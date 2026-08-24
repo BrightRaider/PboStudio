@@ -404,8 +404,13 @@
                   </ComboBox>
                   <Border Background="{StaticResource SurfaceInset}" BorderBrush="{StaticResource AccentPrimary}"
                           BorderThickness="2,0,0,0" CornerRadius="4" Padding="8,6">
-                    <TextBlock x:Name="ProfileHelp" Classes="caption" Foreground="{StaticResource TextMuted}"
-                               FontSize="{StaticResource FontCaption}" LineHeight="16" />
+                    <StackPanel Spacing="5">
+                      <TextBlock x:Name="ProfileEngineText" FontFamily="{StaticResource FontMono}"
+                                 FontSize="{StaticResource FontMicro}" TextWrapping="Wrap" LineHeight="14"
+                                 Foreground="{StaticResource StateInfo}" />
+                      <TextBlock x:Name="ProfileHelp" Classes="caption" Foreground="{StaticResource TextMuted}"
+                                 FontSize="{StaticResource FontCaption}" LineHeight="16" />
+                    </StackPanel>
                   </Border>
                 </StackPanel>
 
@@ -464,6 +469,7 @@
                     <TextBlock x:Name="EngineLabel" Classes="label" />
                     <ComboBox x:Name="EngineBox" SelectedIndex="0" HorizontalAlignment="Stretch"
                               SelectionChanged="OnEngineChanged">
+                      <ComboBoxItem x:Name="EngineOptAuto" />
                       <ComboBoxItem Content="Prime95" />
                       <ComboBoxItem Content="y-cruncher" />
                     </ComboBox>
@@ -492,11 +498,14 @@
                     <TextBlock x:Name="FftLabel" Classes="label" />
                     <ComboBox x:Name="FftBox" SelectedIndex="0" HorizontalAlignment="Stretch"
                               SelectionChanged="OnFftChanged">
-                      <ComboBoxItem Content="Smallest (4-32K)" />
+                      <ComboBoxItem Content="Smallest (4-21K)" />
                       <ComboBoxItem Content="Small (36-248K)" />
                       <ComboBoxItem Content="Large (426-8192K)" />
-                      <ComboBoxItem Content="Huge (8960K+)" />
-                      <ComboBoxItem Content="All" />
+                      <ComboBoxItem Content="Huge (8960-32768K)" />
+                      <ComboBoxItem Content="All (4-32768K)" />
+                      <ComboBoxItem Content="Heavy (4-1344K)" />
+                      <ComboBoxItem Content="HeavyShort (4-160K)" />
+                      <ComboBoxItem Content="Moderate (1344-4096K)" />
                       <ComboBoxItem x:Name="FftOptCustom" />
                     </ComboBox>
 

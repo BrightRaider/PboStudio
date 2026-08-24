@@ -381,10 +381,10 @@ public partial class MainWindow : Window
 
         MinutesBox.Value = s.MinutesPerCore;
         IterationsBox.Value = s.Iterations;
-        EngineBox.SelectedIndex = Math.Clamp(s.EngineIndex, 0, 1);
+        EngineBox.SelectedIndex = Math.Clamp(s.EngineIndex, 0, 2);
         ThreadsBox.SelectedIndex = Math.Clamp(s.ThreadsIndex, 0, 1);
         ModeBox.SelectedIndex = Math.Clamp(s.ModeIndex, 0, 3);
-        FftBox.SelectedIndex = Math.Clamp(s.FftIndex, 0, 5);
+        FftBox.SelectedIndex = Math.Clamp(s.FftIndex, 0, 8);
         FftMinBox.Value = s.CustomFftMin;
         FftMaxBox.Value = s.CustomFftMax;
         YcAlgoBox.SelectedIndex = Math.Clamp(s.YcAlgoIndex, 0, 2);
@@ -927,6 +927,7 @@ public partial class MainWindow : Window
         IterationsLabel.Text = LocalizationService.Get("Passes");
         Tip(IterationsBox, "PassesTooltip");
         EngineLabel.Text = LocalizationService.Get("StressEngine");
+        EngineOptAuto.Content = LocalizationService.Get("EngineFollowProfile");
         Tip(EngineBox, "StressEngineTooltip");
         ThreadsLabel.Text = LocalizationService.Get("ThreadsPerCore");
         Tip(ThreadsBox, "ThreadsTooltip");
@@ -1488,9 +1489,13 @@ public partial class MainWindow : Window
     private void OnEngineChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (PrimeOptionsPanel is null || YcAlgoPanel is null) return;
-        bool isYc = EngineBox.SelectedIndex == 1;
-        PrimeOptionsPanel.IsVisible = !isYc;
-        YcAlgoPanel.IsVisible = isYc;
+
+        var over = EngineOverride();
+        PrimeOptionsPanel.IsVisible = over != EngineKind.YCruncher;
+        YcAlgoPanel.IsVisible = over == EngineKind.YCruncher
+            || (over is null && ProfileBox?.SelectedItem is TestProfile p && p.Uses(EngineKind.YCruncher));
+
+        UpdateDurationHint();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1509,7 +1514,11 @@ public partial class MainWindow : Window
         if (!StartButton.IsEnabled) return;
 
         string engineRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "engines"));
-        bool useYCruncher = EngineBox.SelectedIndex == 1;
+
+        // Which engines the run needs comes from the plan, not from one dropdown.
+        var plannedPhases = BuildPhases();
+        bool useYCruncher = plannedPhases.Any(p => p.Engine == EngineKind.YCruncher);
+        bool usePrime95 = plannedPhases.Any(p => p.Engine == EngineKind.Prime95);
 
         string prime95 = Path.Combine(engineRoot, "prime95", "prime95.exe");
         string? ycBinary = null;
@@ -1530,14 +1539,14 @@ public partial class MainWindow : Window
             }
             Log($"y-cruncher: {Path.GetFileName(ycBinary)}");
         }
-        else if (!File.Exists(prime95))
+        if (usePrime95 && !File.Exists(prime95))
         {
             Log(LocalizationService.Pick($"Prime95 nicht gefunden: {prime95}. Setup wird geöffnet…", $"Prime95 not found: {prime95}. Opening setup…"), LogLevel.Error);
             OnOpenSetupWizard(sender, e);
             return;
         }
 
-        var phases = BuildPhases(useYCruncher);
+        var phases = plannedPhases;
 
         var skipped = _rows.Where(r => !r.Selected).Select(r => r.Index).ToHashSet();
         if (skipped.Count == _rows.Count)
@@ -1671,7 +1680,7 @@ public partial class MainWindow : Window
 
                 if (phases.Count > 1) Log($"=== {_phaseLabel} ===");
 
-                EngineKind effectiveKind = useYCruncher ? EngineKind.YCruncher : phase.Engine;
+                EngineKind effectiveKind = phase.Engine;
                 IStressEngine engine;
 
                 if (effectiveKind == EngineKind.YCruncher)
@@ -1792,24 +1801,52 @@ public partial class MainWindow : Window
     /// result on screen so the plan is never implied, only stated.
     /// </para>
     /// </summary>
-    private List<TestPhase> BuildPhases(bool useYCruncher)
+    /// <summary>
+    /// Null means "whatever the profile says", which is the default. Anything else is a
+    /// deliberate override by someone who knows they want it.
+    /// </summary>
+    private EngineKind? EngineOverride() => EngineBox?.SelectedIndex switch
     {
+        1 => EngineKind.Prime95,
+        2 => EngineKind.YCruncher,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The phases a run will actually consist of.
+    /// <para>
+    /// The profile owns the plan. An explicit engine override rewrites every phase onto that
+    /// engine; the instruction set and FFT range from the Engine tab then apply to the first
+    /// Prime95 phase. Previously the engine box silently overrode profiles even when untouched,
+    /// so "Recommended - Prime95 SSE &amp; y-cruncher" could run as neither.
+    /// </para>
+    /// </summary>
+    private List<TestPhase> BuildPhases()
+    {
+        var over = EngineOverride();
         var phases = new List<TestPhase>();
 
         if (ProfileBox?.SelectedItem is TestProfile profile && profile.Phases.Count > 0)
         {
-            var first = profile.Phases[0];
-            phases.Add(first.Engine == EngineKind.Prime95 && !useYCruncher
-                ? new TestPhase(SelectedPrimeMode(), SelectedFft(), EngineKind.Prime95)
-                : first);
-
-            phases.AddRange(profile.Phases.Skip(1));
+            phases.AddRange(profile.Phases);
         }
         else
         {
             phases.Add(new TestPhase(SelectedPrimeMode(), SelectedFft(),
-                useYCruncher ? EngineKind.YCruncher : EngineKind.Prime95));
+                over ?? EngineKind.Prime95));
         }
+
+        if (over is not { } forced) return phases;
+
+        for (int i = 0; i < phases.Count; i++)
+        {
+            phases[i] = forced == EngineKind.YCruncher
+                ? phases[i] with { Engine = EngineKind.YCruncher }
+                : new TestPhase(SelectedPrimeMode(), SelectedFft(), EngineKind.Prime95);
+        }
+
+        // Forcing Prime95 collapses a chain onto one configuration; keep it to a single phase.
+        if (forced == EngineKind.Prime95 && phases.Count > 1) phases.RemoveRange(1, phases.Count - 1);
 
         return phases;
     }
@@ -1817,7 +1854,7 @@ public partial class MainWindow : Window
     /// <summary>One line naming every phase in order, e.g. "1. SSE / Huge  ·  2. y-cruncher".</summary>
     private string PhaseSummary()
     {
-        var phases = BuildPhases(EngineBox?.SelectedIndex == 1);
+        var phases = BuildPhases();
 
         return string.Join("  ·  ", phases.Select((p, i) =>
         {
@@ -1851,7 +1888,23 @@ public partial class MainWindow : Window
         2 => FftPreset.Large,
         3 => FftPreset.Huge,
         4 => FftPreset.All,
+        5 => FftPreset.Heavy,
+        6 => FftPreset.HeavyShort,
+        7 => FftPreset.Moderate,
         _ => FftPreset.Custom,
+    };
+
+    private static int FftIndexOf(FftPreset preset) => preset switch
+    {
+        FftPreset.Smallest => 0,
+        FftPreset.Small => 1,
+        FftPreset.Large => 2,
+        FftPreset.Huge => 3,
+        FftPreset.All => 4,
+        FftPreset.Heavy => 5,
+        FftPreset.HeavyShort => 6,
+        FftPreset.Moderate => 7,
+        _ => 8,
     };
 
     /// <summary>Only meaningful for <see cref="FftPreset.Custom"/>; ignored otherwise.</summary>
@@ -1865,7 +1918,7 @@ public partial class MainWindow : Window
     private void OnFftChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (CustomFftPanel is null) return;
-        CustomFftPanel.IsVisible = FftBox.SelectedIndex == 5;
+        CustomFftPanel.IsVisible = FftBox.SelectedIndex == 8;
     }
 
     /// <summary>Keeps the two bounds from crossing instead of quietly swapping them later.</summary>
@@ -2007,6 +2060,9 @@ public partial class MainWindow : Window
         if (ProfileBox.SelectedItem is not TestProfile p) return;
 
         ProfileHelp.Text = p.Explanation;
+        ProfileEngineText.Text = p.EngineSummary;
+        PauseIntervalBox.Value = p.SuspendEverySeconds;
+        PauseDurationBox.Value = p.SuspendForSeconds;
         MinutesBox.Value = p.MinutesPerCore;
         IterationsBox.Value = p.Iterations;
         ThreadsBox.SelectedIndex = p.Threads - 1;
@@ -2016,14 +2072,7 @@ public partial class MainWindow : Window
             Prime95Mode.Avx => 1,
             _ => 2,
         };
-        FftBox.SelectedIndex = p.Fft switch
-        {
-            FftPreset.Smallest => 0,
-            FftPreset.Small => 1,
-            FftPreset.Large => 2,
-            FftPreset.Huge => 3,
-            _ => 4,
-        };
+        FftBox.SelectedIndex = FftIndexOf(p.Fft);
         OrderBox.SelectedIndex = p.Order switch
         {
             CoreOrder.Sequential => 0,

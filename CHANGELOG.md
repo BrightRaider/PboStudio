@@ -20,6 +20,26 @@ step-down to the chip limit and locking there.
 - **The offline bundle was not offline.** It carried both stress engines but still needed the
   network for PawnIO, without which the app cannot reach the SMU at all.
 
+### Changed — profiles
+
+- **A profile is now the whole configuration.** Each one carries its engine, workload, runtime,
+  thread count and transient-pause behaviour, and states what it runs directly under its name
+  ("Prime95 SSE · Huge → y-cruncher · 6 min/core × 3, load transition every 30s"). Picking one
+  is a single decision again.
+- **The engine selector no longer overrides profiles silently.** It defaults to "As the profile
+  says"; forcing Prime95 or y-cruncher is still possible but is now a deliberate act. Before,
+  the box sat on "Prime95" out of the box and quietly turned "Recommended - Prime95 SSE &
+  y-cruncher" into neither.
+- **Transient pauses belong to the profile.** The one setting that most reliably breaks a
+  borderline Curve Optimizer value was the only one no profile carried, so it always had to be
+  dialled in by hand.
+- **New profiles**: `🔥 Breaking point - hard load transitions` (AVX2, smallest FFTs, both
+  threads, a load transition every 5 s — the hardest thing the tool does), `Heavy FFTs - the
+  CoreCycler classic`, and two y-cruncher-only profiles. The overnight run now ends with a
+  y-cruncher phase.
+- **FFT ranges match CoreCycler**, including its Heavy, HeavyShort and Moderate presets, so
+  results are comparable between the two tools.
+
 ### Added
 
 - The Setup tab states the phases a run will actually consist of. A profile's first phase is

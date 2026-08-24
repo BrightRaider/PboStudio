@@ -7,7 +7,12 @@ public enum Prime95Mode { Sse, Avx, Avx2, Avx512 }
 
 /// <summary>FFT ranges in K. Small sizes stay in cache and load the core hardest, which is
 /// what exposes an undervolted core; large sizes pull in the memory controller instead.</summary>
-public enum FftPreset { Smallest, Small, Large, Huge, All, Custom }
+/// <summary>
+/// FFT ranges in K, matching CoreCycler's presets so results are comparable between the two.
+/// Heavy and HeavyShort are the ones most people reach for on Curve Optimizer work: they sweep
+/// the in-cache sizes that expose an undervolted core fastest.
+/// </summary>
+public enum FftPreset { Smallest, Small, Large, Huge, All, Heavy, HeavyShort, Moderate, Custom }
 
 public sealed record Prime95Options(
     Prime95Mode Mode = Prime95Mode.Avx2,
@@ -18,13 +23,26 @@ public sealed record Prime95Options(
 {
     public (int Min, int Max) FftRange => Fft switch
     {
-        FftPreset.Smallest => (4, 32),
+        FftPreset.Smallest => (4, 21),
         FftPreset.Small => (36, 248),
         FftPreset.Large => (426, 8192),
-        FftPreset.Huge => (8960, 51200),
-        FftPreset.All => (4, 51200),
+        FftPreset.Huge => (8960, 32768),
+        FftPreset.All => (4, 32768),
+        FftPreset.Heavy => (4, 1344),
+        FftPreset.HeavyShort => (4, 160),
+        FftPreset.Moderate => (1344, 4096),
         _ => (CustomMinFft, CustomMaxFft),
     };
+
+    /// <summary>Short label for the UI, e.g. "Heavy (4-1344K)".</summary>
+    public string FftLabel
+    {
+        get
+        {
+            var (min, max) = FftRange;
+            return $"{Fft} ({min}-{max}K)";
+        }
+    }
 }
 
 /// <summary>

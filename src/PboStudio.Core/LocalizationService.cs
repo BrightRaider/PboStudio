@@ -171,7 +171,13 @@ public static class LocalizationService
             "Passes" => isDe ? "Durchgänge" : "Passes",
             "PassesTooltip" => isDe ? "Wie oft die komplette Kernliste durchlaufen wird. Ein Kern besteht oft den ersten Durchgang und fällt im dritten durch." : "How many times the full core list is worked through. A core often passes the first pass and fails on the third.",
             "StressEngine" => isDe ? "Testprogramm" : "Stress engine",
-            "StressEngineTooltip" => isDe ? "Prime95 belastet mit klassischen FFT-Berechnungen, y-cruncher mit Pi-Berechnungen und deutlich mehr Cache- und Speicherdruck." : "Prime95 stresses with classic FFT math, y-cruncher with pi computations and considerably more cache and memory pressure.",
+            "EngineFollowProfile" => isDe ? "Laut Profil" : "As the profile says",
+            "EngineOverrideNote" => isDe
+                ? "⚙️ Testprogramm von Hand gesetzt — überschreibt das Profil."
+                : "⚙️ Stress engine set by hand — overrides the profile.",
+            "StressEngineTooltip" => isDe
+                ? "Normalerweise auf „Laut Profil“ lassen — jedes Profil bringt sein Testprogramm mit, und Profile wie „Empfohlen“ kombinieren bewusst beide. Nur wer bewusst alles auf ein Programm zwingen will, stellt hier um; das überschreibt dann sämtliche Abschnitte des Profils."
+                : "Normally leave this on “As the profile says” — every profile brings its own engine, and profiles like “Recommended” deliberately combine both. Change it only to deliberately force everything onto one engine; that overrides every phase of the profile.",
             "ThreadsPerCore" => isDe ? "Threads pro Kern" : "Threads per core",
             "ThreadsTooltip" => isDe
                 ? "SMT (Simultaneous Multithreading) ist AMDs Hyperthreading: jeder physische Kern führt zwei Threads aus. Ein Thread lässt den Kern höher boosten und findet Fehler bei Höchsttakt, zwei Threads erzeugen mehr Hitze und Stromlast."
