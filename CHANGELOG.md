@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — 2026-08-25
+## 1.0.1 — 2026-08-25
 
 Verified on hardware. An AMD Ryzen 7 5800X3D ran the full loop: the margin written to the SMU
 before each measurement, Prime95 pinned to one core, a complete stress slot, pass detection,
