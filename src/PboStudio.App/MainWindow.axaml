@@ -553,6 +553,13 @@
                 </StackPanel>
 
                 <CheckBox x:Name="StopOnErrorBox" />
+                <CheckBox x:Name="SkipCoreOnErrorBox" IsChecked="True" />
+
+                <StackPanel Spacing="3">
+                  <TextBlock x:Name="CoreDelayLabel" Classes="label" />
+                  <NumericUpDown x:Name="CoreDelayBox" Value="2" Minimum="0" Maximum="120"
+                                 Increment="1" FormatString="0" />
+                </StackPanel>
               </StackPanel>
 
               <!-- Tab 3: System -->
@@ -562,6 +569,8 @@
                   <NumericUpDown x:Name="MaxTempBox" Value="90" Minimum="60" Maximum="105"
                                  Increment="1" FormatString="0" />
                 </StackPanel>
+
+                <CheckBox x:Name="TreatWheaAsErrorBox" IsChecked="True" />
 
                 <StackPanel Spacing="3">
                   <TextBlock x:Name="PostTestActionLabel" Classes="label" />

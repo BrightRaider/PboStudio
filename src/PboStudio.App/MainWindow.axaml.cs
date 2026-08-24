@@ -298,6 +298,8 @@ public partial class MainWindow : Window
 
     private EngineStatus? _dependencies;
     private readonly CcdLayout _ccdLayout;
+    private readonly AppSettings _settings;
+    private bool _settingsApplied;
     private readonly StringBuilder _logBuffer = new();
     private readonly StreamWriter? _logFile;
     private readonly string? _logDirectory;
@@ -307,6 +309,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Before anything reads LocalizationService or lays out the window.
+        _settings = SettingsService.Load(SettingsRoot);
+        LocalizationService.CurrentLanguage =
+            _settings.UiLanguage == nameof(Language.German) ? Language.German : Language.English;
+
         SizeToWorkArea();
         (_logFile, _logDirectory) = OpenSessionLog();
         CoreList.ItemsSource = _rows;
@@ -322,6 +330,10 @@ public partial class MainWindow : Window
         _clock.Tick += (_, _) => UpdateClock();
         StartWatchdog();
         CheckInterruptedRun();
+
+        // After ApplyLocalization, because LoadProfiles resets the profile selection and
+        // OnProfileChanged overwrites the engine controls from the preset.
+        ApplySettingsToControls();
 
         AutostartBox.IsChecked = TaskSchedulerService.IsAutostartEnabled();
 
@@ -352,6 +364,86 @@ public partial class MainWindow : Window
         {
             SetTelemetryOffline();
         }
+    }
+
+    private static string SettingsRoot => Path.Combine(AppContext.BaseDirectory, "runs");
+
+    /// <summary>
+    /// Restores the saved configuration. Runs after the profile preset has been applied, so
+    /// these values win: a preset is a starting point, not a rule.
+    /// </summary>
+    private void ApplySettingsToControls()
+    {
+        var s = _settings;
+
+        if (ProfileBox.ItemCount > 0)
+            ProfileBox.SelectedIndex = Math.Clamp(s.ProfileIndex, 0, ProfileBox.ItemCount - 1);
+
+        MinutesBox.Value = s.MinutesPerCore;
+        IterationsBox.Value = s.Iterations;
+        EngineBox.SelectedIndex = Math.Clamp(s.EngineIndex, 0, 1);
+        ThreadsBox.SelectedIndex = Math.Clamp(s.ThreadsIndex, 0, 1);
+        ModeBox.SelectedIndex = Math.Clamp(s.ModeIndex, 0, 3);
+        FftBox.SelectedIndex = Math.Clamp(s.FftIndex, 0, 5);
+        FftMinBox.Value = s.CustomFftMin;
+        FftMaxBox.Value = s.CustomFftMax;
+        YcAlgoBox.SelectedIndex = Math.Clamp(s.YcAlgoIndex, 0, 2);
+        PauseIntervalBox.Value = s.PauseInterval;
+        PauseDurationBox.Value = s.PauseDuration;
+        OrderBox.SelectedIndex = Math.Clamp(s.OrderIndex, 0, 3);
+        CustomOrderBox.Text = s.CustomOrder;
+        StopOnErrorBox.IsChecked = s.StopOnError;
+        SkipCoreOnErrorBox.IsChecked = s.SkipCoreOnError;
+        CoreDelayBox.Value = s.DelayBetweenCores;
+
+        MaxTempBox.Value = s.MaxTemp;
+        TreatWheaAsErrorBox.IsChecked = s.TreatWheaWarningAsError;
+        PostTestActionBox.SelectedIndex = Math.Clamp(s.PostTestAction, 0, 2);
+        WebhookBox.Text = s.WebhookUrl;
+
+        AutoTunerModeBox.SelectedIndex = Math.Clamp(s.AutoTunerMode, 0, 2);
+
+        _settingsApplied = true;
+        UpdateDurationHint();
+    }
+
+    /// <summary>Captures the current configuration. Cheap enough to call on every change.</summary>
+    private void SaveSettings()
+    {
+        if (!_settingsApplied) return;   // do not persist the half-built state during startup
+
+        var s = _settings;
+        s.UiLanguage = LocalizationService.IsGerman ? nameof(Language.German) : nameof(Language.English);
+
+        s.ProfileIndex = ProfileBox.SelectedIndex;
+        s.AutoTunerMode = AutoTunerModeBox.SelectedIndex;
+
+        s.MinutesPerCore = (int)(MinutesBox.Value ?? 6);
+        s.Iterations = (int)(IterationsBox.Value ?? 3);
+        s.EngineIndex = EngineBox.SelectedIndex;
+        s.ThreadsIndex = ThreadsBox.SelectedIndex;
+        s.ModeIndex = ModeBox.SelectedIndex;
+        s.FftIndex = FftBox.SelectedIndex;
+        s.CustomFftMin = (int)(FftMinBox.Value ?? 4);
+        s.CustomFftMax = (int)(FftMaxBox.Value ?? 32);
+        s.YcAlgoIndex = YcAlgoBox.SelectedIndex;
+        s.PauseInterval = (int)(PauseIntervalBox.Value ?? 30);
+        s.PauseDuration = (int)(PauseDurationBox.Value ?? 1);
+        s.OrderIndex = OrderBox.SelectedIndex;
+        s.CustomOrder = CustomOrderBox.Text ?? "";
+        s.StopOnError = StopOnErrorBox.IsChecked == true;
+        s.SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true;
+        s.DelayBetweenCores = (int)(CoreDelayBox.Value ?? 2);
+
+        s.MaxTemp = (int)(MaxTempBox.Value ?? 90);
+        s.TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true;
+        s.PostTestAction = PostTestActionBox.SelectedIndex;
+        s.WebhookUrl = WebhookBox.Text ?? "";
+
+        s.WindowWidth = Width;
+        s.WindowHeight = Height;
+
+        SettingsService.Save(SettingsRoot, s);
     }
 
     private const int KeepLogFiles = 20;
@@ -389,6 +481,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        SaveSettings();
         _logFile?.Dispose();
         _watchdog?.Dispose();
         base.OnClosed(e);
@@ -413,8 +506,13 @@ public partial class MainWindow : Window
         double availableWidth = screen.WorkingArea.Width / scaling;
         double availableHeight = screen.WorkingArea.Height / scaling;
 
-        Width = Math.Clamp(1180, MinWidth, Math.Max(MinWidth, availableWidth - 80));
-        Height = Math.Clamp(900, MinHeight, Math.Max(MinHeight, availableHeight - 90));
+        // A remembered size still has to fit the screen it is opening on, which may not be
+        // the screen it was saved on.
+        double wantWidth = _settings.WindowWidth > 0 ? _settings.WindowWidth : 1180;
+        double wantHeight = _settings.WindowHeight > 0 ? _settings.WindowHeight : 900;
+
+        Width = Math.Clamp(wantWidth, MinWidth, Math.Max(MinWidth, availableWidth - 80));
+        Height = Math.Clamp(wantHeight, MinHeight, Math.Max(MinHeight, availableHeight - 90));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -744,6 +842,7 @@ public partial class MainWindow : Window
             : Language.English;
 
         ApplyLocalization();
+        SaveSettings();
         Log(LocalizationService.Pick("🌐 Sprache auf Deutsch umgestellt.", "🌐 Language switched to English."));
     }
 
@@ -843,6 +942,12 @@ public partial class MainWindow : Window
         Tip(OrderBox, "CoreOrderTooltip");
         StopOnErrorBox.Content = LocalizationService.Get("StopOnError");
         Tip(StopOnErrorBox, "StopOnErrorTooltip");
+        SkipCoreOnErrorBox.Content = LocalizationService.Get("SkipCoreOnError");
+        Tip(SkipCoreOnErrorBox, "SkipCoreOnErrorTooltip");
+        CoreDelayLabel.Text = LocalizationService.Get("CoreDelay");
+        Tip(CoreDelayBox, "CoreDelayTooltip");
+        TreatWheaAsErrorBox.Content = LocalizationService.Get("TreatWheaAsError");
+        Tip(TreatWheaAsErrorBox, "TreatWheaAsErrorTooltip");
         PauseIntervalLabel.Text = LocalizationService.Get("PauseInterval");
         Tip(PauseIntervalBox, "TransientPauseTooltip");
         PauseDurationLabel.Text = LocalizationService.Get("PauseDuration");
@@ -1518,6 +1623,9 @@ public partial class MainWindow : Window
             },
             CustomOrder = customOrder,
             StopOnError = StopOnErrorBox.IsChecked == true,
+            SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true,
+            TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true,
+            DelayBetweenCores = TimeSpan.FromSeconds((double)(CoreDelayBox.Value ?? 2)),
             AutoTuner = autoTunerMode,
             MaxNegativeMargin = maxNegativeLimit,
             InitialCoreMargins = coreMargins,
@@ -1527,6 +1635,9 @@ public partial class MainWindow : Window
             SuspendEvery = TimeSpan.FromSeconds(pauseInterval),
             SuspendFor = TimeSpan.FromSeconds(pauseDuration),
         };
+
+        // A run is the natural checkpoint: whatever was configured for it is worth keeping.
+        SaveSettings();
 
         _runStarted = DateTime.Now;
         _plannedTotal = EstimateTotalRuntime(autoTunerMode, maxNegativeLimit, phases.Count);
@@ -2374,6 +2485,7 @@ public partial class MainWindow : Window
                      ProfileBox, AutoTunerModeBox, PauseIntervalBox, PauseDurationBox, YcAlgoBox,
                      StopOnErrorBox, SelectAllBox, AutostartBox,
                      FftMinBox, FftMaxBox, CustomOrderBox,
+                     SkipCoreOnErrorBox, CoreDelayBox, TreatWheaAsErrorBox,
                  })
         {
             c.IsEnabled = !running;

@@ -1,0 +1,87 @@
+using System.Text.Json;
+
+namespace PboStudio.Core;
+
+/// <summary>
+/// Everything the user configures that is not a Curve Optimizer value. Those live in
+/// co_saved.json because the autostart task reads them; this is the rest of the window.
+/// </summary>
+public sealed class AppSettings
+{
+    /// <summary>Not called "Language": that would shadow the enum of the same name.</summary>
+    public string UiLanguage { get; set; } = nameof(PboStudio.Core.Language.English);
+
+    // Setup tab
+    public int ProfileIndex { get; set; }
+    public int AutoTunerMode { get; set; }
+
+    // Engine tab
+    public int MinutesPerCore { get; set; } = 6;
+    public int Iterations { get; set; } = 3;
+    public int EngineIndex { get; set; }
+    public int ThreadsIndex { get; set; }
+    public int ModeIndex { get; set; }
+    public int FftIndex { get; set; }
+    public int CustomFftMin { get; set; } = 4;
+    public int CustomFftMax { get; set; } = 32;
+    public int YcAlgoIndex { get; set; }
+    public int PauseInterval { get; set; } = 30;
+    public int PauseDuration { get; set; } = 1;
+    public int OrderIndex { get; set; } = 1;
+    public string CustomOrder { get; set; } = "";
+    public bool StopOnError { get; set; }
+    public bool SkipCoreOnError { get; set; } = true;
+    public int DelayBetweenCores { get; set; } = 2;
+
+    // System tab
+    public int MaxTemp { get; set; } = 90;
+    public bool TreatWheaWarningAsError { get; set; } = true;
+    public int PostTestAction { get; set; }
+    public string WebhookUrl { get; set; } = "";
+
+    // Window
+    public double WindowWidth { get; set; }
+    public double WindowHeight { get; set; }
+}
+
+/// <summary>
+/// Reads and writes <see cref="AppSettings"/>. Nothing here is allowed to throw: losing a
+/// preferences file must never stop the program from starting.
+/// </summary>
+public static class SettingsService
+{
+    private const string FileName = "settings.json";
+
+    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+
+    private static string PathFor(string workRoot) => Path.Combine(workRoot, FileName);
+
+    public static AppSettings Load(string workRoot)
+    {
+        try
+        {
+            string path = PathFor(workRoot);
+            if (!File.Exists(path)) return new AppSettings();
+
+            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllBytes(path), Options)
+                   ?? new AppSettings();
+        }
+        catch
+        {
+            // Corrupt or unreadable: fall back to defaults rather than refusing to start.
+            return new AppSettings();
+        }
+    }
+
+    public static void Save(string workRoot, AppSettings settings)
+    {
+        try
+        {
+            Directory.CreateDirectory(workRoot);
+            File.WriteAllBytes(PathFor(workRoot), JsonSerializer.SerializeToUtf8Bytes(settings, Options));
+        }
+        catch
+        {
+        }
+    }
+}

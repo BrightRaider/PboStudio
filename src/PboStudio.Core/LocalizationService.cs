@@ -204,6 +204,18 @@ public static class LocalizationService
                 ? "Es ist „Eigene Reihenfolge“ gewählt, aber keine gültige Kern-Reihenfolge eingetragen."
                 : "“Custom order” is selected but no valid core order has been entered.",
             "StopOnError" => isDe ? "Beim ersten Fehler anhalten" : "Stop on first error",
+            "SkipCoreOnError" => isDe ? "Durchgefallenen Kern überspringen" : "Skip a core once it fails",
+            "SkipCoreOnErrorTooltip" => isDe
+                ? "Ein Kern, der durchgefallen ist, wird in den folgenden Durchgängen nicht erneut belastet. Abschalten, wenn du sehen willst, ob der Fehler reproduzierbar ist oder ein Ausreißer war. Ohne Wirkung im Auto-Tuner-Modus, der ohnehin selbst entscheidet."
+                : "A core that has failed is not stressed again in later passes. Turn this off to see whether the failure reproduces or was a one-off. No effect in auto-tuner mode, which decides for itself.",
+            "CoreDelay" => isDe ? "Pause zwischen Kernen (Sek.)" : "Delay between cores (s)",
+            "CoreDelayTooltip" => isDe
+                ? "Wartezeit, bevor der nächste Kern belastet wird. Gibt dem vorherigen Kern Zeit abzukühlen, damit sein Wärmestau das Ergebnis des nächsten nicht verfälscht."
+                : "Wait before the next core is stressed. Lets the previous core cool down so its heat does not skew the next core's result.",
+            "TreatWheaAsError" => isDe ? "WHEA-Warnung als Fehler werten" : "Treat a WHEA warning as a failure",
+            "TreatWheaAsErrorTooltip" => isDe
+                ? "Ein korrigierter Hardware-Fehler (WHEA) lässt den Kern durchfallen, auch wenn das Testprogramm selbst nichts meldet. Genau das ist das früheste Anzeichen für ein zu aggressives Offset — abschalten nur, wenn du bewusst nur auf Rechenfehler prüfen willst."
+                : "A corrected hardware error (WHEA) fails the core even when the stress program itself reports nothing. That is the earliest sign of a too-aggressive offset — only turn this off if you deliberately want to test for calculation errors alone.",
             "StopOnErrorTooltip" => isDe ? "Bricht den gesamten Lauf ab, sobald ein Kern durchfällt — statt die restlichen Kerne weiterzutesten." : "Aborts the whole run as soon as one core fails — instead of continuing with the remaining cores.",
             "PauseInterval" => isDe ? "Pause alle (Sek.)" : "Pause every (s)",
             "PauseDuration" => isDe ? "Pause-Dauer (Sek.)" : "Pause for (s)",
