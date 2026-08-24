@@ -1,0 +1,96 @@
+diff --git a/Cpu.cs b/Cpu.cs
+index 85dd033..4e4288f 100644
+--- a/Cpu.cs
++++ b/Cpu.cs
+@@ -415,27 +415,38 @@ namespace ZenStates.Core
+             }
+             catch { }
+ 
+-            try
+-            {
+-                info.patchLevel = GetPatchLevel();
+-                info.svi2 = GetSVI2Info(info.codeName);
+-                info.aod = new AOD(io, this);
+-                info.apob = new Apob(info.codeName);
+-                systemInfo = new SystemInfo(info, smu, GetAgesaVersion());
+-                powerTable = new PowerTable(_pawnRyzenSmu, info.codeName);
++            // Each of these is initialised separately. They used to share one try block, which
++            // meant a failure in an early step - AOD needs the legacy port-IO driver that is
++            // optional here - silently skipped everything after it, including the power table.
++            Status = IODriver.LibStatus.OK;
+ 
+-                if (!SendTestMessage())
+-                    LastError = new ApplicationException("SMU is not responding to test message!");
++            try { info.patchLevel = GetPatchLevel(); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
+ 
+-                powerTable.Refresh();
++            try { info.svi2 = GetSVI2Info(info.codeName); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
+ 
+-                Status = IODriver.LibStatus.OK;
+-            }
+-            catch (Exception ex)
++            try { info.aod = new AOD(io, this); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
++
++            try { info.apob = new Apob(info.codeName); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
++
++            try { systemInfo = new SystemInfo(info, smu, GetAgesaVersion()); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
++
++            try { powerTable = new PowerTable(_pawnRyzenSmu, info.codeName); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
++
++            try
+             {
+-                LastError = ex;
+-                Status = IODriver.LibStatus.PARTIALLY_OK;
++                if (!SendTestMessage())
++                    LastError = new ApplicationException("SMU is not responding to test message!");
+             }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
++
++            try { powerTable?.Refresh(); }
++            catch (Exception ex) { LastError = ex; Status = IODriver.LibStatus.PARTIALLY_OK; }
+         }
+ 
+         // [31-28] ccd index
+diff --git a/Drivers/IODriver.cs b/Drivers/IODriver.cs
+index 076cfa6..ac675cf 100644
+--- a/Drivers/IODriver.cs
++++ b/Drivers/IODriver.cs
+@@ -31,6 +31,12 @@ namespace ZenStates.Core.Drivers
+ 
+         private LibStatus WinIoStatus { get; set; } = LibStatus.INITIALIZE_ERROR;
+ 
++        // The legacy port-IO backend (inpoutx64 / WinIo32) is an unsigned driver and is only
++        // needed for port IO and physical memory mapping. SMU access goes through PawnIO, so
++        // its absence must degrade gracefully instead of aborting Cpu construction.
++        public Exception InitError { get; private set; }
++        public bool IsAvailable => ioModule != IntPtr.Zero && InitError == null;
++
+         private volatile bool _disposed;
+         private static IODriver _instance;
+ 
+@@ -39,7 +45,7 @@ namespace ZenStates.Core.Drivers
+         public bool IsInpOutDriverOpen()
+         {
+             if (Utils.Is64Bit)
+-                return IsInpOutDriverOpen64() != 0;
++                return IsInpOutDriverOpen64 != null && IsInpOutDriverOpen64() != 0;
+             else
+                 return WinIoStatus == LibStatus.OK;
+         }
+@@ -142,7 +148,9 @@ namespace ZenStates.Core.Drivers
+             }
+             catch (Exception ex)
+             {
+-                throw new Exception("Error initializing IO module.", ex);
++                InitError = ex;
++                WinIoStatus = LibStatus.INITIALIZE_ERROR;
++                _instance = this;
+             }
+         }
+ 
