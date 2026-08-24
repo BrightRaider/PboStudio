@@ -15,7 +15,7 @@ per-core stress testing with direct SMU Curve Optimizer read/write in a single n
 | Variant | Size | What you need |
 |---|---|---|
 | **`PboStudio.exe`** | 45 MB | Nothing. One file, no .NET install. Fetches Prime95 and y-cruncher from their vendors on first run. |
-| **`PboStudio-full.zip`** | 95 MB | Nothing, including no internet. Same executable with both stress engines already unpacked beside it. |
+| **`PboStudio-full.zip`** | 99 MB | Nothing, including no internet. Same executable plus both stress engines and the PawnIO driver installer. |
 
 Take the single executable unless the machine has no internet access. Both are on the
 [Releases page](../../releases).
@@ -60,9 +60,12 @@ Windows SmartScreen will warn about an unknown publisher — the executable is n
   ring-0 access to a narrow set of commands. Installable from inside the app.
 
 Prime95 and y-cruncher are downloaded from the vendors on first run, falling back to the
-current version on the vendor's download page if a pinned build has been retired. The
-`PboStudio-full.zip` variant ships them alongside the executable for machines without internet
-access.
+current version on the vendor's download page if a pinned build has been retired. PawnIO is
+fetched from its GitHub release when you press Install.
+
+The `PboStudio-full.zip` variant ships all three alongside the executable, so a machine with no
+internet access can be set up completely. The app uses the bundled driver installer
+automatically when it is present.
 
 ---
 
@@ -117,11 +120,14 @@ dotnet publish src/PboStudio.App/PboStudio.App.csproj -c Release -r win-x64 \
 GPL-3.0 for PboStudio itself. Includes a patched copy of
 [ZenStates-Core](https://github.com/irusanov/ZenStates-Core), also GPL-3.0.
 
-**Prime95** (Great Internet Mersenne Prime Search) and **y-cruncher** (Alexander J. Yee) are
-freeware owned by their respective authors and are **not covered by this project's licence**.
-The single-file build downloads them from the vendors. The offline bundle includes them
-unmodified for convenience; if you are an author of either and would prefer it did not, open an
-issue and the bundle will be withdrawn.
+**Prime95** (Great Internet Mersenne Prime Search), **y-cruncher** (Alexander J. Yee) and
+**PawnIO** (namazso) are owned by their respective authors and are **not covered by this
+project's licence**. The single-file build downloads them from their official sources. The
+offline bundle includes them unmodified and signature-intact for convenience; if you are an
+author of any of them and would prefer it did not, open an issue and the bundle will be
+withdrawn.
 
-- Prime95: <https://www.mersenne.org/legal/>
-- y-cruncher: <http://www.numberworld.org/y-cruncher/>
+- Prime95: freeware — <https://www.mersenne.org/legal/>
+- y-cruncher: freeware — <http://www.numberworld.org/y-cruncher/>
+- PawnIO driver: GPL-2.0 — <https://github.com/namazso/PawnIO>; the installer wrapper declares
+  no licence and is redistributed as published, signed by namazso.eu

@@ -62,7 +62,10 @@ public partial class SetupWizardWindow : Window
 
         PawnIoStatusText.Text = status.PawnIoAvailable
             ? LocalizationService.Get("WizardPawnIoOk")
-            : $"❌ {status.PawnIoStatus}";
+            : $"❌ {status.PawnIoStatus}"
+              + (DependencyService.HasBundledPawnIo(AppContext.BaseDirectory)
+                  ? "\n" + LocalizationService.Get("WizardPawnIoBundled")
+                  : "");
         PawnIoStatusText.Foreground = StatusBrush(status.PawnIoAvailable);
         // Was the one card whose button never switched off once its component was present.
         InstallPawnIoButton.IsEnabled = !status.PawnIoAvailable && !_busy;
@@ -217,7 +220,7 @@ public partial class SetupWizardWindow : Window
 
         try
         {
-            await DependencyService.DownloadAndInstallPawnIoAsync(msg =>
+            await DependencyService.DownloadAndInstallPawnIoAsync(AppContext.BaseDirectory, msg =>
                 Dispatcher.UIThread.Post(() => ProgressLabelText.Text = msg));
 
             ProgressLabelText.Text = LocalizationService.Pick(

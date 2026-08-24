@@ -315,6 +315,9 @@ public static class LocalizationService
             "WizardInstalled" => isDe ? "✅ Installiert" : "✅ Installed",
             "WizardNotFound" => isDe ? "❌ Nicht gefunden — kann automatisch heruntergeladen werden." : "❌ Not found — can be downloaded automatically.",
             "WizardPawnIoOk" => isDe ? "✅ Treiber aktiv, SMU erreichbar." : "✅ Driver active, SMU reachable.",
+            "WizardPawnIoBundled" => isDe
+                ? "📦 Der Installer liegt bereits bei — „Installieren“ startet ihn direkt, ohne Internet."
+                : "📦 The installer is already included — “Install” runs it directly, no internet needed.",
             "WizardCancel" => isDe ? "Abbrechen" : "Cancel",
             "WizardOpenPage" => isDe ? "🌐 Download-Seite öffnen" : "🌐 Open download page",
 

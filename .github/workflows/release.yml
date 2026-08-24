@@ -59,8 +59,19 @@ jobs:
           $bundle = 'out/full'
           New-Item -ItemType Directory -Force -Path "$bundle/engines/prime95" | Out-Null
           New-Item -ItemType Directory -Force -Path "$bundle/engines/ycruncher" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$bundle/drivers" | Out-Null
           Copy-Item out/single/PboStudio.exe $bundle
           Copy-Item LICENSE $bundle
+
+          # The kernel driver installer. Without it the offline bundle cannot reach the SMU at
+          # all, which is the one thing the app exists for.
+          Write-Host 'Downloading PawnIO installer...'
+          Invoke-WebRequest -UseBasicParsing -OutFile "$bundle/drivers/PawnIO_setup.exe" `
+            -Uri 'https://github.com/namazso/PawnIO.Setup/releases/download/2.2.0/PawnIO_setup.exe'
+
+          $sig = Get-AuthenticodeSignature "$bundle/drivers/PawnIO_setup.exe"
+          if ($sig.Status -ne 'Valid') { throw "PawnIO installer signature is $($sig.Status)" }
+          Write-Host "PawnIO installer signed by: $($sig.SignerCertificate.Subject)" 
 
           $sources = @(
             @{ Name = 'Prime95';    Dir = "$bundle/engines/prime95";   Url = 'https://www.mersenne.org/download/software/v30/30.8/p95v308b17.win64.zip' },
@@ -80,8 +91,8 @@ jobs:
             Expand-Archive -Path $tmp -DestinationPath $s.Dir -Force
           }
 
-          if (-not (Test-Path "$bundle/engines/prime95/prime95.exe")) {
-            throw 'Bundle is missing prime95.exe'
+          foreach ($required in @("$bundle/engines/prime95/prime95.exe", "$bundle/drivers/PawnIO_setup.exe")) {
+            if (-not (Test-Path $required)) { throw "Bundle is missing $required" }
           }
           Write-Host "Bundle size: $([math]::Round((Get-ChildItem $bundle -Recurse | Measure-Object Length -Sum).Sum / 1MB, 1)) MB"
 

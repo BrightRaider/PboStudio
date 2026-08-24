@@ -74,23 +74,45 @@ public static class DependencyService
     public const string PawnIoDownloadUrl = "https://github.com/namazso/PawnIO.Setup/releases/download/2.2.0/PawnIO_setup.exe";
     public const string PawnIoPageUrl = "https://pawnio.eu/";
 
+    /// <summary>
+    /// Where the offline bundle puts the driver installer. Checked before reaching for the
+    /// network, so a machine with no internet can still install the driver - without which the
+    /// whole point of the offline bundle is lost, since Curve Optimizer access needs it.
+    /// </summary>
+    public static string BundledPawnIoPath(string baseDirectory) =>
+        Path.Combine(baseDirectory, "drivers", "PawnIO_setup.exe");
+
+    public static bool HasBundledPawnIo(string baseDirectory) =>
+        File.Exists(BundledPawnIoPath(baseDirectory));
+
     public static string TargetDirectoryFor(string baseDirectory, EngineSource source) =>
         Path.Combine(baseDirectory, "engines", source.TargetSubdirectory);
 
-    public static async Task DownloadAndInstallPawnIoAsync(Action<string>? progress = null, CancellationToken ct = default)
+    public static async Task DownloadAndInstallPawnIoAsync(
+        string baseDirectory, Action<string>? progress = null, CancellationToken ct = default)
     {
-        string tempExe = Path.Combine(Path.GetTempPath(), "PawnIO_setup.exe");
-        progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird heruntergeladen…", "Downloading the PawnIO installer…"));
+        string installer;
 
-        using (var response = await HttpClient.GetAsync(PawnIoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+        if (HasBundledPawnIo(baseDirectory))
         {
+            installer = BundledPawnIoPath(baseDirectory);
+            progress?.Invoke(LocalizationService.Pick(
+                "Mitgelieferter PawnIO-Installer wird verwendet…",
+                "Using the bundled PawnIO installer…"));
+        }
+        else
+        {
+            installer = Path.Combine(Path.GetTempPath(), "PawnIO_setup.exe");
+            progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird heruntergeladen…", "Downloading the PawnIO installer…"));
+
+            using var response = await HttpClient.GetAsync(PawnIoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
-            using var fileStream = new FileStream(tempExe, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+            using var fileStream = new FileStream(installer, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
             await response.Content.CopyToAsync(fileStream, ct);
         }
 
         progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird gestartet (Administratorrechte erforderlich)…", "Starting the PawnIO installer (administrator rights required)…"));
-        var psi = new System.Diagnostics.ProcessStartInfo(tempExe)
+        var psi = new System.Diagnostics.ProcessStartInfo(installer)
         {
             UseShellExecute = true,
             Verb = "runas"
