@@ -1,0 +1,127 @@
+# 📘 PboStudio — Das Ultimative Handbuch & Dokumentation
+
+> **PBO Studio**: Die All-in-One Tuning & Stabilitäts-Suite für AMD Ryzen Curve Optimizer, PBO Telemetrie und Per-Core Stresstesting.
+
+---
+
+## 📋 Inhaltsverzeichnis
+1. [Über das Projekt](#1-über-das-projekt)
+2. [Voraussetzungen & Treiber (PawnIO)](#2-voraussetzungen--treiber-pawnio)
+3. [Die Hauptansicht (UI Übersicht)](#3-die-hauptansicht-ui-übersicht)
+4. [System Health Audit (EXPO & BIOS Status)](#4-system-health-audit-expo--bios-status)
+5. [WHEA Wächter & Smart Empfehlungen (Grob vs. Fein)](#5-whea-wächter--smart-empfehlungen-grob-vs-fein)
+6. [Der Auto-Tuner (Vollautomatisches CO-Absenken)](#6-der-auto-tuner-vollautomatisches-co-absenken)
+7. [Werte live anwenden vs. BIOS-Übernahme](#7-werte-live-anwenden-vs-bios-übernahme)
+8. [Stabilitäts-Bericht (HTML Report Exporter)](#8-stabilitäts-bericht-html-report-exporter)
+9. [Absturzsicherheit & BSOD Recovery](#9-absturzsicherheit--bsod-recovery)
+10. [Häufige Fragen (FAQ)](#10-häufige-fragen-faq)
+
+---
+
+## 1. Über das Projekt
+**PboStudio** vereint echtes Einzelkern-Stresstesting (bekannt aus Tools wie CoreCycler) mit der direkten Live-Steuerung des AMD Curve Optimizers über die **SMU (System Management Unit)** in einer einzigen modernen Benutzeroberfläche.
+
+Du musst keine unleserlichen `.ini`-Dateien mehr bearbeiten – Testen, Fehler analysieren und Anpassungen vornehmen geschehen in Echtzeit in einer Hand.
+
+---
+
+## 2. Voraussetzungen & Treiber (PawnIO)
+- **Betriebssystem**: Windows 10 / 11 (64-Bit)
+- **Prozessor**: AMD Ryzen (Zen 2, Zen 3, Zen 4, Zen 5 – inkl. X3D Modelle)
+- **Rechte**: Administrator-Rechte (erforderlich für SMU Ring-0 Kommunikation)
+- **Kernel-Treiber**: **PawnIO** (Signierter Windows-Treiber, kein unsicheres WinRing0/inpoutx64). Über den eingebauten *⚙️ Treiber & Engines Manager* kann PawnIO mit 1 Klick installiert werden.
+
+---
+
+## 3. Die Hauptansicht (UI Übersicht)
+Das Hauptfenster ist in übersichtliche Funktionsbereiche gegliedert:
+
+- **Top Header Bar**:
+  - **Links**: Anwendungs-Logo, erkannte CPU und Live-Telemetrie (Boost-Takt, PPT, TDC, EDC, Temperatur).
+  - **Rechts**: Klickbarer `🔍 SYSTEM: xx/100` Audit Button, `⚙️ Treiber & Engines Manager` und isolierte `🛡️ WÄCHTER` Fehleranzeige.
+- **Linke Spalte (Kern-Tabelle & Empfehlungen)**:
+  - **Empfehlungskarte**: Zeigt WHEA-Korrekturvorschläge mit **`⏩ Grob (+4)`** vs. **`🎯 Fein (+2)`** Precision-Toggle.
+  - **Tabelle**: Zeigt alle Kerne mit CPPC-Bestenliste (🥇 Gold & 🥈 Silber bevorzugte Kerne) und Live-Margin Spinnern (-60 bis +30).
+- **Rechte Spalte (Test Steuerung & Auto-Tuner)**:
+  - **Profil-Wahl**: Vordefinierte Test-Profile (z.B. *Komplett – SSE & AVX2*).
+  - **🤖 Auto-Tuner**: Umschalter für vollautomatisches Absenken (Deaktiviert / Grob / Fein).
+  - **Action Buttons**: `⚡ CO-Werte jetzt live anwenden` und `🚀 Test Starten`.
+  - **⚙️ Mehr Einstellungen**: Scrollbarer Bereich für Runtime, Durchgänge, P95 / y-cruncher Wahl, Webhooks & Autostart.
+- **Untere Workspace-Karte**:
+  - Tab 1: **`📊 Live Telemetrie-Graph`** (60s Verlauf von MHz, °C, W).
+  - Tab 2: **`📜 Konsole & Log-Protokoll`** (Detailliertes Entwickler-Protokoll).
+
+---
+
+## 4. System Health Audit (EXPO & BIOS Status)
+Ein Klick auf **`🔍 SYSTEM: xx/100`** prüft dein System auf zwei kritische Leistungsfaktoren:
+1. **RAM EXPO / XMP Profil**: Liest über WMI die tatsächliche Taktrate ab. Läuft dein RAM nur mit JEDEC Standard-Takt (z.B. 4800 MT/s statt 6000 MT/s), wird eine Warnung ausgegeben.
+2. **AGESA BIOS-Datum**: Prüft das Release-Datum deines Mainboard-BIOS. Ist das BIOS älter als 9 Monate, wird ein Update für bessere Ryzen-Stabilität empfohlen.
+
+---
+
+## 5. WHEA Wächter & Smart Empfehlungen (Grob vs. Fein)
+Der integrierte Wächter liest in Echtzeit Windows Event Log **WHEA-Fehler 18/19** aus und ordnet sie streng numerisch aufsteigend den physikalischen CPU-Kernen zu (`Kern 0`, `Kern 1`, `Kern 4`).
+
+### Precision Modi:
+- **⏩ Grob (+4)**: Erhöht den Voltage-Offset bei WHEA-Fehlern um `+4` Schritte (z.B. `-30 ➔ -26`). Empfohlen, um instabile Kerne sofort abzusichern.
+- **🎯 Fein (+2)**: Erhöht den Offset um nur `+2` Schritte (z.B. `-30 ➔ -28`). Für Tuner, die jedes Millivolt herauskitzeln wollen.
+
+Ein Klick auf **`⚡ Werte übernehmen`** übernimmt die korrigierten Offsets direkt in die Tabelle.
+
+---
+
+## 6. Der Auto-Tuner (Vollautomatisches CO-Absenken)
+Der **Auto-Tuner** sucht vollautomatisch die Stabilitätsgrenze deiner Kerne:
+
+1. **Wahl des Modus**:
+   - **Grob (-3 Schritte)**: Schnellsuch-Modus. Senkt bestandene Kerne pro Runde um 3 Stufen ab.
+   - **Fein (-1 Schritt)**: Min/Max Tuning. Senkt bestandene Kerne pro Runde um 1 Stufe ab.
+2. **Ablauf**:
+   - Besteht ein Kern den Durchgang, senkt der Auto-Tuner den Wert weiter ab.
+   - Tritt ein WHEA-Fehler auf, korrigiert der Auto-Tuner den Kern zurück auf den letzten stabilen Wert, **fixiert den Kern als optimal** und testet die übrigen Kerne weiter.
+
+---
+
+## 7. Werte live anwenden vs. BIOS-Übernahme
+
+### Live in Windows anwenden:
+Mit Klick auf **`⚡ CO-Werte jetzt live anwenden`** werden alle Offsets sofort in die AMD SMU geladen.
+- **Autostart-Funktion**: Aktiviere unter *Mehr Einstellungen* das Häkchen `[x] Beim Windows-Start automatisch anwenden`. PboStudio erstellt eine geplante Windows-Aufgabe, die deine Werte nach jedem Neustart lädt.
+
+### Permanentes Einbrennen im Mainboard-BIOS:
+Kein Windows-Tool kann den physischen BIOS-Chip im Betrieb überschreiben. So überträgst du deine getesteten Werte ins BIOS:
+1. Notiere deine finalen Tabellenwerte (z.B. `Kern 0: -20`, `Kern 1: -25`...).
+2. Starte den PC neu und drücke `ENTF` / `F2` fürs BIOS.
+3. Gehe zu: *Advanced ➔ AMD Overclocking ➔ Precision Boost Overdrive ➔ Curve Optimizer*.
+4. Setze *Curve Optimizer* auf **Per Core**, Vorzeichen auf **Negative** und trage deine Beträge ein.
+5. Drücke `F10` zum Speichern!
+
+---
+
+## 8. Stabilitäts-Bericht (HTML Report Exporter)
+Nach Abschluss eines Testlaufs bietet PboStudio die Funktion **`📄 Report exportieren`**.
+Dabei wird eine interaktive, professionelle HTML-Zertifikatsdatei erstellt mit:
+- Vollständiger Hardware-Zusammenfassung (CPU, RAM, System Health Score)
+- Getesteten Durchgängen, Laufzeiten & Fehlerrate
+- Kerntabelle mit final empfohlenen Curve Optimizer Werten zum Ausdrucken oder Teilen.
+
+---
+
+## 9. Absturzsicherheit & BSOD Recovery
+Sollte während eines extremen Testlaufs ein Bluescreen (BSOD) auftreten, geht kein Fortschritt verloren:
+- PboStudio speichert den Testzustand nach jedem Durchgang in `runs/state.json`.
+- Nach dem Windows-Neustart erkennt PboStudio den Unterbrechungszustand automatisch und bietet mit einem Klick an: **`✓ Empfohlenen Wert übernehmen & Fortsetzen`**.
+
+---
+
+## 10. Häufige Fragen (FAQ)
+
+**F: Warum braucht PboStudio Admin-Rechte?**  
+*A: Die SMU der AMD Ryzen Prozessoren ist ein geschützter Ring-0 Hardwarebereich. Ohne Admin-Rechte kann kein Tool der Welt die CO-Werte lesen oder schreiben.*
+
+**F: Funktioniert PboStudio auch auf Intel-CPUs?**  
+*A: Der Stresstest-Teil (Prime95 / y-cruncher Rotator) funktioniert auf allen CPUs. Die Curve Optimizer Funktionen sind spezifisch für AMD Ryzen.*
+
+**F: Was unterscheidet PboStudio von CoreCycler?**  
+*A: CoreCycler ist ein reines PowerShell-Skript ohne SMU-Schreibfunktion. PboStudio bietet Live-SMU-Schreiben, Auto-Tuning, Wächter-WHEA-Erkennung, Live-Graphen und eine Benutzeroberfläche ohne `.ini`-Dateien.*

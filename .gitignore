@@ -1,0 +1,18 @@
+# Build output
+bin/
+obj/
+publish/
+dist/
+dist-app/
+*.user
+.vs/
+
+# Downloaded stress engines - large, reproducible via the Driver & Engines manager
+external/engines/
+
+# Runtime state: session logs, saved profiles, interrupted-run markers, reports
+runs/
+*.log
+
+# Upstream clone history of the vendored ZenStates-Core fork
+external/ZenStates-Core/.git.upstream/

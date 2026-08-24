@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Reflection bindings for now; switching to compiled bindings is a prerequisite for
+         the Native AOT build and belongs with that work, not before it. -->
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>PboStudio</AssemblyName>
+    <RootNamespace>PboStudio.App</RootNamespace>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="icon.png" />
+    <AvaloniaResource Include="icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PboStudio.Core\PboStudio.Core.csproj" />
+  </ItemGroup>
+
+  <Target Name="CopyEnginesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <EngineFiles Include="$(MSBuildProjectDirectory)\..\..\external\engines\**\*.*"
+                   Exclude="$(MSBuildProjectDirectory)\..\..\external\engines\*.zip;$(MSBuildProjectDirectory)\..\..\external\engines\runs\**\*.*;$(MSBuildProjectDirectory)\..\..\external\engines\work\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EngineFiles)" DestinationFolder="$(PublishDir)\engines\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
