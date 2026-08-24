@@ -414,6 +414,9 @@
                     <TextBlock x:Name="DurationHint" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
                                Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
                     <TextBlock x:Name="DurationHintSub" Classes="caption" Foreground="#6EE7B7" LineHeight="14" />
+                    <!-- What will really run, since the Engine tab overrides a profile's first phase. -->
+                    <TextBlock x:Name="PhasePlanText" Classes="caption" FontFamily="{StaticResource FontMono}"
+                               Foreground="{StaticResource TextMuted}" LineHeight="14" />
                   </StackPanel>
                 </Border>
 

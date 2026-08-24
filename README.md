@@ -4,9 +4,9 @@
 per-core stress testing with direct SMU Curve Optimizer read/write in a single native GUI
 (.NET 9 / Avalonia UI), so you can test a value and apply it without rebooting into the BIOS.
 
-> **Status: 1.0.0-rc.1.** The logic is covered by 81 tests and the tuning loop has been exercised
-> on real hardware, but the auto-tuner's *failure* path — core fails, voltage is raised, core is
-> re-tested — has not yet been observed on a physical CPU. See [Known gaps](#known-gaps).
+> **Status: 1.0.0.** 84 tests, and the tuning loop verified end to end on an AMD Ryzen 7 5800X3D:
+> values written to the SMU before each measurement, Prime95 pinned to a single core, a full
+> stress slot, pass detection, step-down and locking at the chip limit.
 
 ---
 
@@ -15,7 +15,7 @@ per-core stress testing with direct SMU Curve Optimizer read/write in a single n
 | Variant | Size | What you need |
 |---|---|---|
 | **`PboStudio.exe`** | 45 MB | Nothing. One file, no .NET install. Fetches Prime95 and y-cruncher from their vendors on first run. |
-| **`PboStudio-full.zip`** | 99 MB | Nothing, including no internet. Same executable plus both stress engines and the PawnIO driver installer. |
+| **`PboStudio-full.zip`** | 98 MB | Nothing, including no internet. Same executable plus both stress engines and the PawnIO driver installer. |
 
 Take the single executable unless the machine has no internet access. Both are on the
 [Releases page](../../releases).
@@ -108,10 +108,12 @@ dotnet publish src/PboStudio.App/PboStudio.App.csproj -c Release -r win-x64 \
 
 ## Known gaps
 
-- The auto-tuner's failure path has not been verified on physical hardware.
+- The auto-tuner's **upward** search — core fails, voltage is raised, core is re-tested — is
+  covered by tests but has not been observed on physical hardware, because the test CPU stayed
+  stable down to its chip limit. The descent and locking paths are verified.
 - Aida64 and Linpack engines are not supported; CoreCycler has them.
-- The auto-tuner's upward search is bounded by the configured pass count, so starting at the
-  chip limit with few passes can leave a core unresolved.
+- The upward search is bounded by the configured pass count, so starting at the chip limit with
+  few passes can leave a core unresolved.
 
 ---
 

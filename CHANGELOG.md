@@ -1,10 +1,40 @@
 # Changelog
 
+## 1.0.0 — 2026-08-25
+
+Verified on hardware. An AMD Ryzen 7 5800X3D ran the full loop: the margin written to the SMU
+before each measurement, Prime95 pinned to one core, a complete stress slot, pass detection,
+step-down to the chip limit and locking there.
+
+### Fixed
+
+- **The auto-tuner forgot everything between phases.** A profile like Hybrid Ultimate runs
+  several phases, each with its own runner, and both the per-core search state and the set of
+  locked cores lived inside it. A core that failed at -28, climbed to -25 and locked there would
+  be tested again in the next phase with no memory of any of it — pass at -25, look like a fresh
+  descent, and be stepped straight back down to -28. The lock icon stayed on screen throughout.
+- **Engine downloads were pinned to one version each, and both had 404'd.** First-run setup was
+  a dead end. Downloads now try pinned builds, then discover the current archive from the
+  vendor's own download page, and only then fail — with the page and target folder named, and a
+  button to open it. A payload that is not a ZIP is rejected rather than handed to the extractor.
+- **The offline bundle was not offline.** It carried both stress engines but still needed the
+  network for PawnIO, without which the app cannot reach the SMU at all.
+
+### Added
+
+- The Setup tab states the phases a run will actually consist of. A profile's first phase is
+  replaced by the Engine tab's instruction set and FFT range while later phases are not, so a
+  profile promising "SSE with huge FFTs" could genuinely run small ones with nothing on screen
+  saying so.
+- `PboStudio-full.zip`: executable, both engines and the PawnIO installer, for machines with no
+  internet access. CI fails the build if the driver installer's signature is not valid.
+
+---
+
 ## 0.9.0 — 2026-08-24
 
 First versioned release. The project had no version history before this point; everything
-below was found and fixed in a single review pass, so it is grouped by kind rather than by
-release.
+below was found and fixed in a single review pass.
 
 ### Fixed — correctness
 
@@ -67,11 +97,8 @@ release.
 - Localisation is complete in both directions. Status text, results, the wizard, the platform
   check and every tooltip previously appeared in German regardless of the selected language.
 
-### Known gaps
+### Known gaps at the time
 
-- **No end-to-end run has been verified on real hardware.** The test suite covers the logic;
-  the full path — engine launch, core pinning, failure detection, SMU writes under load — has
-  not been exercised.
+- No end-to-end run had been verified on real hardware. Resolved in 1.0.0.
 - Aida64 and Linpack engines are not supported; CoreCycler has them.
-- The auto-tuner's upward search is bounded by the configured pass count. Starting at the
-  chip limit with few passes can leave a core unresolved.
+- The auto-tuner's upward search is bounded by the configured pass count.

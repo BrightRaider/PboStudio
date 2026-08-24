@@ -1537,27 +1537,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Build phases from selected profile or manual controls
-        var phases = new List<TestPhase>();
-        if (ProfileBox.SelectedItem is TestProfile profile && profile.Phases.Count > 0)
-        {
-            var first = profile.Phases[0];
-            if (first.Engine == EngineKind.Prime95 && !useYCruncher)
-            {
-                phases.Add(new TestPhase(SelectedPrimeMode(), SelectedFft(), EngineKind.Prime95));
-            }
-            else
-            {
-                phases.Add(first);
-            }
-
-            phases.AddRange(profile.Phases.Skip(1));
-        }
-        else
-        {
-            phases.Add(new TestPhase(SelectedPrimeMode(), SelectedFft(),
-                useYCruncher ? EngineKind.YCruncher : EngineKind.Prime95));
-        }
+        var phases = BuildPhases(useYCruncher);
 
         var skipped = _rows.Where(r => !r.Selected).Select(r => r.Index).ToHashSet();
         if (skipped.Count == _rows.Count)
@@ -1800,6 +1780,60 @@ public partial class MainWindow : Window
             row.RefreshLocalization();
         });
         return true;
+    }
+
+    /// <summary>
+    /// The phases a run will actually consist of.
+    /// <para>
+    /// A profile's first phase is replaced by the Engine tab's own instruction set and FFT
+    /// range, while later phases come from the profile verbatim. That is deliberate - the
+    /// dropdowns have to do something - but it means a profile whose description promises
+    /// "SSE with huge FFTs" can genuinely run small ones. <see cref="PhaseSummary"/> puts the
+    /// result on screen so the plan is never implied, only stated.
+    /// </para>
+    /// </summary>
+    private List<TestPhase> BuildPhases(bool useYCruncher)
+    {
+        var phases = new List<TestPhase>();
+
+        if (ProfileBox?.SelectedItem is TestProfile profile && profile.Phases.Count > 0)
+        {
+            var first = profile.Phases[0];
+            phases.Add(first.Engine == EngineKind.Prime95 && !useYCruncher
+                ? new TestPhase(SelectedPrimeMode(), SelectedFft(), EngineKind.Prime95)
+                : first);
+
+            phases.AddRange(profile.Phases.Skip(1));
+        }
+        else
+        {
+            phases.Add(new TestPhase(SelectedPrimeMode(), SelectedFft(),
+                useYCruncher ? EngineKind.YCruncher : EngineKind.Prime95));
+        }
+
+        return phases;
+    }
+
+    /// <summary>One line naming every phase in order, e.g. "1. SSE / Huge  ·  2. y-cruncher".</summary>
+    private string PhaseSummary()
+    {
+        var phases = BuildPhases(EngineBox?.SelectedIndex == 1);
+
+        return string.Join("  ·  ", phases.Select((p, i) =>
+        {
+            string label = p.Engine == EngineKind.YCruncher
+                ? "y-cruncher"
+                : $"{p.Mode.ToString().ToUpperInvariant()} / {FftLabelFor(p)}";
+            return phases.Count > 1 ? $"{i + 1}. {label}" : label;
+        }));
+    }
+
+    /// <summary>Shows the real bounds for a custom range rather than the word "Custom".</summary>
+    private string FftLabelFor(TestPhase phase)
+    {
+        if (phase.Fft != FftPreset.Custom) return phase.Fft.ToString();
+        var (min, max) = CustomFftRange();
+        return $"{min}-{max}K";
     }
 
     private Prime95Mode SelectedPrimeMode() => ModeBox.SelectedIndex switch
@@ -2067,6 +2101,11 @@ public partial class MainWindow : Window
             DurationHintSub.Text = isDe
                 ? "Prüft die aktuellen CO-Werte auf Stabilität, ohne sie zu verändern."
                 : "Tests the current CO values for stability without changing them.";
+        }
+
+        if (PhasePlanText is not null)
+        {
+            PhasePlanText.Text = LocalizationService.Pick("Ablauf: ", "Plan: ") + PhaseSummary();
         }
 
         UpdateAutoTunerProgress();
