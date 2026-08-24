@@ -316,6 +316,7 @@ public static class LocalizationService
             "WizardNotFound" => isDe ? "❌ Nicht gefunden — kann automatisch heruntergeladen werden." : "❌ Not found — can be downloaded automatically.",
             "WizardPawnIoOk" => isDe ? "✅ Treiber aktiv, SMU erreichbar." : "✅ Driver active, SMU reachable.",
             "WizardCancel" => isDe ? "Abbrechen" : "Cancel",
+            "WizardOpenPage" => isDe ? "🌐 Download-Seite öffnen" : "🌐 Open download page",
 
             // ---- Graph ----
             "GraphClock" => isDe ? "Takt" : "Clock",

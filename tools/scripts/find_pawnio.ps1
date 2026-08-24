@@ -12,8 +12,8 @@ $urls = @(
 foreach ($url in $urls) {
     try {
         Write-Host "Trying $url ..."
-        $wc.DownloadFile($url, "C:\Users\Ionas\APP\PboStudio\PawnIO_setup.exe")
-        Write-Host "SUCCESS! Downloaded to C:\Users\Ionas\APP\PboStudio\PawnIO_setup.exe"
+        $wc.DownloadFile($url, (Join-Path $PSScriptRoot "..\..\PawnIO_setup.exe"))
+        Write-Host "SUCCESS! Downloaded to $PSScriptRoot\..\..\PawnIO_setup.exe"
         exit 0
     } catch {
         Write-Host "Failed: $_"
@@ -27,7 +27,7 @@ try {
     $asset = $json.assets | Where-Object { $_.name -like "*.exe" } | Select-Object -First 1
     if ($asset) {
         Write-Host "Found API asset: $($asset.browser_download_url)"
-        $wc.DownloadFile($asset.browser_download_url, "C:\Users\Ionas\APP\PboStudio\PawnIO_setup.exe")
+        $wc.DownloadFile($asset.browser_download_url, (Join-Path $PSScriptRoot "..\..\PawnIO_setup.exe"))
         Write-Host "SUCCESS from API!"
         exit 0
     }

@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
 
-$pngPath = "C:\Users\Ionas\APP\PboStudio\src\PboStudio.App\icon.png"
-$icoPath = "C:\Users\Ionas\APP\PboStudio\src\PboStudio.App\icon.ico"
+$pngPath = (Join-Path $PSScriptRoot "..\..\src\PboStudio.App\icon.png")
+$icoPath = (Join-Path $PSScriptRoot "..\..\src\PboStudio.App\icon.ico")
 
 $bmp = [System.Drawing.Bitmap]::FromFile($pngPath)
 $hIcon = $bmp.GetHicon()

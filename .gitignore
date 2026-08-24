@@ -16,3 +16,6 @@ runs/
 
 # Upstream clone history of the vendored ZenStates-Core fork
 external/ZenStates-Core/.git.upstream/
+
+# Release packaging output
+release/

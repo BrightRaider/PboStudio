@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
 
-$jpgPath = "C:\Users\Ionas\.gemini\antigravity\brain\16aad794-fa72-4677-bde1-ff8006fb9fab\pbostudio_icon_1786546241843.jpg"
-$pngPath = "C:\Users\Ionas\APP\PboStudio\src\PboStudio.App\icon.png"
+$jpgPath = (Join-Path $PSScriptRoot "icon-source.jpg")
+$pngPath = (Join-Path $PSScriptRoot "..\..\src\PboStudio.App\icon.png")
 
 $img = [System.Drawing.Image]::FromFile($jpgPath)
 # Resize to a clean 256x256 icon bitmap

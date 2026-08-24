@@ -95,8 +95,11 @@
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Grid.Column="0" x:Name="ProgressLabelText" Classes="label"
                    Foreground="{StaticResource StateInfo}" TextWrapping="Wrap" />
-        <Button Grid.Column="1" x:Name="CancelDownloadButton" Classes="secondary"
-                Click="OnCancelDownload" Padding="10,3" Margin="10,0,0,0" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0">
+          <Button x:Name="OpenDownloadPageButton" Classes="primary" Click="OnOpenDownloadPage"
+                  Padding="10,3" IsVisible="False" />
+          <Button x:Name="CancelDownloadButton" Classes="secondary" Click="OnCancelDownload" Padding="10,3" />
+        </StackPanel>
       </Grid>
       <ProgressBar x:Name="DownloadProgressBar" Minimum="0" Maximum="100" Height="6" />
     </StackPanel>

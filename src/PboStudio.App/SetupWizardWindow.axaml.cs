@@ -49,6 +49,7 @@ public partial class SetupWizardWindow : Window
         RecheckButton.Content = LocalizationService.Get("WizardRecheck");
         CloseButton.Content = LocalizationService.Get("Close");
         CancelDownloadButton.Content = LocalizationService.Get("WizardCancel");
+        OpenDownloadPageButton.Content = LocalizationService.Get("WizardOpenPage");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -115,15 +116,13 @@ public partial class SetupWizardWindow : Window
 
     private async void OnDownloadPrime95(object? sender, RoutedEventArgs e)
     {
-        string targetDir = Path.Combine(AppContext.BaseDirectory, "engines", "prime95");
-        await RunDownloadAsync(DependencyService.Prime95DownloadUrl, targetDir, "Prime95");
+        await RunDownloadAsync(DependencyService.Prime95);
         await RefreshStatusAsync();
     }
 
     private async void OnDownloadYCruncher(object? sender, RoutedEventArgs e)
     {
-        string targetDir = Path.Combine(AppContext.BaseDirectory, "engines", "ycruncher");
-        await RunDownloadAsync(DependencyService.YCruncherDownloadUrl, targetDir, "y-cruncher");
+        await RunDownloadAsync(DependencyService.YCruncher);
         await RefreshStatusAsync();
     }
 
@@ -133,30 +132,29 @@ public partial class SetupWizardWindow : Window
         var status = await Task.Run(() => DependencyService.CheckDependencies(AppContext.BaseDirectory, _smu));
 
         if (!status.Prime95Available)
-        {
-            await RunDownloadAsync(DependencyService.Prime95DownloadUrl,
-                Path.Combine(AppContext.BaseDirectory, "engines", "prime95"), "Prime95");
-        }
+            await RunDownloadAsync(DependencyService.Prime95);
+
         if (!status.YCruncherAvailable && _downloadCts?.IsCancellationRequested != true)
-        {
-            await RunDownloadAsync(DependencyService.YCruncherDownloadUrl,
-                Path.Combine(AppContext.BaseDirectory, "engines", "ycruncher"), "y-cruncher");
-        }
+            await RunDownloadAsync(DependencyService.YCruncher);
 
         await RefreshStatusAsync();
     }
 
-    private async Task RunDownloadAsync(string url, string targetDir, string name)
+    private EngineSource? _lastFailedSource;
+
+    private async Task RunDownloadAsync(EngineSource source)
     {
+        string name = source.Name;
         _downloadCts = new CancellationTokenSource();
         SetBusy(true);
+        OpenDownloadPageButton.IsVisible = false;
         DownloadProgressBar.Value = 0;
         DownloadProgressBar.IsIndeterminate = false;
         ProgressLabelText.Foreground = SolidColorBrush.Parse("#38BDF8");
 
         try
         {
-            await DependencyService.DownloadAndExtractAsync(url, targetDir, (pct, status) =>
+            await DependencyService.DownloadEngineAsync(AppContext.BaseDirectory, source, (pct, status) =>
             {
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -180,10 +178,15 @@ public partial class SetupWizardWindow : Window
         catch (Exception ex)
         {
             ProgressLabelText.Foreground = SolidColorBrush.Parse("#F87171");
+            string targetDir = DependencyService.TargetDirectoryFor(AppContext.BaseDirectory, source);
             ProgressLabelText.Text = LocalizationService.Pick(
-                $"Fehler beim Download von {name}: {ex.Message}",
-                $"Error downloading {name}: {ex.Message}");
-            // Leave the message on screen rather than hiding it with the panel.
+                $"{name}: {ex.Message}\nDu kannst das Archiv von Hand laden und nach „{targetDir}“ entpacken.",
+                $"{name}: {ex.Message}\nYou can download the archive by hand and extract it to “{targetDir}”.");
+
+            // A dead end is the one outcome the setup must never produce: offer the page.
+            _lastFailedSource = source;
+            OpenDownloadPageButton.IsVisible = true;
+
             SetBusy(false);
             DownloadProgressPanel.IsVisible = true;
             return;
@@ -198,6 +201,12 @@ public partial class SetupWizardWindow : Window
     }
 
     private void OnCancelDownload(object? sender, RoutedEventArgs e) => _downloadCts?.Cancel();
+
+    private void OnOpenDownloadPage(object? sender, RoutedEventArgs e)
+    {
+        string url = _lastFailedSource?.PageUrl ?? DependencyService.Prime95.PageUrl;
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+    }
 
     private async void OnDownloadPawnIo(object? sender, RoutedEventArgs e)
     {

@@ -1,43 +1,114 @@
 # 🚀 PboStudio — CoreCycler & AMD Ryzen Curve Optimizer Studio
 
-**PboStudio** is a next-generation stability testing and live tuning suite for AMD Ryzen processors. It replaces text-based tools like CoreCycler by combining per-core stress testing with direct live SMU (System Management Unit) Curve Optimizer read/write controls in a single native GUI (.NET 9 / Avalonia UI).
+**PboStudio** is a stability testing and live tuning suite for AMD Ryzen processors. It combines
+per-core stress testing with direct SMU Curve Optimizer read/write in a single native GUI
+(.NET 9 / Avalonia UI), so you can test a value and apply it without rebooting into the BIOS.
+
+> **Status: 1.0.0-rc.1.** The logic is covered by 81 tests and the tuning loop has been exercised
+> on real hardware, but the auto-tuner's *failure* path — core fails, voltage is raised, core is
+> re-tested — has not yet been observed on a physical CPU. See [Known gaps](#known-gaps).
+
+---
+
+## ⬇️ Download
+
+| Variant | Size | What you need |
+|---|---|---|
+| **`PboStudio.exe`** | ~47 MB | Nothing. Single file, no .NET install. Downloads Prime95 and y-cruncher on first run. |
+
+Grab it from the [Releases page](../../releases). Right-click → **Run as administrator**:
+talking to the SMU goes through a kernel driver, and that needs elevation.
+
+Windows SmartScreen will warn about an unknown publisher — the executable is not code-signed.
 
 ---
 
 ## ✨ Key Features
 
-- 🎯 **Live Curve Optimizer Control**: Read and write per-core CO margins live in Windows without rebooting.
-- 🤖 **Auto-Tuner Engine & Adaptive Staging**: Automated Top-Down and Bottom-Up tuning with instant safety backoff (+3/+2) and automatic core locking (`🔒`).
-- 🏆 **Hybrid Dual-Engine Testing**: Chains **Prime95 SSE** (for max boost & transient Vdroop limits) and **y-cruncher** (for heavy AVX vector & cache validation) seamlessly in a single test run.
-- 🛡️ **WHEA Event Log Watchdog**: Intercepts hardware errors (WHEA 18/19) in real-time, mapping them strictly to physical core IDs.
-- ⏩ **Grob (+4) & 🎯 Fein (+2) Smart Recommendations**: Instant mitigation proposals to fix instability with one click.
-- 🩺 **System Health Audit**: Queries WMI for RAM EXPO/XMP speed and motherboard AGESA BIOS release dates (Score 0–100).
-- 🗂️ **Clean 3-Tab Control Panel**: `[🎯 Setup]`, `[⚡ Engine]`, `[🛡️ System]` with a sticky start button, plus one place that shows all three ways a value becomes real (live SMU, BIOS list, Windows autostart) side by side.
-- ⭐ **CPPC Preferred Core & Chiplet Badges**: Identifies top performing cores (🥇 Gold & 🥈 Silver). Chiplet grouping is resolved from the OS die/last-level-cache topology plus the CPU's own CCD fuse, so it is correct on 12/16-core desktop parts, Threadripper, and the Zen/Zen 2 parts that put two CCXs on one CCD.
-- 📊 **15-Minute Live Telemetry**: Three separate lanes for boost clock (MHz), core temperature (°C) and PPT power (W), each with its own labelled scale, a time axis, the configured emergency temperature limit drawn in, and a crosshair tooltip with real timestamps.
-- 📄 **HTML Stability Certificate Exporter**: Generates shareable, interactive benchmark reports.
-- 💾 **BSOD & Crash Recovery**: Resumes interrupted test runs automatically after system reboots without losing state.
-- ⚙️ **Windows Autostart Task**: Re-applies your tuned CO settings invisibly on every Windows boot.
+- 🎯 **Live Curve Optimizer control** — read and write per-core CO margins in Windows, no reboot.
+- 🤖 **Auto-tuner with a two-way search** — steps each core down toward the chip limit, and on a
+  failure steps it back *up*, re-testing, until a value actually holds. Only a value that has
+  passed under load gets locked in.
+- 🏆 **Dual-engine testing** — chains Prime95 SSE (peak boost, transient Vdroop) and y-cruncher
+  (heavy vector and cache load) in one run.
+- 🛡️ **WHEA watchdog** — catches corrected hardware errors from the Windows event log and maps
+  them to physical cores by APIC ID. Usually the earliest sign of a too-aggressive offset.
+- ⏩ **Smart recommendations** — coarse (+4) and fine (+2) mitigation proposals in one click.
+- 🩺 **Platform check** — EXPO/XMP state and motherboard BIOS age, both of which affect PBO
+  stability before any CO value is involved.
+- ⭐ **Preferred-core badges from real CPPC data** — read from the processor, not guessed. If the
+  CPU reports no ranking, no badge is shown.
+- 📊 **15-minute live telemetry** — three labelled lanes (clock, temperature, PPT) with a time
+  axis, the configured emergency temperature limit drawn in, and a crosshair tooltip.
+- 📄 **HTML stability report** — shareable summary of values, errors and runtimes.
+- 💾 **Crash recovery** — an interrupted run is detected on the next start and can be resumed.
+- ⚙️ **Windows autostart task** — reapplies your tuned values on every boot.
+- 🌍 **German and English**, switchable at runtime.
 
 ---
 
-## 📘 Documentation & Manuals
+## 🛠️ Requirements
 
-For complete German documentation, usage instructions, and BIOS step-by-step guides, visit:
+- **OS**: Windows 10 / 11 (64-bit)
+- **CPU**: AMD Ryzen (Zen 2 – Zen 5, including X3D) and Ryzen Threadripper
+- **Rights**: Administrator — required for SMU access
+- **Driver**: [PawnIO](https://pawnio.eu/) — a signed, open-source kernel driver that restricts
+  ring-0 access to a narrow set of commands. Installable from inside the app.
 
-➡️ **[Lies das vollständige Benutzer-Handbuch (`docs/BENUTZER_HANDBUCH.md`)](file:///C:/Users/Ionas/APP/PboStudio/docs/BENUTZER_HANDBUCH.md)**
+Prime95 and y-cruncher are **not bundled**. The app downloads them from the vendors on first
+run, falling back to the current version on the vendor's download page if a pinned build has
+been retired.
 
 ---
 
-## 🛠️ System Requirements
+## ⚠️ What this software does to your computer
 
-- **OS**: Windows 10 / 11 (64-Bit)
-- **CPU**: AMD Ryzen (Zen 2, Zen 3, Zen 4, Zen 5 including X3D models) and Ryzen Threadripper
-- **Permissions**: Administrator rights (Required for SMU Ring-0 hardware communication)
-- **Kernel Driver**: **[PawnIO](https://pawnio.eu/)** (Signed driver, installable via built-in manager)
+It changes CPU voltage offsets. Crashes and bluescreens are a normal part of finding a limit,
+not a malfunction. Values applied live are gone after a reboot unless you enable the autostart
+task or enter them in your BIOS.
+
+Undervolting is not overvolting and does not typically damage hardware, but an unstable system
+can corrupt data in flight. Do not tune a machine that is doing work you care about.
+
+---
+
+## 📘 Documentation
+
+- [Benutzer-Handbuch (Deutsch)](docs/BENUTZER_HANDBUCH.md)
+- [User Manual (English)](docs/USER_MANUAL.md)
+- [Changelog](CHANGELOG.md)
+
+---
+
+## 🔨 Building from source
+
+```bash
+git clone <this repository>
+cd PboStudio
+dotnet test tests/PboStudio.Tests/PboStudio.Tests.csproj
+dotnet publish src/PboStudio.App/PboStudio.App.csproj -c Release -r win-x64 \
+  --self-contained true -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true \
+  -o out
+```
+
+`external/ZenStates-Core` is a vendored fork of
+[irusanov/ZenStates-Core](https://github.com/irusanov/ZenStates-Core) with local patches;
+`external/zenstates-local-patches.diff` records the difference from upstream.
+
+---
+
+## Known gaps
+
+- The auto-tuner's failure path has not been verified on physical hardware.
+- Aida64 and Linpack engines are not supported; CoreCycler has them.
+- The auto-tuner's upward search is bounded by the configured pass count, so starting at the
+  chip limit with few passes can leave a core unresolved.
 
 ---
 
 ## 📜 License
 
-GPL-3.0 License — includes patched [ZenStates-Core](https://github.com/irusanov/ZenStates-Core).
+GPL-3.0. Includes a patched copy of [ZenStates-Core](https://github.com/irusanov/ZenStates-Core).
+Prime95 and y-cruncher are the property of their respective authors and are downloaded from
+their official sources, not redistributed here.
