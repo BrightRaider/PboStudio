@@ -59,9 +59,10 @@ Windows SmartScreen will warn about an unknown publisher — the executable is n
 - **Driver**: [PawnIO](https://pawnio.eu/) — a signed, open-source kernel driver that restricts
   ring-0 access to a narrow set of commands. Installable from inside the app.
 
-Prime95 and y-cruncher are **not bundled**. The app downloads them from the vendors on first
-run, falling back to the current version on the vendor's download page if a pinned build has
-been retired.
+Prime95 and y-cruncher are downloaded from the vendors on first run, falling back to the
+current version on the vendor's download page if a pinned build has been retired. The
+`PboStudio-full.zip` variant ships them alongside the executable for machines without internet
+access.
 
 ---
 
@@ -113,6 +114,14 @@ dotnet publish src/PboStudio.App/PboStudio.App.csproj -c Release -r win-x64 \
 
 ## 📜 License
 
-GPL-3.0. Includes a patched copy of [ZenStates-Core](https://github.com/irusanov/ZenStates-Core).
-Prime95 and y-cruncher are the property of their respective authors and are downloaded from
-their official sources, not redistributed here.
+GPL-3.0 for PboStudio itself. Includes a patched copy of
+[ZenStates-Core](https://github.com/irusanov/ZenStates-Core), also GPL-3.0.
+
+**Prime95** (Great Internet Mersenne Prime Search) and **y-cruncher** (Alexander J. Yee) are
+freeware owned by their respective authors and are **not covered by this project's licence**.
+The single-file build downloads them from the vendors. The offline bundle includes them
+unmodified for convenience; if you are an author of either and would prefer it did not, open an
+issue and the bundle will be withdrawn.
+
+- Prime95: <https://www.mersenne.org/legal/>
+- y-cruncher: <http://www.numberworld.org/y-cruncher/>
