@@ -28,7 +28,7 @@ PboStudio ist ein moderner, performanter Ersatz für CoreCycler in C# (.NET 9) /
    - **Dynamisches Farbschema**: Grün (#10B981) für statische Stresstests, Lila (#8B5CF6) für den Auto-Tuner.
    - **Multi-CCD Schnellauswahl**: Filter-Buttons werden aus der tatsächlichen Chiplet-Zahl erzeugt (vorher fest zwei, auf Threadripper falsch).
    - **Kerntabelle**: CCD als eigener Chip, Risiko-Farbcodierung des CO-Werts, `▲/▼`-Delta zum Startwert, Fortschrittsbalken bis zum Chip-Limit, Status mit Glyphe **und** Farbe (rot/grün-tauglich).
-   - **Quick-Actions**: `[⚡ Alle auf -30/-50]` (Label und Wert aus dem echten CPU-Limit, mit Sicherheitsabfrage) und `[🔄 Zurücksetzen]`.
+   - **Quick-Actions**: `[⚡ Alle auf -30]` bzw. `-50` (Label und Wert aus dem echten CPU-Limit, mit Sicherheitsabfrage) und `[🔄 BIOS-Werte]`, das wieder wirklich auf den beim Start gelesenen Wert zurücksetzt.
    - **Sperren während eines Laufs**: alle Parameter, die mitten im Lauf ohnehin wirkungslos wären; das Notfall-Temperaturlimit bleibt bewusst änderbar.
    - Tastatur-Shortcuts: `F5` (Start/Stop), `Ctrl+C` (BIOS Copy), `Ctrl+S` (Live SMU), `Ctrl+L` (DE/EN). `Space` als Start-Trigger wurde entfernt – er löste auf fokussierten ComboBoxen ungewollt Testläufe aus.
 
@@ -54,6 +54,13 @@ PboStudio ist ein moderner, performanter Ersatz für CoreCycler in C# (.NET 9) /
    - Plattform-Check und Abhängigkeitsprüfung liefen synchron im Konstruktor (WMI, Datei-IO, SMU) und verzögerten den ersten Frame; jetzt asynchron nach dem Rendern.
    - Fehlende Komponenten werden **vor** dem Klick auf „Start" als Banner gemeldet, der Start-Button ist bis dahin deaktiviert – vorher scheiterte der Lauf stumm und der Assistent sprang unvermittelt auf.
    - Protokoll hängt Zeilen als `Run`-Inlines an (vorher `Text +=`, also eine vollständige Kopie pro Zeile) und färbt nach Schweregrad.
+
+3d. **Einstellungen, Kernqualität und Werkzeugkette**:
+   - **Persistenz**: Sprache, Profil, sämtliche Engine-Parameter, Temperaturlimit, Webhook und Fenstergröße liegen in `runs/settings.json` und werden beim Start wiederhergestellt. Zuvor überlebte nur `co_saved.json` einen Neustart.
+   - **Echte CPPC-Rangfolge**: `CoreQualityService` liest die vom Prozessor gemeldeten CPPC-Leistungswerte (MSR `0xC00102B3`, über `ISmuService.CorePerformanceRanking`) statt Kern 0 pauschal als „Gold" zu deklarieren. Meldet die CPU nichts, wird **kein** Abzeichen vergeben — die alte Heuristik zeigte erfundene Daten als Messwert.
+   - **Nachgerüstete Schalter**: „Durchgefallenen Kern überspringen", „WHEA-Warnung als Fehler werten" und „Pause zwischen Kernen" existierten nur als fest verdrahtete Vorgaben in `TestPlan` und sind jetzt bedienbar.
+   - **Versionskontrolle**: Das Projekt ist ein Git-Repository (Version 0.9.0). Der gepatchte ZenStates-Core-Fork ist vendert, seine Abweichung von Upstream liegt als `external/zenstates-local-patches.diff` bei.
+   - **Handbücher** (`docs/BENUTZER_HANDBUCH.md`, `docs/USER_MANUAL.md`) beschreiben wieder die tatsächliche Oberfläche.
 
 4. **Automatisierter Auto-Tuner Regelkreis & Adaptive Staging (`AutoTunerService.cs`)**:
    - **Top-Down & Bottom-Up Suche**: Wähle zwischen Grob (-3 Schritte) und Fein (-1 Schritt).

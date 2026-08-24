@@ -38,23 +38,33 @@ Du musst keine unleserlichen `.ini`-Dateien oder PowerShell-Skripte mehr manuell
 ## 3. Die Hauptansicht (UI & 3-Tab Architektur)
 Das Hauptfenster ist in übersichtliche Funktionsbereiche gegliedert:
 
-- **Top Header Bar**:
-  - **Links**: Anwendungs-Logo, erkannte CPU und Live-Telemetrie (Boost-Takt, PPT, TDC, EDC, Temperatur).
-  - **Rechts**: Klickbarer `🔍 SYSTEM: xx/100` Audit Button, `⚙️ Treiber & Engines Manager` und isolierte `🛡️ WÄCHTER` Fehleranzeige.
+- **Kopfzeile**:
+  - **Oben links**: Logo und erkannte CPU. Darunter der `🛡️ WÄCHTER` und die Live-Telemetrie als einzelne Chips (TAKT, PPT, TDC, EDC, TEMP, SCALAR), jeweils mit Auslastungsbalken gegen das Limit.
+  - **Oben rechts**: Sprachumschalter, klickbarer Plattform-Check (`🔍 System OK · 95/100`) und `⚙️ Treiber & Engines`.
+  - **Setup-Banner**: Fehlen Prime95, y-cruncher oder PawnIO, steht das hier — **bevor** du auf Start drückst. Der Start-Button ist bis dahin deaktiviert.
 - **Linke Spalte (Kern-Tabelle & Empfehlungen)**:
-  - **Empfehlungskarte**: Zeigt WHEA-Korrekturvorschläge mit **`⏩ Grob (+4)`** vs. **`🎯 Fein (+2)`** Precision-Toggle.
-  - **Tabelle**: Zeigt alle physischen Kerne mit CPPC-Bestenliste (🥇 Gold & 🥈 Silber bevorzugte Kerne), CCD-Badging (`[CCD0]`, `[CCD1]`) und Live-Margin Spinnern (automatisch begrenzt auf das BIOS-Limit deiner CPU).
+  - **Empfehlungskarte**: WHEA-Korrekturvorschläge mit **`⏩ Grob (+4)`** vs. **`🎯 Fein (+2)`**, `⚡ Werte übernehmen`, `🧹 WHEA zurücksetzen` und dem empfohlenen Profil samt `Profil laden`.
+  - **Tabelle**: Alle physischen Kerne mit
+    - CCD-Chip, sofern die CPU mehr als ein Chiplet hat (aus der Topologie ermittelt, nicht geraten),
+    - 🥇/🥈 für die bevorzugten Kerne — **nur** wenn der Prozessor tatsächlich CPPC-Rangwerte meldet; der Tooltip nennt den Messwert,
+    - farbcodiertem CO-Wert (grün → gelb → orange → rot, je näher am Chip-Limit),
+    - `▲/▼`-Delta gegenüber dem BIOS-Ausgangswert (bernstein = noch nicht angewendet, gedämpft = in der CPU aktiv),
+    - Status mit Symbol **und** Farbe (`○ Bereit`, `● läuft`, `✓ bestanden`, `✕ FEHLER`, `🔒 Limit`).
   - **Quick-Actions im Tabellenkopf**:
-    - **`[⚡ All -30]`**: Schaltet alle ausgewählten Kerne mit 1 Klick sofort auf das CPU-Limit.
-    - **`[🔄 Reset]`**: Setzt alle ausgewählten Kerne auf die beim Programmstart ausgelesenen Originalwerte zurück.
+    - **`[⚡ Alle auf -30]`** (bzw. `-50` bei Zen 5): setzt alle ausgewählten Kerne auf das Chip-Limit. Fragt vorher nach — dieser Wert ist auf kaum einer CPU stabil.
+    - **`[🔄 BIOS-Werte]`**: zurück auf die Werte, die beim Programmstart aus der CPU gelesen wurden. Ändert nur die Tabelle; die CPU folgt erst mit `⚡ Live anwenden`.
+  - **`CO-WERTE ANWENDEN`** direkt unter der Tabelle: die drei Wege nebeneinander, jeweils mit Kurzerklärung (siehe Kapitel 9).
 - **Rechte Spalte (3-Tab Kontrollpanel)**:
-  - **Tab `[🎯 Setup]`**: Profilauswahl, Erklärung, prominente Auto-Tuner Engine Card, dynamisches Status-Badge und Live-Fortschrittspanel.
-  - **Tab `[⚡ Engine]`**: Min/Kern, Durchgänge, Engine-Wahl (Prime95 / y-cruncher), FFT-Presets, AVX-512, Lastwechsel-Pause (Intervall/Dauer) und Kern-Reihenfolge.
-  - **Tab `[🛡️ System]`**: Safety Temp Limit (°C), Windows Autostart Task, Post-Test Aktion (Sleep/Shutdown), Discord Webhook Integration.
-  - **Sticky Action Footer**: `🚀 Start Test` / `🤖 Start Auto-Tuner` und `⚡ CO-Werte live anwenden` bleiben stets fest am unteren Rand sichtbar.
-- **Untere Workspace-Karte**:
-  - Tab 1: **`📊 Live Telemetrie-Graph`** (60s Verlauf von MHz, °C, W mit interaktivem Mouse-Hover-Crosshair).
-  - Tab 2: **`📜 Konsole & Log-Protokoll`** (Detailliertes Echtzeit-Protokoll).
+  - **Tab `[🎯 Setup]`**: Profilauswahl mit Erklärung, Laufzeit-Abschätzung, Auto-Tuner-Karte mit Absenk-Fortschritt.
+  - **Tab `[⚡ Engine]`**: Min/Kern, Durchgänge, Engine-Wahl (Prime95 / y-cruncher), Befehlssatz bis AVX-512, FFT-Bereich **inklusive frei wählbarem Bereich**, Transient-Pause (Intervall/Dauer), Kern-Reihenfolge **inklusive eigener Reihenfolge**, „Beim ersten Fehler anhalten", „Durchgefallenen Kern überspringen" und Pause zwischen Kernen.
+  - **Tab `[🛡️ System]`**: Notfall-Temperaturlimit (°C), „WHEA-Warnung als Fehler werten", Aktion nach Testende (Standby/Herunterfahren), Discord-Webhook.
+  - **Fortschrittsanzeige** liegt außerhalb der Tabs und bleibt daher in jedem Tab sichtbar.
+  - **Sticky Footer**: `🚀 Test starten` / `🤖 Auto-Tuner starten` / `⏹ Test abbrechen`.
+- **Untere Workspace-Karte** (Höhe per Trennlinie verstellbar):
+  - Tab 1: **`📊 Live-Telemetrie`** — drei getrennte Spuren für Takt, Temperatur und PPT, je mit eigener beschrifteter Skala, Zeitachse über 15 Minuten, eingezeichnetem Notfall-Temperaturlimit und Hover-Tooltip mit echtem Zeitstempel.
+  - Tab 2: **`📜 Protokoll`** — nach Schweregrad farbig, mit `Kopieren`, `Ordner` und `Leeren`.
+
+> **Alle Einstellungen bleiben erhalten.** Sprache, Profil, Engine-Parameter, Temperaturlimit, Webhook und Fenstergröße werden in `runs/settings.json` gespeichert und beim nächsten Start wiederhergestellt.
 
 ---
 
@@ -106,7 +116,7 @@ Je nachdem, ob deine CPU bereits teilweise optimiert ist oder du ganz neu beginn
 ---
 
 ## 6. System Health Audit (EXPO & BIOS Status)
-Ein Klick auf **`🔍 SYSTEM: xx/100`** prüft dein System auf zwei kritische Leistungsfaktoren:
+Ein Klick auf den Plattform-Check (`🔍 System OK · 95/100`) prüft dein System auf zwei kritische Leistungsfaktoren:
 1. **RAM EXPO / XMP Profil**: Liest über WMI die tatsächliche Taktrate ab. Läuft dein RAM nur mit JEDEC Standard-Takt (z.B. 4800 MT/s statt 6000 MT/s), wird eine Warnung ausgegeben.
 2. **AGESA BIOS-Datum**: Prüft das Release-Datum deines Mainboard-BIOS. Ist das BIOS älter als 9 Monate, wird ein Update für bessere Ryzen-Stabilität empfohlen.
 
@@ -121,7 +131,26 @@ Der integrierte Wächter liest in Echtzeit Windows Event Log **WHEA-Fehler 18/19
 
 ---
 
-## 8. Der Auto-Tuner (Top-Down, Adaptive Staging & Limits)
+## 8. Der Auto-Tuner (zweiseitige Suche)
+
+Der Auto-Tuner setzt jeden Wert **selbstständig per SMU, unmittelbar bevor der Kern gemessen wird** — du bestätigst nichts. Jede dieser Schreiboperationen steht im Protokoll.
+
+Ablauf pro Kern:
+
+| Situation | Was passiert |
+|---|---|
+| Bestanden, oberhalb des Limits | ein Schritt tiefer (`-3` bei Grob, `-1` bei Fein) |
+| Bestanden am Chip-Limit | fixiert (🔒) — der Grenzwert ist belegt |
+| Durchgefallen, vorher schon einmal bestanden | zurück auf den zuletzt bestandenen Wert und fixiert. Kein erneuter Test nötig: dieser Wert hat bereits einen vollen Durchgang überstanden |
+| **Durchgefallen, noch nie bestanden** | Spannung anheben und **erneut testen**, Schritt für Schritt aufwärts, bis ein Wert tatsächlich hält. Erst dieser wird fixiert |
+| Durchgefallen bei `0` | Abbruch für diesen Kern mit dem Hinweis, dass die Ursache nicht am Curve Optimizer liegt (RAM/EXPO, Kühlung, BIOS-Version) |
+
+Damit trägt kein fixierter Wert das Etikett „fertig", ohne getestet worden zu sein.
+
+**Zwei Dinge, die du wissen solltest:**
+
+1. **Startest du direkt auf dem Chip-Limit** (z. B. `-30`), findet keine Suche nach unten statt — darunter gibt es nichts. Der Tuner prüft `-30` und arbeitet sich bei einem Fehler aufwärts. Für eine echte Suche startest du mild (z. B. `0` oder `-5`) und lässt ihn absenken.
+2. **Die Suche ist durch „Durchgänge" begrenzt.** Von `-30` aus mit Grob und 3 Durchgängen kommst du nur bis `-24`. Reicht das nicht, bleibt der Kern offen statt fixiert. Die Laufzeit-Abschätzung im Setup-Tab rechnet den ungünstigsten Fall mit.
 
 ### 🎯 Hardware-Limits je nach CPU-Generation:
 - **Ryzen 5000 (Zen 3) & Ryzen 7000 / 8000 (Zen 4):** Standard-Limit = **`-30`**
@@ -131,12 +160,17 @@ Der integrierte Wächter liest in Echtzeit Windows Event Log **WHEA-Fehler 18/19
 
 ## 9. Werte live anwenden vs. BIOS-Übernahme
 
-### Live in Windows anwenden:
-Mit Klick auf **`⚡ CO-Werte jetzt live anwenden`** (Shortcut: `Strg+S`) werden alle Offsets sofort in die AMD SMU geladen.
-- **Autostart-Funktion**: Aktiviere im Tab *[🛡️ System]* das Häkchen `[x] Beim Windows-Start automatisch anwenden`. PboStudio erstellt eine geplante Windows-Aufgabe, die deine Werte nach jedem Neustart im Hintergrund lädt.
+Alle drei Wege stehen unter der Kern-Tabelle im Block **`CO-WERTE ANWENDEN`** nebeneinander.
 
-### Permanentes Eintragen im Mainboard-BIOS:
-Mit Klick auf **`📋 BIOS Liste kopieren`** (Shortcut: `Strg+C`) kopiert PboStudio die formatierten Werte in die Zwischenablage.
+### ⚡ Live anwenden (`Strg+S`)
+Schreibt die geänderten Werte direkt in die SMU-Register. Wirkt sofort ohne Neustart.
+- **Wichtig:** Beim nächsten Hochfahren ist das weg, weil das BIOS beim POST seine eigenen Werte neu setzt. Das Schließen der App ändert dagegen nichts — die Werte bleiben aktiv, solange Windows läuft.
+
+### 🔄 Bei jedem Windows-Start
+Das Häkchen im Anwenden-Block legt die geplante Windows-Aufgabe `PboStudioWatchdog` an, die deine gespeicherten Werte nach jedem Start im Hintergrund neu setzt. Bequemer als der BIOS-Eintrag, wirkt aber erst ein paar Sekunden nach dem Anmelden und braucht Administratorrechte. Ein abgeschlossener Auto-Tuner-Lauf aktualisiert dieses Profil automatisch.
+
+### 📋 Permanentes Eintragen im Mainboard-BIOS (`Strg+C`)
+Mit Klick auf **`📋 BIOS-Liste`** kopiert PboStudio die formatierten Werte in die Zwischenablage. Das ist der einzige wirklich dauerhafte Weg.
 1. Starte den PC neu und drücke `ENTF` / `F2` fürs BIOS.
 2. Gehe zu: *Advanced ➔ AMD Overclocking ➔ Precision Boost Overdrive ➔ Curve Optimizer*.
 3. Setze *Curve Optimizer* auf **Per Core**, Vorzeichen auf **Negative** und trage deine Beträge ein.

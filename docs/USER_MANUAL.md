@@ -35,20 +35,31 @@ No manual `.ini` file editing is required — testing, error analysis, and core 
 
 ## 3. User Interface Overview
 
-- **Top Header Bar**:
-  - **Left Side**: Application brand logo, detected CPU model, and live CPU telemetry (Boost Clock, PPT Power, TDC Current, EDC Current, Core Temperature).
-  - **Right Side**: Clickable `🔍 SYSTEM: xx/100` Audit Button, `🌐 EN / DE` Language Switcher, `⚙️ Driver & Engines Manager`, and isolated `🛡️ WATCHDOG` alert badge.
+- **Header**:
+  - **Top left**: brand and detected CPU. Below it the `🛡️ WATCHDOG` and live telemetry as individual chips (CLOCK, PPT, TDC, EDC, TEMP, SCALAR), each with a utilisation bar against its limit.
+  - **Top right**: language switcher, clickable platform check (`🔍 System OK · 95/100`) and `⚙️ Driver & Engines`.
+  - **Setup banner**: if Prime95, y-cruncher or PawnIO is missing it says so **before** you press start, and the start button stays disabled.
 - **Left Column (Core Table & Recommendations)**:
-  - **Smart Recommendation Card**: WHEA error mitigation proposals featuring a **`⏩ Coarse (+4)`** vs. **`🎯 Fine (+2)`** precision toggle.
-  - **Core Table**: Displays physical cores with CPPC ranking badges (🥇 Gold & 🥈 Silver preferred cores) and live Curve Optimizer margin spinners (-60 to +30).
-- **Right Column (Test Controls & Auto-Tuner)**:
-  - **Profile Selector**: Presets for stress testing (e.g., *Full Test - SSE & AVX2*).
-  - **🤖 Auto-Tuner Card**: Selection box for automated step-down (Disabled / Coarse / Fine).
-  - **Primary Action Buttons**: `⚡ Apply CO Values Live` and `🚀 Start Test`.
-  - **⚙️ Advanced Settings**: Scrollable panel for runtime per core, passes, Prime95 vs. y-cruncher selection, post-test actions (Sleep / Shutdown), safety temp limits, and Windows autostart configuration.
-- **Bottom Workspace Card**:
-  - Tab 1: **`📊 Live Telemetry Graph`** (60-second rolling chart of Clock MHz, Temp °C, and Power W).
-  - Tab 2: **`📜 Console & Log Protocol`** (Detailed developer execution logs).
+  - **Smart Recommendation Card**: WHEA mitigation proposals with a **`⏩ Coarse (+4)`** vs. **`🎯 Fine (+2)`** toggle, `⚡ Apply values`, `🧹 Reset WHEA`, plus the recommended profile and a `Load profile` action.
+  - **Core Table**: every physical core with
+    - a CCD chip when the CPU has more than one chiplet (resolved from the topology, not assumed),
+    - 🥇/🥈 for the preferred cores — shown **only** when the processor actually reports CPPC rankings; the tooltip quotes the measured value,
+    - a risk-coloured CO value (green → amber → orange → red as it approaches the chip limit),
+    - a `▲/▼` delta against the BIOS starting value (amber while only the table knows it, muted once the CPU holds it),
+    - status carried by glyph **and** colour (`○ Ready`, `● running`, `✓ passed`, `✕ FAILED`, `🔒 limit`).
+  - **Quick actions**: `[⚡ All to -30]` (or `-50` on Zen 5, with a confirmation) and `[🔄 BIOS values]`.
+  - **`APPLY CO VALUES`** sits directly below the table: all three routes side by side (see section 7).
+- **Right Column (3-tab control panel)**:
+  - **`[🎯 Setup]`**: profile selector with explanation, runtime estimate, auto-tuner card with step-down progress.
+  - **`[⚡ Engine]`**: minutes per core, passes, engine choice, instruction set up to AVX-512, FFT range **including a custom range**, transient pause, core order **including a custom order**, stop-on-error, skip-core-on-error and delay between cores.
+  - **`[🛡️ System]`**: emergency temperature limit, treat-WHEA-as-failure, post-test action, Discord webhook.
+  - The progress panel lives outside the tabs and stays visible whichever tab is open.
+  - **Sticky footer**: `🚀 Start test` / `🤖 Start auto-tuner` / `⏹ Cancel test`.
+- **Bottom Workspace Card** (height adjustable via the splitter):
+  - Tab 1: **`📊 Live telemetry`** — three separate lanes for clock, temperature and PPT, each with its own labelled scale, a 15-minute time axis, the configured emergency temperature limit drawn in, and a crosshair tooltip with real timestamps.
+  - Tab 2: **`📜 Log`** — coloured by severity, with `Copy`, `Folder` and `Clear`.
+
+> **Settings persist.** Language, profile, engine parameters, temperature limit, webhook and window size are stored in `runs/settings.json` and restored on the next start.
 
 ---
 
@@ -74,7 +85,7 @@ PboStudio includes pre-configured test profiles tailored for Curve Optimizer val
 ---
 
 ## 4. System Health Audit (EXPO RAM & AGESA BIOS Check)
-Clicking on **`🔍 SYSTEM: xx/100`** runs a full diagnostic audit:
+Clicking the platform-check pill (`🔍 System OK · 95/100`) runs a full diagnostic audit:
 1. **RAM EXPO / XMP Profile**: Queries WMI for active memory clock speed. If your RAM runs at fallback JEDEC speeds (e.g., 4800 MT/s instead of 6000 MT/s), an optimization alert is flagged.
 2. **AGESA BIOS Release Date**: Audits motherboard BIOS release dates. BIOS versions older than 9 months trigger a recommendation to update for improved Ryzen stability and memory compatibility.
 
@@ -91,7 +102,32 @@ Clicking **`⚡ Apply Values`** updates all core margins in the table instantly.
 
 ---
 
-## 6. The Auto-Tuner Engine (Automated CO Step-Down)
+## 6. The Auto-Tuner Engine (two-way search)
+
+The auto-tuner writes every value **itself, over the SMU, immediately before the core is
+measured** — nothing needs confirming. Every one of those writes is in the log.
+
+Per core:
+
+| Situation | What happens |
+|---|---|
+| Passed, above the limit | one step lower (`-3` coarse, `-1` fine) |
+| Passed at the chip limit | locked (🔒) — the limit is proven |
+| Failed, but passed at a higher value earlier | back to that value and locked. No retest: it already survived a full slot |
+| **Failed, never passed** | raise the voltage and **test again**, step by step upward, until a value actually holds. Only that one is locked |
+| Failed at `0` | this core stops with a note that the cause is not the Curve Optimizer (RAM/EXPO, cooling, BIOS version) |
+
+So no locked value carries the label "done" without having been tested.
+
+**Two things worth knowing:**
+
+1. **Starting at the chip limit** (say `-30`) means no downward search happens — there is
+   nothing below it. The tuner tests `-30` and works upward on a failure. For a real search,
+   start mild (`0` or `-5`) and let it descend.
+2. **The search is bounded by "Passes".** From `-30` with coarse steps and 3 passes you only
+   reach `-24`. If that is not enough the core stays open rather than locked. The runtime
+   estimate in the Setup tab accounts for the worst case.
+
 The **Auto-Tuner** automatically discovers individual core stability limits:
 
 1. **Selecting Mode**:
@@ -105,9 +141,14 @@ The **Auto-Tuner** automatically discovers individual core stability limits:
 
 ## 7. Applying CO Values Live vs. Motherboard BIOS Flashing
 
-### Applying Live in Windows:
-Clicking **`⚡ Apply CO Values Live`** writes offsets directly to the AMD SMU firmware.
-- **Autostart Feature**: Enable `[x] Apply automatically on Windows boot` in Advanced Settings. PboStudio creates a Windows Scheduled Task to load your offsets automatically on every reboot.
+All three routes sit together under the core table in the **`APPLY CO VALUES`** block.
+
+### ⚡ Apply live (`Ctrl+S`)
+Writes the changed values straight into the AMD SMU registers. Takes effect at once, no reboot.
+- **It is gone on the next boot**, because the BIOS reapplies its own values at POST. Closing the app changes nothing — the values stay active as long as Windows is running.
+
+### 🔄 On every Windows start
+The checkbox in the apply block creates the scheduled task `PboStudioWatchdog`, which reapplies your saved values in the background after every boot. More convenient than the BIOS route, but it only takes effect a few seconds after login and needs administrator rights. A completed auto-tuner run updates this profile automatically.
 
 ### Permanent Motherboard BIOS Entry:
 No Windows application can flash or alter motherboard SPI BIOS chips during runtime. To enter your tested values permanently into BIOS:
