@@ -31,6 +31,18 @@ public sealed record TestPlan
     /// Null leaves the hardware untouched, which is what the tests want.
     /// </summary>
     public Func<int, int, bool>? ApplyMargin { get; init; }
+
+    /// <summary>
+    /// What the auto-tuner has learned, shared across phases. A profile like "Hybrid Ultimate"
+    /// runs several phases, each with its own runner; keeping this inside the runner meant the
+    /// search restarted from nothing at every phase boundary. A core locked at -25 in phase 1
+    /// would then pass at -25 in phase 2, look like a fresh descent, and be stepped back down
+    /// to the value phase 1 had just proved unstable.
+    /// </summary>
+    public IDictionary<int, AutoTunerCoreState>? TunerState { get; init; }
+
+    /// <summary>Cores the auto-tuner has settled, likewise shared across phases.</summary>
+    public ISet<int>? LockedCores { get; init; }
     public bool IsGerman { get; init; }
 
     /// <summary>Interrupt the load now and then so the core has to boost back up.</summary>
@@ -76,14 +88,17 @@ public sealed class TestRunner
     public async Task<IReadOnlyDictionary<int, List<Failure>>> RunAsync(CancellationToken ct = default)
     {
         var failures = new Dictionary<int, List<Failure>>();
+
         var excluded = new HashSet<int>(_plan.CoresToIgnore);
+        if (_plan.LockedCores is { } alreadyLocked) excluded.UnionWith(alreadyLocked);
         var currentMargins = _plan.InitialCoreMargins != null
             ? new Dictionary<int, int>(_plan.InitialCoreMargins)
             : new Dictionary<int, int>();
 
         // What the tuner has learned per core. Without this the search has no memory and
-        // cannot tell "never passed" from "passed lower down and then failed".
-        var tunerState = new Dictionary<int, AutoTunerCoreState>();
+        // cannot tell "never passed" from "passed lower down and then failed". Supplied from
+        // outside when a run has several phases, so the memory outlives one phase.
+        var tunerState = _plan.TunerState ?? new Dictionary<int, AutoTunerCoreState>();
         foreach (var c in _cores)
             if (!currentMargins.ContainsKey(c.Index)) currentMargins[c.Index] = 0;
 
@@ -125,11 +140,15 @@ public sealed class TestRunner
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: false, _plan.AutoTuner.Value,
                             _plan.MaxNegativeMargin, _plan.IsGerman,
-                            tunerState.GetValueOrDefault(coreIndex));
+                            (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
                         Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
-                        if (res.CoreLocked) excluded.Add(coreIndex);
+                        if (res.CoreLocked)
+                        {
+                            excluded.Add(coreIndex);
+                            _plan.LockedCores?.Add(coreIndex);
+                        }
                     }
                     else
                     {
@@ -151,11 +170,15 @@ public sealed class TestRunner
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: true, _plan.AutoTuner.Value,
                             _plan.MaxNegativeMargin, _plan.IsGerman,
-                            tunerState.GetValueOrDefault(coreIndex));
+                            (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
                         Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
-                        if (res.CoreLocked) excluded.Add(coreIndex);
+                        if (res.CoreLocked)
+                        {
+                            excluded.Add(coreIndex);
+                            _plan.LockedCores?.Add(coreIndex);
+                        }
                     }
                 }
 

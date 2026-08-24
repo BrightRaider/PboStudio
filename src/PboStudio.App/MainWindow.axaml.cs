@@ -1603,6 +1603,10 @@ public partial class MainWindow : Window
         if (unapplied > 0 && !_smu.IsAvailable)
             Log(string.Format(LocalizationService.Get("MarginsNotApplied"), unapplied), LogLevel.Warn);
 
+        // Created once for the whole run so the auto-tuner's memory survives phase changes.
+        var tunerState = new Dictionary<int, AutoTunerCoreState>();
+        var lockedCores = new HashSet<int>();
+
         double pauseInterval = (double)(PauseIntervalBox?.Value ?? 30);
         double pauseDuration = (double)(PauseDurationBox?.Value ?? 1);
 
@@ -1630,6 +1634,8 @@ public partial class MainWindow : Window
             MaxNegativeMargin = maxNegativeLimit,
             InitialCoreMargins = coreMargins,
             ApplyMargin = _smu.IsAvailable ? ApplyMarginToHardware : null,
+            TunerState = tunerState,
+            LockedCores = lockedCores,
             IsGerman = LocalizationService.IsGerman,
             SuspendPeriodically = pauseInterval > 0 && pauseDuration > 0,
             SuspendEvery = TimeSpan.FromSeconds(pauseInterval),
