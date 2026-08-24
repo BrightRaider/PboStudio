@@ -48,6 +48,9 @@ public sealed class SmuService : ISmuService
     /// <summary>Zero means ZenStates could not read the CCD fuse; that is not a count.</summary>
     public int? ReportedCcdCount { get; }
 
+    /// <summary>Read once at startup from MSR 0xC00102B3; the values do not change at runtime.</summary>
+    public IReadOnlyList<int>? CorePerformanceRanking { get; }
+
     public SmuService()
     {
         try
@@ -63,6 +66,9 @@ public sealed class SmuService : ISmuService
         CpuName = _cpu.info.cpuName?.Trim() ?? "unknown";
         PhysicalCores = (int)_cpu.info.topology.physicalCores;
         ReportedCcdCount = _cpu.info.topology.ccds > 0 ? (int)_cpu.info.topology.ccds : null;
+        CorePerformanceRanking = _cpu.info.topology.performanceOfCore is { Length: > 0 } perf
+            ? [.. perf.Select(v => (int)v)]
+            : null;
         Support = CurveOptimizerSupport.Full;
     }
 

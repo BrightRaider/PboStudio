@@ -19,6 +19,13 @@ public interface ISmuService : IDisposable
     /// </summary>
     int? ReportedCcdCount { get; }
 
+    /// <summary>
+    /// Per-core CPPC "highest performance" values, indexed by physical core, or null when the
+    /// processor would not report them. Higher means the firmware rates the core as the better
+    /// boosting one - this is what actually identifies a preferred core.
+    /// </summary>
+    IReadOnlyList<int>? CorePerformanceRanking { get; }
+
     bool ReadsAllZero();
     int? ReadCurveOptimizer(int core);
     bool WriteCurveOptimizer(int core, int margin);

@@ -110,11 +110,11 @@ public static class LocalizationService
                 : "Returns the selected cores in the table to the values read from the CPU at startup, i.e. your BIOS setting. The CPU itself only changes once you press “⚡ Apply live”; until then the values last written stay active until reboot.",
             "CoreTooltip" => isDe ? "Diesen Kern im nächsten Lauf testen" : "Test this core in the next run",
             "GoldCoreTooltip" => isDe
-                ? "🥇 Bevorzugter Kern (CPPC Rang 1): boostet am höchsten und wird von Windows für einzelne Threads zuerst gewählt. Verträgt erfahrungsgemäß 3–5 Punkte weniger Undervolt als Standardkerne."
-                : "🥇 Preferred core (CPPC rank 1): boosts highest and is picked first by Windows for single threads. Typically tolerates 3–5 points less undervolt than standard cores.",
+                ? "🥇 Bester Kern dieser CPU. Der Prozessor meldet für ihn den höchsten CPPC-Leistungswert ({0}) — Windows wählt ihn für einzelne Threads zuerst und er boostet am höchsten. Erfahrungsgemäß verträgt er 3–5 Punkte weniger Undervolt als Standardkerne."
+                : "🥇 Best core on this CPU. The processor reports the highest CPPC performance value for it ({0}) — Windows picks it first for single threads and it boosts highest. Typically tolerates 3–5 points less undervolt than standard cores.",
             "SilverCoreTooltip" => isDe
-                ? "🥈 Zweitbester Kern (CPPC Rang 2): boostet ebenfalls überdurchschnittlich hoch und reagiert empfindlicher auf aggressive CO-Werte."
-                : "🥈 Second-best core (CPPC rank 2): also boosts above average and reacts more sensitively to aggressive CO values.",
+                ? "🥈 Zweitbester Kern (CPPC-Leistungswert {0}). Boostet ebenfalls überdurchschnittlich hoch und reagiert empfindlicher auf aggressive CO-Werte."
+                : "🥈 Second-best core (CPPC performance value {0}). Also boosts above average and reacts more sensitively to aggressive CO values.",
             "LockedTooltip" => isDe
                 ? "🔒 Vom Auto-Tuner fixiert: Dieser Kern ist an seiner Stabilitätsgrenze angekommen und wird nicht weiter abgesenkt. Wert von Hand ändern hebt die Sperre auf."
                 : "🔒 Locked by the auto-tuner: this core has reached its stability limit and will not be lowered further. Editing the value by hand releases the lock.",

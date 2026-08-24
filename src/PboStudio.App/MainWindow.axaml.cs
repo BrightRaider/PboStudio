@@ -64,6 +64,9 @@ public sealed class CoreRow : INotifyPropertyChanged
     public double LabelWidth => HasCcd ? 176 : 128;
 
     public CoreQualityRank QualityRank { get; set; } = CoreQualityRank.Standard;
+
+    /// <summary>Raw CPPC value behind the badge, so the tooltip can show the evidence.</summary>
+    public int CppcPerformance { get; set; }
     public bool HasQuality => QualityRank != CoreQualityRank.Standard;
     public string QualityBadge => QualityRank switch
     {
@@ -73,8 +76,8 @@ public sealed class CoreRow : INotifyPropertyChanged
     };
     public string QualityTooltip => QualityRank switch
     {
-        CoreQualityRank.GoldStar => LocalizationService.Get("GoldCoreTooltip"),
-        CoreQualityRank.SilverStar => LocalizationService.Get("SilverCoreTooltip"),
+        CoreQualityRank.GoldStar => string.Format(LocalizationService.Get("GoldCoreTooltip"), CppcPerformance),
+        CoreQualityRank.SilverStar => string.Format(LocalizationService.Get("SilverCoreTooltip"), CppcPerformance),
         _ => "",
     };
 
@@ -561,7 +564,7 @@ public partial class MainWindow : Window
 
     private void BuildCoreRows()
     {
-        var qualities = CoreQualityService.GetCoreQualities(_cores.Count);
+        var qualities = CoreQualityService.GetCoreQualities(_cores.Count, _smu.CorePerformanceRanking);
         int maxNegative = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
 
         for (int i = 0; i < _cores.Count; i++)
@@ -575,6 +578,7 @@ public partial class MainWindow : Window
                 MinLimit = maxNegative,
                 MaxLimit = 30m,
                 QualityRank = qualities.TryGetValue(i, out var q) ? q.Rank : CoreQualityRank.Standard,
+                CppcPerformance = qualities.TryGetValue(i, out var qp) ? qp.CppcPerformance : 0,
             };
             if (_smu.ReadCurveOptimizer(i) is { } margin)
             {
@@ -1181,6 +1185,32 @@ public partial class MainWindow : Window
 
         Log($"{_smu.CpuName}, {_cores.Count} " + LocalizationService.Pick("Kerne erkannt.", "cores detected."), LogLevel.Success);
         LogCcdLayout();
+        LogPreferredCores();
+    }
+
+    /// <summary>Names the preferred cores and the values they were derived from.</summary>
+    private void LogPreferredCores()
+    {
+        var gold = _rows.FirstOrDefault(r => r.QualityRank == CoreQualityRank.GoldStar);
+        var silver = _rows.FirstOrDefault(r => r.QualityRank == CoreQualityRank.SilverStar);
+
+        if (gold is null)
+        {
+            Log(LocalizationService.Pick(
+                "Bevorzugte Kerne: Die CPU meldet keine CPPC-Rangwerte — es werden keine Abzeichen vergeben.",
+                "Preferred cores: the CPU reports no CPPC ranking, so no badges are shown."));
+            return;
+        }
+
+        string silverPart = silver is null
+            ? ""
+            : LocalizationService.Pick(
+                $", 🥈 {silver.CoreName} ({silver.CppcPerformance})",
+                $", 🥈 {silver.CoreName} ({silver.CppcPerformance})");
+
+        Log(LocalizationService.Pick(
+            $"Bevorzugte Kerne laut CPPC: 🥇 {gold.CoreName} ({gold.CppcPerformance}){silverPart}",
+            $"Preferred cores per CPPC: 🥇 {gold.CoreName} ({gold.CppcPerformance}){silverPart}"));
     }
 
     /// <summary>

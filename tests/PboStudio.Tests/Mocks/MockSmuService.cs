@@ -12,6 +12,7 @@ public sealed class MockSmuService : ISmuService
     public int PhysicalCores { get; set; } = 8;
     public CurveOptimizerSupport Support { get; set; } = CurveOptimizerSupport.Full;
     public int? ReportedCcdCount { get; set; } = 1;
+    public IReadOnlyList<int>? CorePerformanceRanking { get; set; }
 
     public bool ReadsAllZero() => _margins.Values.All(m => m == 0);
 
