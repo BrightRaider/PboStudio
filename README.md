@@ -14,10 +14,14 @@ per-core stress testing with direct SMU Curve Optimizer read/write in a single n
 
 | Variant | Size | What you need |
 |---|---|---|
-| **`PboStudio.exe`** | ~47 MB | Nothing. Single file, no .NET install. Downloads Prime95 and y-cruncher on first run. |
+| **`PboStudio.exe`** | 45 MB | Nothing. One file, no .NET install. Fetches Prime95 and y-cruncher from their vendors on first run. |
+| **`PboStudio-full.zip`** | 95 MB | Nothing, including no internet. Same executable with both stress engines already unpacked beside it. |
 
-Grab it from the [Releases page](../../releases). Right-click → **Run as administrator**:
-talking to the SMU goes through a kernel driver, and that needs elevation.
+Take the single executable unless the machine has no internet access. Both are on the
+[Releases page](../../releases).
+
+Right-click → **Run as administrator**: talking to the SMU goes through a kernel driver, and
+that needs elevation.
 
 Windows SmartScreen will warn about an unknown publisher — the executable is not code-signed.
 
