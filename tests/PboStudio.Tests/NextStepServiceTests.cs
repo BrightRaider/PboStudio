@@ -108,15 +108,59 @@ public class NextStepServiceTests
 
     // ── first run ────────────────────────────────────────────────
 
+    /// <summary>
+    /// Validating a Curve Optimizer setting means alternating the two engines — a core can pass
+    /// Prime95 and fail y-cruncher. The combined profile is the project's own labelled gold
+    /// standard, and the recommendation has to agree with it rather than name something else.
+    /// </summary>
     [Fact]
-    public void WithNothingMeasuredItStartsWithTheSseWorkhorse()
+    public void WithNothingMeasuredItRunsBothEngines()
     {
         var step = Recommend(Plain, AllAt(0));
 
         Assert.Equal(TuningStage.Discover, step.Stage);
-        Assert.Equal(ProfileId.HeavyFfts, step.Profile);
+        Assert.Equal(ProfileId.RecommendedCombo, step.Profile);
         Assert.False(step.UseAutoTuner);
         Assert.Empty(step.Cores);
+
+        var profile = TestProfiles.For(Plain, isGerman: false).Single(p => p.Id == step.Profile);
+        Assert.True(profile.Uses(EngineKind.Prime95));
+        Assert.True(profile.Uses(EngineKind.YCruncher));
+    }
+
+    /// <summary>
+    /// The exception, and the reason for it: locked cores are excluded at the start of every
+    /// phase, so a core the tuner settles under Prime95 would never enter the y-cruncher phase.
+    /// The second engine would cost the full runtime and measure nothing.
+    /// </summary>
+    [Fact]
+    public void TheTuningStageRunsOneEngineBecauseALockedCoreSkipsLaterPhases()
+    {
+        var margins = AllAt(-30);
+        margins[3] = -18;
+
+        var step = Recommend(Plain, margins, new Dictionary<int, CoreKnowledge>
+        {
+            [0] = new(BestPassed: -30),
+            [3] = new(BestPassed: -18),
+        });
+
+        Assert.True(step.UseAutoTuner);
+
+        var profile = TestProfiles.For(Plain, isGerman: false).Single(p => p.Id == step.Profile);
+        Assert.Single(profile.Phases);
+        Assert.Contains("y-cruncher", step.Reason);
+    }
+
+    [Fact]
+    public void TheConfirmationRunCoversBothEngines()
+    {
+        var step = Recommend(Plain, AllAt(-30),
+            Enumerable.Range(0, 8).ToDictionary(i => i, _ => new CoreKnowledge(BestPassed: -30)));
+
+        var profile = TestProfiles.For(Plain, isGerman: false).Single(p => p.Id == step.Profile);
+        Assert.True(profile.Uses(EngineKind.Prime95));
+        Assert.True(profile.Uses(EngineKind.YCruncher));
     }
 
     /// <summary>
@@ -131,7 +175,10 @@ public class NextStepServiceTests
         Assert.NotEqual(ProfileId.Step2Avx2, step.Profile);
         Assert.NotEqual(ProfileId.HeavyLoad, step.Profile);
         Assert.NotEqual(ProfileId.BreakingPoint, step.Profile);
-        Assert.Equal(ProfileId.HeavyFfts, step.Profile);
+
+        // Whatever it picks, the first phase must be SSE rather than AVX2.
+        var profile = TestProfiles.For(X3d, isGerman: false).Single(p => p.Id == step.Profile);
+        Assert.Equal(Prime95Mode.Sse, profile.Mode);
         Assert.Contains("X3D", step.Reason);
     }
 

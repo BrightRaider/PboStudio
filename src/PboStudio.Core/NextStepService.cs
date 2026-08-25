@@ -142,12 +142,15 @@ public static class NextStepService
             ShowProfile: false);
 
     /// <summary>
-    /// Nothing measured yet. SSE across the Heavy range is the workhorse: it exposes an
-    /// undervolted core fastest, and because it is the coolest of the Prime95 modes it is the
-    /// right first load on every part, X3D included.
+    /// Nothing measured yet, so the first run is a plain validation of whatever is set — and
+    /// the established way to validate a Curve Optimizer setting is to alternate the two
+    /// engines. Prime95 SSE finds instability at peak boost and low voltage; y-cruncher leans
+    /// on cache and memory in a way Prime95's FFT work does not, and catches cores that sail
+    /// through it. CoreCycler needs two runs and its multiconfig launcher to do this; the
+    /// combined profile chains both in one.
     /// </summary>
     private static NextStep Discover(string cpuName, bool isX3d, bool isGerman) =>
-        new(ProfileId.HeavyFfts, TuningStage.Discover,
+        new(ProfileId.RecommendedCombo, TuningStage.Discover,
             isGerman ? "Schritt 3: den ersten Testlauf machen" : "Step 3: make the first run",
             isGerman
                 ? $"Für den {cpuName} ist noch nichts gemessen. „Heavy FFTs“ ist der Standardeinstieg: SSE deckt instabile Kerne am schnellsten auf und erzeugt dabei die geringste Hitze{(isX3d ? " — bei einem X3D wichtig, weil der gestapelte Cache empfindlich auf Temperatur reagiert" : "")}.\n\nDieser Lauf verändert nichts dauerhaft: er belastet jeden Kern nacheinander mit den Werten, die gerade anliegen, und hält fest, welcher durchfällt. Erst danach wird über neue Werte entschieden — und auch die gelten nur bis zum nächsten Neustart, solange du sie nicht ins BIOS überträgst."
@@ -159,6 +162,13 @@ public static class NextStepService
     /// Some cores hold a milder value than they are allowed to try. That is a search, which is
     /// what the auto-tuner is for — and running it on only the open cores is the difference
     /// between an evening and a night.
+    /// <para>
+    /// Single engine on purpose, unlike the runs either side of it. Locked cores are shared
+    /// across phases and excluded at the start of each, so a core the tuner settles during the
+    /// Prime95 phase never enters the y-cruncher phase at all: the second engine would cost the
+    /// full runtime and test nothing. Both load types belong on the confirmation run, where
+    /// nothing is locked and every core is measured under all of them.
+    /// </para>
     /// </summary>
     private static NextStep Narrow(IReadOnlyList<int> open, int total, bool isGerman)
     {
@@ -172,10 +182,12 @@ public static class NextStepService
             isGerman
                 ? $"{(open.Count == 1 ? "Dieser Kern hält" : "Diese Kerne halten")} noch einen milderen Wert, als nach bisherigem Stand möglich wäre. "
                   + $"{(few ? "Die übrigen Kerne sind ausgereizt und bleiben außen vor — das spart den Großteil der Laufzeit. " : "")}"
-                  + "Der Auto-Tuner senkt schrittweise ab und fixiert den ersten Wert, der hält; Werte, bei denen ein Kern schon einmal durchgefallen ist, fasst er nicht mehr an."
+                  + "Der Auto-Tuner senkt schrittweise ab und fixiert den ersten Wert, der hält; Werte, bei denen ein Kern schon einmal durchgefallen ist, fasst er nicht mehr an.\n\n"
+                  + "Hier läuft bewusst nur Prime95, nicht der Wechsel mit y-cruncher: ein Kern, der in der ersten Phase fixiert wird, ist aus der zweiten ausgeschlossen und bekäme y-cruncher gar nicht mehr zu sehen. Die zweite Lastart kommt beim Absichern danach."
                 : $"{(open.Count == 1 ? "This core holds" : "These cores hold")} a milder value than what is currently known to be reachable. "
                   + $"{(few ? "The rest are maxed out and stay out of the run, which saves most of the runtime. " : "")}"
-                  + "The auto-tuner steps down and locks the first value that holds; values a core has already failed at are off limits.",
+                  + "The auto-tuner steps down and locks the first value that holds; values a core has already failed at are off limits.\n\n"
+                  + "This stage deliberately runs Prime95 alone rather than alternating with y-cruncher: a core locked in the first phase is excluded from the second and would never see y-cruncher at all. The second load type comes with the confirmation run afterwards.",
             UseAutoTuner: true,
             Cores: open);
     }
@@ -188,9 +200,9 @@ public static class NextStepService
         new(ProfileId.Overnight, TuningStage.Confirm,
             isGerman ? "Jetzt absichern" : "Now confirm it",
             isGerman
-                ? "Jeder Kern steht auf dem aggressivsten Wert, der nach bisherigem Stand zulässig ist. Der Absicherungslauf fährt SSE über alle FFT-Größen, danach AVX, AVX2 und y-cruncher — vier verschiedene Lastarten. Erst das rechtfertigt, die Werte ins BIOS zu übertragen."
+                ? "Jeder Kern steht auf dem aggressivsten Wert, der nach bisherigem Stand zulässig ist. Der Absicherungslauf fährt SSE über alle FFT-Größen, danach AVX, AVX2 und y-cruncher — vier Lastarten, beide Testprogramme. Erst das rechtfertigt, die Werte ins BIOS zu übertragen."
                 + (isX3d ? " Behalte die Temperatur im Auge: der AVX2-Abschnitt ist auf einem X3D der heißeste Teil des Laufs." : "")
-                : "Every core sits at the most aggressive value currently known to be allowed. The overnight run sweeps SSE across every FFT size, then AVX, AVX2 and y-cruncher — four different load types. Only that justifies committing the values to the BIOS."
+                : "Every core sits at the most aggressive value currently known to be allowed. The overnight run sweeps SSE across every FFT size, then AVX, AVX2 and y-cruncher — four load types across both engines. Only that justifies committing the values to the BIOS."
                 + (isX3d ? " Watch the temperature: on an X3D the AVX2 leg is the hottest part of the run." : ""),
             UseAutoTuner: false,
             Cores: []);

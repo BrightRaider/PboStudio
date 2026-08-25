@@ -3,7 +3,7 @@
 ## 1.0.2 — 2026-08-25
 
 A UI/UX audit and a feature-by-feature comparison against CoreCycler v0.11.0.3, with the
-findings from both fixed. 145 unit tests. The interface changes have not been seen on screen
+findings from both fixed. 147 unit tests. The interface changes have not been seen on screen
 yet — the hardware run that shook out the engine side was made with an earlier build of this
 release, before the toast layer, the collapsible dock and the auto-tuner memory existed.
 
@@ -94,6 +94,18 @@ release, before the toast layer, the collapsible dock and the auto-tuner memory 
   that has one correct answer. A card names it, says why in terms of this machine, and sets the
   whole run up in one click — profile, auto-tuner, core selection and pass count. The full list
   is still there, one click away under "Choose a different profile".
+- **The first run alternates both engines, as it should.** The recommendation named the
+  single-engine Heavy FFTs profile while the profile list's own entry #0 — labelled 🏆 and
+  described as "the gold standard from CoreCycler" — is the Prime95 SSE → y-cruncher chain.
+  Validating a Curve Optimizer setting means passing both: a core can sail through Prime95 and
+  fail y-cruncher's cache and memory pressure. CoreCycler needs two runs and its multiconfig
+  launcher for this; the combined profile chains them in one. The confirmation run already
+  covered both.
+- **Except while the auto-tuner is searching**, which stays on one engine — and now says why.
+  Locked cores are shared across phases and excluded at the start of each, so a core the tuner
+  settles during the Prime95 phase never enters the y-cruncher phase: the second engine would
+  cost the full runtime and measure nothing. Both load types belong on the confirmation run,
+  where nothing is locked.
 - **The recommendation was wrong for X3D parts.** It mapped CPU generation to a profile and,
   for Zen 3 X3D, named the AVX2 profile: the hottest load in the set, on the one design whose
   stacked cache is most sensitive to temperature — contradicting the project's own X3D guidance
