@@ -111,9 +111,31 @@ dotnet publish src/PboStudio.App/PboStudio.App.csproj -c Release -r win-x64 \
 - The auto-tuner's **upward** search — core fails, voltage is raised, core is re-tested — is
   covered by tests but has not been observed on physical hardware, because the test CPU stayed
   stable down to its chip limit. The descent and locking paths are verified.
-- Aida64 and Linpack engines are not supported; CoreCycler has them.
 - The upward search is bounded by the configured pass count, so starting at the chip limit with
   few passes can leave a core unresolved.
+
+### Compared with CoreCycler
+
+Not supported, and not planned:
+
+- **Aida64 and Linpack** engines. Prime95 and y-cruncher cover the Curve Optimizer case.
+- **The old y-cruncher build** (`YCRUNCHER_OLD`), and with it the retired `N32`, `HNT` and
+  `C17` algorithms.
+- A **Windows Event Log** source for run and error entries. The session log is written with
+  `AutoFlush`, so it survives a hard reboot on its own.
+- An **update check**.
+- Stress-test **process priority** and the `Debugger`/`Threads` choice for suspension.
+
+Deliberately different:
+
+- The stress engine is **always restarted for each core** (CoreCycler's
+  `restartTestProgramForEachCore = 1`), so every core runs the same sequence. There is no
+  option to carry one process across cores.
+- The auto-tuner **never raises a value above 0**, where CoreCycler's `maxValue` allows a
+  positive offset.
+- Automatic resume after a crash is a **button, not a scheduled task**: the interrupted run is
+  detected on the next start and offered with a recommendation, rather than resuming by itself
+  at logon.
 
 ---
 

@@ -24,8 +24,18 @@ public class TelemetryGraphControl : Control
     // for a run that takes all night.
     private const int MaxSamples = 450;
 
-    private const double AxisStripHeight = 13;
+    private const double AxisStripHeight = 15;
     private const double LanePadding = 3;
+
+    /// <summary>
+    /// Band at the top of every lane reserved for its title and scale label. Without it the
+    /// plot area started at the very top of the lane and any value near the maximum drew
+    /// straight through the text naming it.
+    /// </summary>
+    private const double LaneHeaderHeight = 13;
+
+    private const double LabelSize = 9.5;
+    private const double ScaleLabelSize = 9;
 
     private readonly List<TelemetrySample> _samples = [];
     private double? _hoverX;
@@ -33,7 +43,9 @@ public class TelemetryGraphControl : Control
     // Parsed once. These used to be re-parsed on every frame, ten brushes per render.
     private static readonly IBrush BackgroundBrush = SolidColorBrush.Parse("#08090D");
     private static readonly IBrush LaneBrush = SolidColorBrush.Parse("#0B0D12");
-    private static readonly IBrush TextFaint = SolidColorBrush.Parse("#475569");
+    // Was #475569 at 8px: 2.63:1 on this background, i.e. the axis numbers were effectively
+    // invisible. #8494A8 clears 5.6:1 and the label size moved up with it.
+    private static readonly IBrush TextFaint = SolidColorBrush.Parse("#8494A8");
     private static readonly IBrush TextMuted = SolidColorBrush.Parse("#94A3B8");
     private static readonly IBrush TextBright = SolidColorBrush.Parse("#F8FAFC");
     private static readonly IBrush TooltipBg = SolidColorBrush.Parse("#161B26");
@@ -163,8 +175,8 @@ public class TelemetryGraphControl : Control
         for (int laneIndex = 0; laneIndex < lanes.Length; laneIndex++)
         {
             var lane = lanes[laneIndex];
-            double plotTop = lane.Top + LanePadding;
-            double plotHeight = Math.Max(4, lane.Height - LanePadding * 2);
+            double plotTop = lane.Top + LaneHeaderHeight;
+            double plotHeight = Math.Max(4, lane.Height - LaneHeaderHeight - LanePadding);
 
             if (laneIndex % 2 == 1)
                 context.DrawRectangle(LaneBrush, null, new Rect(0, lane.Top, width, lane.Height));
@@ -181,7 +193,7 @@ public class TelemetryGraphControl : Control
             {
                 double limitY = plotTop + plotHeight - (TempLimit / lane.Max * plotHeight);
                 context.DrawLine(LimitPen, new Point(0, limitY), new Point(width, limitY));
-                var limitLabel = Text($"{_labelLimit} {TempLimit:F0}°", 8, SolidColorBrush.Parse("#EF4444"));
+                var limitLabel = Text($"{_labelLimit} {TempLimit:F0}°", ScaleLabelSize, SolidColorBrush.Parse("#F87171"));
                 context.DrawText(limitLabel, new Point(width - limitLabel.Width - 6, limitY - limitLabel.Height - 1));
             }
 
@@ -209,14 +221,20 @@ public class TelemetryGraphControl : Control
                 1 => _samples[^1].TempC,
                 _ => _samples[^1].PowerW,
             };
-            var title = Text($"{lane.Title}  {latest.ToString(lane.Format)} {lane.Unit}", 9.5, lane.Brush);
+            var title = Text($"{lane.Title}  {latest.ToString(lane.Format)} {lane.Unit}", LabelSize, lane.Brush);
             context.DrawText(title, new Point(6, lane.Top + 2));
 
-            var scale = Text($"{lane.Max.ToString(lane.Format)}", 8, TextFaint);
+            var scale = Text($"{lane.Max.ToString(lane.Format)}", ScaleLabelSize, TextFaint);
             context.DrawText(scale, new Point(width - scale.Width - 6, lane.Top + 2));
 
-            var midScale = Text($"{(lane.Max / 2).ToString(lane.Format)}", 8, TextFaint);
-            context.DrawText(midScale, new Point(width - midScale.Width - 6, midY - midScale.Height / 2));
+            // The mid-scale label sits inside the plot, on the same edge as the newest sample.
+            // A backing plate keeps both readable where they cross.
+            var midScale = Text($"{(lane.Max / 2).ToString(lane.Format)}", ScaleLabelSize, TextFaint);
+            var midOrigin = new Point(width - midScale.Width - 6, midY - midScale.Height / 2);
+            context.DrawRectangle(
+                BackgroundBrush, null,
+                new Rect(midOrigin.X - 3, midOrigin.Y, midScale.Width + 6, midScale.Height));
+            context.DrawText(midScale, midOrigin);
         }
 
         DrawTimeAxis(context, width, height);
@@ -247,7 +265,7 @@ public class TelemetryGraphControl : Control
 
         foreach (var (x, label) in marks)
         {
-            var text = Text(label, 8, TextFaint);
+            var text = Text(label, ScaleLabelSize, TextFaint);
             double tx = Math.Clamp(x - text.Width / 2, 4, Math.Max(4, width - text.Width - 4));
             context.DrawText(text, new Point(tx, y));
         }
@@ -271,8 +289,8 @@ public class TelemetryGraphControl : Control
         for (int laneIndex = 0; laneIndex < lanes.Length; laneIndex++)
         {
             var lane = lanes[laneIndex];
-            double plotTop = lane.Top + LanePadding;
-            double plotHeight = Math.Max(4, lane.Height - LanePadding * 2);
+            double plotTop = lane.Top + LaneHeaderHeight;
+            double plotHeight = Math.Max(4, lane.Height - LaneHeaderHeight - LanePadding);
             float raw = laneIndex switch
             {
                 0 => sample.ClockMhz,

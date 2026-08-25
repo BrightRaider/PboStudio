@@ -17,8 +17,11 @@
       <TextBlock x:Name="HeaderSubtitle" Classes="body" Foreground="{StaticResource TextMuted}" />
 
       <Border x:Name="SummaryBanner" Classes="panel success">
-        <TextBlock x:Name="SummaryText" FontSize="{StaticResource FontBody}" FontWeight="SemiBold"
-                   TextWrapping="Wrap" Foreground="{StaticResource AccentPrimaryHi}" />
+        <StackPanel Spacing="4">
+          <TextBlock x:Name="SummaryText" FontSize="{StaticResource FontBody}" FontWeight="SemiBold"
+                     TextWrapping="Wrap" Foreground="{StaticResource AccentPrimaryHi}" />
+          <TextBlock x:Name="SummaryNextStep" Classes="caption" TextWrapping="Wrap" IsVisible="False" />
+        </StackPanel>
       </Border>
     </StackPanel>
 
@@ -32,6 +35,10 @@
           <StackPanel Spacing="8">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Border Classes="chip tiny" Background="#1E3A52" BorderBrush="Transparent" VerticalAlignment="Center">
+                  <TextBlock x:Name="PawnIoStep" FontSize="10" FontWeight="Bold"
+                             Foreground="{StaticResource TextPrimary}" />
+                </Border>
                 <TextBlock Text="🔌" FontSize="15" VerticalAlignment="Center" />
                 <TextBlock x:Name="PawnIoTitle" Classes="title" VerticalAlignment="Center" />
               </StackPanel>
@@ -50,6 +57,11 @@
             </Border>
 
             <TextBlock x:Name="PawnIoStatusText" Classes="body" TextWrapping="Wrap" />
+
+            <!-- The driver only becomes usable after a restart, and saying so in a sentence
+                 after the installer ran left the reader to work out what to do next. -->
+            <Button x:Name="RestartAppButton" Classes="primary" Click="OnRestartApp"
+                    Padding="14,7" IsVisible="False" HorizontalAlignment="Left" />
           </StackPanel>
         </Border>
 
@@ -58,6 +70,10 @@
           <StackPanel Spacing="8">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Border Classes="chip tiny" Background="#1E3A52" BorderBrush="Transparent" VerticalAlignment="Center">
+                  <TextBlock x:Name="Prime95Step" FontSize="10" FontWeight="Bold"
+                             Foreground="{StaticResource TextPrimary}" />
+                </Border>
                 <TextBlock Text="🧮" FontSize="15" VerticalAlignment="Center" />
                 <TextBlock x:Name="Prime95Title" Classes="title" VerticalAlignment="Center" />
               </StackPanel>
@@ -75,6 +91,10 @@
           <StackPanel Spacing="8">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Border Classes="chip tiny" Background="#1E3A52" BorderBrush="Transparent" VerticalAlignment="Center">
+                  <TextBlock x:Name="YCruncherStep" FontSize="10" FontWeight="Bold"
+                             Foreground="{StaticResource TextPrimary}" />
+                </Border>
                 <TextBlock Text="🥧" FontSize="15" VerticalAlignment="Center" />
                 <TextBlock x:Name="YCruncherTitle" Classes="title" VerticalAlignment="Center" />
               </StackPanel>

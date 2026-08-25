@@ -25,6 +25,22 @@ public enum CoreState
     Locked,
 }
 
+/// <summary>One value the auto-tuner tried on a core, and whether the core held up at it.</summary>
+public sealed record TuneStep(decimal Value, bool Passed)
+{
+    /// <summary>Signed, because on a Curve Optimizer value the sign is half the information.</summary>
+    public string Label => Value > 0 ? $"+{Value:0}" : $"{Value:0}";
+
+    public string Glyph => Passed ? "✓" : "✕";
+
+    public IBrush Foreground => SolidColorBrush.Parse(Passed ? "#34D399" : "#F87171");
+    public IBrush Background => SolidColorBrush.Parse(Passed ? "#0C1A1A" : "#2E1418");
+
+    public string Tooltip => Passed
+        ? LocalizationService.Pick($"{Label} hat gehalten.", $"{Label} held up.")
+        : LocalizationService.Pick($"{Label} ist durchgefallen.", $"{Label} failed.");
+}
+
 public sealed class CoreRow : INotifyPropertyChanged
 {
     private decimal _margin;
@@ -61,7 +77,19 @@ public sealed class CoreRow : INotifyPropertyChanged
     public string CoreName => LocalizationService.Pick("Kern", "Core") + $" {Index}";
 
     /// <summary>Fixed so every row lines up; wide enough for "[CCD1] Kern 15 🥇 🔒".</summary>
-    public double LabelWidth => HasCcd ? 176 : 128;
+    public double LabelWidth => WidthForCcd(HasCcd);
+
+    /// <summary>
+    /// The single source both the header grid and the row template size their first column
+    /// from. They used to declare <c>Auto</c> independently, and because the row forced a fixed
+    /// width while the header measured its own checkbox and CCD buttons, the "Curve Optimizer"
+    /// heading sat about 42 px to the left of the column it labelled on any single-CCD chip.
+    /// Avalonia has no SharedSizeGroup, so one value has to feed both.
+    /// </summary>
+    public static double WidthForCcd(bool multiCcd) => multiCcd ? 176 : 128;
+
+    public static string ColumnsFor(bool multiCcd) =>
+        $"{WidthForCcd(multiCcd)},126,50,*";
 
     public CoreQualityRank QualityRank { get; set; } = CoreQualityRank.Standard;
 
@@ -80,6 +108,33 @@ public sealed class CoreRow : INotifyPropertyChanged
         CoreQualityRank.SilverStar => string.Format(LocalizationService.Get("SilverCoreTooltip"), CppcPerformance),
         _ => "",
     };
+
+    /// <summary>What earlier runs observed about this core. Null until anything is known.</summary>
+    public CoreKnowledge? Knowledge
+    {
+        get => _knowledge;
+        set
+        {
+            _knowledge = value;
+            Raise();
+            Raise(nameof(HasKnownBad));
+            Raise(nameof(KnowledgeGlyph));
+            Raise(nameof(KnowledgeTooltip));
+        }
+    }
+    private CoreKnowledge? _knowledge;
+
+    public int ChipLimit { get; set; } = -30;
+
+    /// <summary>A core with a value that once failed carries a mark, because that floor is now
+    /// binding on the auto-tuner and the reader should not have to wonder why it stopped.</summary>
+    public bool HasKnownBad => _knowledge?.WorstFailed is not null;
+
+    public string KnowledgeGlyph => "⛒";
+
+    public string KnowledgeTooltip => _knowledge is null
+        ? LocalizationService.Pick("Noch nichts über diesen Kern bekannt.", "Nothing known about this core yet.")
+        : CoreKnowledgeService.Describe(_knowledge, ChipLimit, LocalizationService.IsGerman);
 
     public string SelectTooltip => LocalizationService.Get("CoreTooltip");
     public string MarginTooltip => LocalizationService.Get("ColumnCoTooltip");
@@ -162,6 +217,15 @@ public sealed class CoreRow : INotifyPropertyChanged
         $"{RiskFraction * 100:F0} % des Weges bis zum Chip-Limit ({MinLimit}) ausgereizt.",
         $"{RiskFraction * 100:F0} % of the way toward the chip limit ({MinLimit}).");
 
+    /// <summary>
+    /// A second channel for the risk bar. The bar itself is the only purely colour-coded signal
+    /// in the window, and green against orange at two pixels is exactly the pairing red/green
+    /// colour blindness cannot separate - so past 70 % the row says so in a glyph as well.
+    /// </summary>
+    public bool IsHighRisk => RiskFraction >= 0.70;
+
+    public string RiskGlyph => RiskFraction >= 0.90 ? "‼" : "⚠";
+
     /// <summary>Distance from the BIOS setting, which is the number a person actually tracks.</summary>
     public string DeltaLabel
     {
@@ -174,7 +238,7 @@ public sealed class CoreRow : INotifyPropertyChanged
     }
 
     /// <summary>Amber while the edit is only on screen, muted once the CPU actually holds it.</summary>
-    public IBrush DeltaBrush => SolidColorBrush.Parse(IsChanged ? "#FBBF24" : "#64748B");
+    public IBrush DeltaBrush => SolidColorBrush.Parse(IsChanged ? "#FBBF24" : "#8494A8");
 
     public string DeltaTooltipText => IsChanged
         ? LocalizationService.Pick(
@@ -194,6 +258,33 @@ public sealed class CoreRow : INotifyPropertyChanged
 
     /// <summary>Margin the auto-tuner settled on, shown inside the Locked pill.</summary>
     public decimal? LockedValue { get; set; }
+
+    /// <summary>
+    /// Every value the auto-tuner has tried on this core and how it went, oldest first.
+    ///
+    /// The search is the whole point of the auto-tuner and it used to be invisible: a run that
+    /// takes all night reported one number, "n of m cores locked". Showing the path makes the
+    /// difference between coarse and fine steps something you can see rather than read about.
+    /// </summary>
+    public ObservableCollection<TuneStep> TuneTrail { get; } = [];
+
+    public bool HasTrail => TuneTrail.Count > 0;
+
+    public void RecordTuneStep(decimal value, bool passed)
+    {
+        TuneTrail.Add(new TuneStep(value, passed));
+
+        // A long descent would otherwise push the row wider than the column it lives in.
+        while (TuneTrail.Count > 8) TuneTrail.RemoveAt(0);
+        Raise(nameof(HasTrail));
+    }
+
+    public void ClearTuneTrail()
+    {
+        if (TuneTrail.Count == 0) return;
+        TuneTrail.Clear();
+        Raise(nameof(HasTrail));
+    }
 
     public string Status => State switch
     {
@@ -227,7 +318,7 @@ public sealed class CoreRow : INotifyPropertyChanged
         CoreState.Running => "#38BDF8",
         CoreState.Passed => "#34D399",
         CoreState.Failed => "#F87171",
-        CoreState.Skipped => "#64748B",
+        CoreState.Skipped => "#8494A8",
         CoreState.Locked => "#A78BFA",
         _ => "#94A3B8",
     });
@@ -251,6 +342,7 @@ public sealed class CoreRow : INotifyPropertyChanged
         Raise(nameof(DeltaTooltip));
         Raise(nameof(LockedTooltip));
         Raise(nameof(RiskTooltip));
+        Raise(nameof(KnowledgeTooltip));
         RaiseStatusDerived();
     }
 
@@ -261,6 +353,8 @@ public sealed class CoreRow : INotifyPropertyChanged
         Raise(nameof(RiskFraction));
         Raise(nameof(RiskBrush));
         Raise(nameof(RiskTooltip));
+        Raise(nameof(RiskGlyph));
+        Raise(nameof(IsHighRisk));
         Raise(nameof(DeltaLabel));
         Raise(nameof(IsChanged));
     }
@@ -297,6 +391,16 @@ public partial class MainWindow : Window
     private ActiveRunState? _interruptedState;
 
     private EngineStatus? _dependencies;
+
+    /// <summary>
+    /// What every core has been observed to do, across all runs. Seeds the auto-tuner's floor
+    /// so a value that once crashed the machine is never offered up for rediscovery.
+    /// </summary>
+    private readonly Dictionary<int, CoreKnowledge> _knowledge;
+
+    /// <summary>BIOS version the memory was gathered under, "" when it predates the stamp.</summary>
+    private string _knowledgeBios = "";
+
     private readonly CcdLayout _ccdLayout;
     private readonly AppSettings _settings;
     private bool _settingsApplied;
@@ -312,6 +416,9 @@ public partial class MainWindow : Window
 
         // Before anything reads LocalizationService or lays out the window.
         _settings = SettingsService.Load(SettingsRoot);
+        var loaded = CoreKnowledgeService.Load(SettingsRoot);
+        _knowledge = loaded.Cores;
+        _knowledgeBios = loaded.BiosVersion;
         LocalizationService.CurrentLanguage =
             _settings.UiLanguage == nameof(Language.German) ? Language.German : Language.English;
 
@@ -321,8 +428,21 @@ public partial class MainWindow : Window
 
         _ccdLayout = CoreTopology.ResolveCcds(_cores, _smu.ReportedCcdCount);
 
+        // The header grid and the row template have to size their first column from the same
+        // value; two independent "Auto" columns drifted by up to 42 px on a single-CCD chip.
+        CoreTableHeader.ColumnDefinitions =
+            new ColumnDefinitions(CoreRow.ColumnsFor(_ccdLayout.IsMultiCcd));
+
+        _toastTimer.Tick += (_, _) =>
+        {
+            _toastTimer.Stop();
+            if (Toast is not null) Toast.IsVisible = false;
+        };
+
         BuildCoreRows();
+        PushKnowledgeToRows();
         BuildCcdButtons();
+        BuildYcAlgoChecks();
         ApplyLocalization();
         ShowSystemInfo();
         UpdateDurationHint();
@@ -396,8 +516,30 @@ public partial class MainWindow : Window
         SkipCoreOnErrorBox.IsChecked = s.SkipCoreOnError;
         CoreDelayBox.Value = s.DelayBetweenCores;
 
+        AutoRuntimeBox.IsChecked = s.AutoRuntime;
+        AutoRuntimeCapBox.Value = s.AutoRuntimeCap;
+        SpreadSmtBox.IsChecked = s.SpreadSmt;
+        IsolateCoreBox.IsChecked = s.IsolateTestedCore;
+        YcSecondsBox.Value = s.YcSeconds;
+        YcMemoryBox.SelectedIndex = Math.Clamp(s.YcMemoryIndex, 0, YcMemoryBox.ItemCount - 1);
+        if (YcBinaryBox.ItemCount > 0)
+            YcBinaryBox.SelectedIndex = Math.Clamp(s.YcBinaryIndex, 0, YcBinaryBox.ItemCount - 1);
+
+        if (!string.IsNullOrWhiteSpace(s.YcCustomAlgorithms))
+        {
+            var saved = s.YcCustomAlgorithms.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var (tag, box) in _ycAlgoBoxes) box.IsChecked = saved.Contains(tag);
+        }
+
         MaxTempBox.Value = s.MaxTemp;
         TreatWheaAsErrorBox.IsChecked = s.TreatWheaWarningAsError;
+        RestorePointBox.IsChecked = s.CreateRestorePoint;
+        DockCollapseButton.IsChecked = !s.BottomDockCollapsed;
+        OnToggleBottomDock(null, new RoutedEventArgs());
+
+        RefreshAutoRuntime();
+        RefreshThreadOptions();
+        RefreshYcAlgoPanel();
         PostTestActionBox.SelectedIndex = Math.Clamp(s.PostTestAction, 0, 2);
         WebhookBox.Text = s.WebhookUrl;
 
@@ -435,8 +577,20 @@ public partial class MainWindow : Window
         s.SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true;
         s.DelayBetweenCores = (int)(CoreDelayBox.Value ?? 2);
 
+        s.AutoRuntime = AutoRuntimeBox.IsChecked == true;
+        s.AutoRuntimeCap = (int)(AutoRuntimeCapBox.Value ?? 60);
+        s.SpreadSmt = SpreadSmtBox.IsChecked == true;
+        s.IsolateTestedCore = IsolateCoreBox.IsChecked == true;
+        s.YcSeconds = (int)(YcSecondsBox.Value ?? 60);
+        s.YcMemoryIndex = YcMemoryBox.SelectedIndex;
+        s.YcBinaryIndex = YcBinaryBox.SelectedIndex;
+        s.YcCustomAlgorithms = string.Join(",",
+            _ycAlgoBoxes.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key));
+
         s.MaxTemp = (int)(MaxTempBox.Value ?? 90);
         s.TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true;
+        s.CreateRestorePoint = RestorePointBox.IsChecked == true;
+        s.BottomDockCollapsed = DockCollapseButton.IsChecked != true;
         s.PostTestAction = PostTestActionBox.SelectedIndex;
         s.WebhookUrl = WebhookBox.Text ?? "";
 
@@ -639,7 +793,11 @@ public partial class MainWindow : Window
 
         if (inTextInput) return;
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.C)
+        // Ctrl+Shift+C, not Ctrl+C: outside a text field everyone still expects plain Ctrl+C
+        // to copy whatever they selected, not a list they never asked for.
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control)
+            && e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+            && e.Key == Key.C)
         {
             OnCopyBiosValues(sender, new RoutedEventArgs());
             e.Handled = true;
@@ -775,6 +933,8 @@ public partial class MainWindow : Window
             $"The last run was cut short during pass {_interruptedState.CurrentIteration} on core {core} (Curve Optimizer: {currentMargin}). " +
             $"That is the classic signature of an unstable core.\nRecommendation: back core {core} off by 4 points ({currentMargin} → {currentMargin + 4}) and resume with the remaining cores.");
 
+        RememberCrash(core, currentMargin);
+
         RecoveryPanel.IsVisible = true;
         Log(LocalizationService.Pick(
             $"Letzter Testlauf bei Kern {core} durch System-Absturz unterbrochen.",
@@ -898,6 +1058,10 @@ public partial class MainWindow : Window
         // Right panel
         TestControlsTitle.Text = LocalizationService.Get("TestControls");
         RightTabSetupBtn.Content = LocalizationService.Get("TabSetup");
+        AdvancedTabsLabel.Text = LocalizationService.Get("AdvancedTabs");
+        Tip(AdvancedTabsLabel, "AdvancedTabsTooltip");
+        Tip(RightTabEngineBtn, "AdvancedTabsTooltip");
+        Tip(RightTabSystemBtn, "AdvancedTabsTooltip");
         RightTabEngineBtn.Content = LocalizationService.Get("TabEngine");
         RightTabSystemBtn.Content = LocalizationService.Get("TabSystem");
         TestRunningText.Text = LocalizationService.Get("TestRunning");
@@ -908,6 +1072,9 @@ public partial class MainWindow : Window
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
         AutoTunerOpt1.Content = LocalizationService.Get("AutoTunerCoarse");
         AutoTunerOpt2.Content = LocalizationService.Get("AutoTunerFine");
+        ResetKnowledgeButton.Content = LocalizationService.Get("KnowledgeReset");
+        Tip(ResetKnowledgeButton, "KnowledgeResetTooltip");
+        UpdateKnowledgeSummary();
 
         // Apply section
         ApplySectionTitle.Text = LocalizationService.Get("ApplySectionTitle");
@@ -933,6 +1100,23 @@ public partial class MainWindow : Window
         Tip(ThreadsBox, "ThreadsTooltip");
         ModeLabel.Text = LocalizationService.Get("InstructionSet");
         Tip(ModeBox, "InstructionSetTooltip");
+        // These four carried x:Names but were never assigned, so a German UI showed
+        // "SSE (Recommended for CO)" and "AVX2 (High Load)" in English forever.
+        ModeOpt0.Content = LocalizationService.Get("ModeSse");
+        ModeOpt1.Content = LocalizationService.Get("ModeAvx");
+        ModeOpt2.Content = LocalizationService.Get("ModeAvx2");
+        ModeOpt3.Content = LocalizationService.Get("ModeAvx512");
+
+        AutoRuntimeBox.Content = LocalizationService.Get("AutoRuntime");
+        Tip(AutoRuntimeBox, "AutoRuntimeTooltip");
+        AutoRuntimeCapLabel.Text = LocalizationService.Get("AutoRuntimeCap");
+        AutoRuntimeCapHint.Text = LocalizationService.Get("AutoRuntimeCapHint");
+        SpreadSmtBox.Content = LocalizationService.Get("SpreadSmt");
+        Tip(SpreadSmtBox, "SpreadSmtTooltip");
+        IsolateCoreBox.Content = LocalizationService.Get("IsolateCore");
+        Tip(IsolateCoreBox, "IsolateCoreTooltip");
+        RestorePointBox.Content = LocalizationService.Get("RestorePoint");
+        RestorePointHint.Text = LocalizationService.Get("RestorePointHint");
         FftLabel.Text = LocalizationService.Get("FftRange");
         Tip(FftBox, "FftTooltip");
         FftOptCustom.Content = LocalizationService.Get("FftCustom");
@@ -955,10 +1139,20 @@ public partial class MainWindow : Window
         Tip(PauseDurationBox, "TransientPauseTooltip");
         YcAlgoLabel.Text = LocalizationService.Get("YcAlgo");
         Tip(YcAlgoBox, "YcAlgoTooltip");
+        YcAlgoOpt0.Content = LocalizationService.Get("YcAlgoPresetCo");
+        YcAlgoOpt1.Content = LocalizationService.Get("YcAlgoPresetAll");
+        YcAlgoOpt2.Content = LocalizationService.Get("YcAlgoPresetFast");
+        YcAlgoOptCustom.Content = LocalizationService.Get("YcAlgoPresetCustom");
+        YcSecondsLabel.Text = LocalizationService.Get("YcSeconds");
+        YcMemoryLabel.Text = LocalizationService.Get("YcMemory");
+        YcBinaryLabel.Text = LocalizationService.Get("YcBinary");
+        YcBinaryHint.Text = LocalizationService.Get("YcBinaryHint");
+        BuildYcBinaryChoices();
         OrderOpt0.Content = LocalizationService.Pick("Nacheinander", "Sequential");
         OrderOpt1.Content = LocalizationService.Pick("Abwechselnd", "Alternate");
         OrderOpt2.Content = LocalizationService.Pick("Zufällig", "Random");
         OrderOpt3.Content = LocalizationService.Get("OrderCustom");
+        OrderOpt4.Content = LocalizationService.Get("OrderCorePairs");
         CustomOrderLabel.Text = LocalizationService.Get("CustomOrderLabel");
         Tip(CustomOrderBox, "CustomOrderTooltip");
         UpdateCustomOrderHint();
@@ -977,7 +1171,9 @@ public partial class MainWindow : Window
 
         // Bottom workspace
         TabGraphButton.Content = LocalizationService.Get("TabGraph");
-        TabLogButton.Content = LocalizationService.Get("TabLog");
+        TabLogText.Text = LocalizationService.Get("TabLog");
+        Tip(DockCollapseButton, "CollapseDockTooltip");
+        Tip(LogWarningBadge, "LogWarningBadgeTooltip");
         CopyLogButton.Content = LocalizationService.Get("CopyLog");
         ClearLogButton.Content = LocalizationService.Get("ClearLog");
         OpenLogFolderButton.Content = LocalizationService.Get("OpenLogFolder");
@@ -1024,7 +1220,122 @@ public partial class MainWindow : Window
         CopyLogButton.IsVisible = log;
         OpenLogFolderButton.IsVisible = log && _logDirectory is not null;
         ClearLogButton.IsVisible = log;
+
+        // Switching to the log is the moment the backlog has been seen. Opening the tab while
+        // the dock is collapsed does not count - nothing is actually on screen then.
+        if (log && BottomContent?.IsVisible == true)
+        {
+            _unseenWarnings = 0;
+            UpdateLogBadge();
+        }
     }
+
+    private void OnAutoRuntimeChanged(object? sender, RoutedEventArgs e) => RefreshAutoRuntime();
+
+    private void RefreshAutoRuntime()
+    {
+        if (AutoRuntimeBox is null || MinutesBox is null || AutoRuntimeCapPanel is null) return;
+
+        bool auto = AutoRuntimeBox.IsChecked == true;
+        MinutesBox.IsEnabled = !auto;
+        AutoRuntimeCapPanel.IsVisible = auto;
+        UpdateDurationHint();
+    }
+
+    private void OnThreadsChanged(object? sender, SelectionChangedEventArgs e) => RefreshThreadOptions();
+
+    private void RefreshThreadOptions()
+    {
+        // Spreading one worker across both siblings is meaningless once both are saturated.
+        if (SpreadSmtBox is null || ThreadsBox is null) return;
+        SpreadSmtBox.IsEnabled = ThreadsBox.SelectedIndex == 0;
+    }
+
+    private void OnYcAlgoChanged(object? sender, SelectionChangedEventArgs e) => RefreshYcAlgoPanel();
+
+    private void RefreshYcAlgoPanel()
+    {
+        if (YcAlgoChecks is null || YcAlgoBox is null) return;
+        YcAlgoChecks.IsVisible = YcAlgoBox.SelectedIndex == 3;
+        UpdateDurationHint();
+    }
+
+    /// <summary>
+    /// One checkbox per algorithm y-cruncher actually accepts, generated from
+    /// <see cref="YCruncherOptions.AllAlgorithms"/> so the UI cannot offer a tag the command
+    /// line would reject.
+    /// </summary>
+    private readonly Dictionary<string, CheckBox> _ycAlgoBoxes = [];
+
+    private void BuildYcAlgoChecks()
+    {
+        var boxes = new List<CheckBox>();
+        foreach (string tag in YCruncherOptions.AllAlgorithms)
+        {
+            var box = new CheckBox
+            {
+                Content = tag,
+                IsChecked = YCruncherOptions.CurveOptimizer.Algorithms.Contains(tag),
+                Margin = new Avalonia.Thickness(0, 0, 10, 0),
+                MinHeight = 24,
+            };
+            _ycAlgoBoxes[tag] = box;
+            boxes.Add(box);
+        }
+        YcAlgoChecks.ItemsSource = boxes;
+    }
+
+    private void BuildYcBinaryChoices()
+    {
+        var items = new List<string> { LocalizationService.Get("YcBinaryAuto") };
+
+        string ycRoot = Path.Combine(AppContext.BaseDirectory, "engines", "ycruncher");
+        string? install = Directory.Exists(ycRoot)
+            ? Directory.EnumerateDirectories(ycRoot, "y-cruncher*").FirstOrDefault()
+            : null;
+
+        _ycBinaryPrefixes = [null];
+        if (install is not null)
+        {
+            foreach (var (prefix, label) in YCruncherEngine.AvailableBinaries(install))
+            {
+                items.Add(label);
+                _ycBinaryPrefixes.Add(prefix);
+            }
+        }
+
+        int keep = YcBinaryBox.SelectedIndex;
+        YcBinaryBox.ItemsSource = items;
+        YcBinaryBox.SelectedIndex = keep >= 0 && keep < items.Count ? keep : 0;
+    }
+
+    private List<string?> _ycBinaryPrefixes = [null];
+
+    /// <summary>
+    /// The custom tag selection, falling back to the CO preset if everything was unticked —
+    /// y-cruncher treats an empty algorithm list as "run all of them", which is the opposite
+    /// of what unticking everything looks like it should mean.
+    /// </summary>
+    private IReadOnlyList<string> SelectedYcAlgorithms()
+    {
+        var chosen = _ycAlgoBoxes
+            .Where(kv => kv.Value.IsChecked == true)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        if (chosen.Count > 0) return chosen;
+
+        Log(LocalizationService.Pick(
+            "Kein y-cruncher-Algorithmus ausgewählt — es läuft das Curve-Optimizer-Preset.",
+            "No y-cruncher algorithm selected — running the Curve Optimizer preset instead."),
+            LogLevel.Warn);
+        return YCruncherOptions.CurveOptimizer.Algorithms;
+    }
+
+    private string? SelectedYcBinaryPrefix =>
+        YcBinaryBox?.SelectedIndex is { } i && i >= 0 && i < _ycBinaryPrefixes.Count
+            ? _ycBinaryPrefixes[i]
+            : null;
 
     private void OnAutoTunerModeChanged(object? sender, SelectionChangedEventArgs e)
     {
@@ -1164,6 +1475,12 @@ public partial class MainWindow : Window
     /// </summary>
     private void ShowDetailPanel(string title, string body, bool showAccept)
     {
+        // Reset the tint: after a failed run the panel was still red, so the platform check
+        // arrived looking like a second failure.
+        ResultPanel.Classes.Set("danger", false);
+        ResultPanel.Classes.Set("success", true);
+        ResultTitle.Foreground = SolidColorBrush.Parse("#34D399");
+
         ResultTitle.Text = title;
         ResultText.Text = body;
         AcceptButton.IsVisible = showAccept;
@@ -1530,7 +1847,9 @@ public partial class MainWindow : Window
                 ? Directory.EnumerateDirectories(ycRoot, "y-cruncher*").FirstOrDefault()
                 : null;
 
-            ycBinary = install is null ? null : YCruncherEngine.FindBinaryFor(install, DetectGeneration());
+            ycBinary = install is null
+                ? null
+                : YCruncherEngine.FindBinaryFor(install, DetectGeneration(), SelectedYcBinaryPrefix);
             if (ycBinary is null)
             {
                 Log(LocalizationService.Pick("y-cruncher nicht gefunden. Setup wird geöffnet…", "y-cruncher not found. Opening setup…"), LogLevel.Error);
@@ -1587,6 +1906,18 @@ public partial class MainWindow : Window
             return;
         }
 
+        // The auto-tuner deliberately drives cores past stability, and an unstable core can
+        // corrupt whatever was being written when it miscalculated. This happens before the
+        // first SMU write, because afterwards there may be nothing clean left to snapshot.
+        if (autoTunerMode.HasValue && RestorePointBox.IsChecked == true)
+        {
+            Log(LocalizationService.Get("RestorePointWorking"));
+            StartButton.IsEnabled = false;
+            var restore = await Task.Run(() => SystemRestoreService.Create(LocalizationService.IsGerman));
+            StartButton.IsEnabled = true;
+            Log(restore.Message, restore.Created ? LogLevel.Success : LogLevel.Warn);
+        }
+
         // A static run against unapplied edits measures something other than what is on screen.
         int unapplied = _rows.Count(r => r.Selected && r.IsChanged);
         if (unapplied > 0 && !_smu.IsAvailable)
@@ -1601,17 +1932,25 @@ public partial class MainWindow : Window
 
         int maxNegativeLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
 
+        bool autoRuntime = AutoRuntimeBox.IsChecked == true;
+
         var plan = new TestPlan
         {
             CoresToIgnore = skipped,
-            RuntimePerCore = TimeSpan.FromMinutes((double)(MinutesBox.Value ?? 6)),
+            RuntimePerCore = autoRuntime
+                ? TestPlan.AutoRuntime
+                : TimeSpan.FromMinutes((double)(MinutesBox.Value ?? 6)),
+            AutoRuntimeCap = TimeSpan.FromMinutes((double)(AutoRuntimeCapBox.Value ?? 60)),
             Threads = ThreadsBox.SelectedIndex + 1,
+            SpreadSingleThreadAcrossSmt = SpreadSmtBox.IsChecked == true,
+            IsolateTestedCore = IsolateCoreBox.IsChecked == true && _smu.IsAvailable,
             MaxIterations = (int)(IterationsBox.Value ?? 3),
             Order = OrderBox.SelectedIndex switch
             {
                 0 => CoreOrder.Sequential,
                 2 => CoreOrder.Random,
                 3 => CoreOrder.Custom,
+                4 => CoreOrder.CorePairs,
                 _ => CoreOrder.Alternate,
             },
             CustomOrder = customOrder,
@@ -1621,6 +1960,7 @@ public partial class MainWindow : Window
             DelayBetweenCores = TimeSpan.FromSeconds((double)(CoreDelayBox.Value ?? 2)),
             AutoTuner = autoTunerMode,
             MaxNegativeMargin = maxNegativeLimit,
+            PerCoreFloor = CoreKnowledgeService.FloorsFor(_knowledge, maxNegativeLimit),
             InitialCoreMargins = coreMargins,
             ApplyMargin = _smu.IsAvailable ? ApplyMarginToHardware : null,
             TunerState = tunerState,
@@ -1658,12 +1998,19 @@ public partial class MainWindow : Window
             _ = NotificationService.SendRunStartedAsync(webhookUrl, _smu.CpuName, selectedCores.Count, plan.RuntimePerCore);
         }
 
-        var ycOpts = YcAlgoBox.SelectedIndex switch
+        var ycAlgorithms = YcAlgoBox.SelectedIndex switch
         {
-            1 => YCruncherOptions.Default,
-            2 => new YCruncherOptions(["VT3", "FFT", "N63"]),
-            _ => YCruncherOptions.CurveOptimizer,
+            1 => YCruncherOptions.Default.Algorithms,
+            2 => YCruncherOptions.FastDiscovery.Algorithms,
+            3 => SelectedYcAlgorithms(),
+            _ => YCruncherOptions.CurveOptimizer.Algorithms,
         };
+
+        var ycOpts = new YCruncherOptions(
+            ycAlgorithms,
+            SecondsPerTest: (int)(YcSecondsBox.Value ?? 60),
+            Memory: (YcMemoryBox.SelectedItem as ComboBoxItem)?.Content as string ?? "64M",
+            SpreadAcrossSmt: plan.SpreadSingleThreadAcrossSmt);
 
         _runCts = new CancellationTokenSource();
         var combined = new Dictionary<int, List<Failure>>();
@@ -1689,7 +2036,9 @@ public partial class MainWindow : Window
                     {
                         string ycRoot = Path.Combine(engineRoot, "ycruncher");
                         string? install = Directory.Exists(ycRoot) ? Directory.EnumerateDirectories(ycRoot, "y-cruncher*").FirstOrDefault() : null;
-                        ycBinary = install is null ? null : YCruncherEngine.FindBinaryFor(install, DetectGeneration());
+                        ycBinary = install is null
+                ? null
+                : YCruncherEngine.FindBinaryFor(install, DetectGeneration(), SelectedYcBinaryPrefix);
                         if (ycBinary is null)
                         {
                             Log(LocalizationService.Pick("y-cruncher nicht gefunden. Setup wird geöffnet…", "y-cruncher not found. Opening setup…"), LogLevel.Error);
@@ -1709,7 +2058,8 @@ public partial class MainWindow : Window
                     }
                     var (fftMin, fftMax) = CustomFftRange();
                     engine = new Prime95Engine(prime95, runsDir,
-                        new Prime95Options(phase.Mode, phase.Fft, fftMin, fftMax));
+                        new Prime95Options(phase.Mode, phase.Fft, fftMin, fftMax,
+                            SpreadAcrossSmt: plan.SpreadSingleThreadAcrossSmt));
                 }
 
                 var runner = new TestRunner(engine, _cores, plan);
@@ -1935,7 +2285,12 @@ public partial class MainWindow : Window
     /// <summary>Shared by the progress clock and the duration hint so the two cannot disagree.</summary>
     private TimeSpan EstimateTotalRuntime(AutoTunerMode? mode, int maxNegativeLimit, int phaseCount)
     {
-        double minutesPerCore = (double)(MinutesBox.Value ?? 6);
+        // On automatic runtime the honest planning figure is the cap, not the fixed minutes:
+        // the run finishes earlier if the engine reports a completed sweep, but nothing
+        // guarantees it will, and an estimate that promises the shorter number is a wrong one.
+        double minutesPerCore = AutoRuntimeBox?.IsChecked == true
+            ? (double)(AutoRuntimeCapBox?.Value ?? 60)
+            : (double)(MinutesBox.Value ?? 6);
         int maxPasses = (int)(IterationsBox.Value ?? 3);
 
         if (mode.HasValue)
@@ -1971,11 +2326,13 @@ public partial class MainWindow : Window
                 break;
 
             case TestEvent.CorePassed s:
+                RememberOutcome(s.Core, passed: true);
                 Row(s.Core).State = CoreState.Passed;
                 Log($"{Row(s.Core).CoreName}: " + LocalizationService.Pick("bestanden.", "passed."), LogLevel.Success);
                 break;
 
             case TestEvent.CoreFailed s:
+                RememberOutcome(s.Core, passed: false);
                 Row(s.Core).State = CoreState.Failed;
                 Log($"{Row(s.Core).CoreName}: {s.Failure}", LogLevel.Error);
                 if (!string.IsNullOrEmpty(webhookUrl))
@@ -1987,6 +2344,9 @@ public partial class MainWindow : Window
                 break;
 
             case TestEvent.CoreAutoTuned cat:
+                // The value that was just under load, and how it went. Recorded before the
+                // next step overwrites Margin, so the row keeps the whole search path.
+                Row(cat.Core).RecordTuneStep(cat.Result.OldMargin, cat.Result.Passed);
                 Row(cat.Core).Margin = cat.Result.NextMargin;
                 if (_smu.IsAvailable) _smu.WriteCurveOptimizer(cat.Core, cat.Result.NextMargin);
                 if (cat.Result.CoreLocked)
@@ -2141,15 +2501,24 @@ public partial class MainWindow : Window
             DurationHint.Foreground = SolidColorBrush.Parse("#34D399");
             DurationHintSub.Foreground = SolidColorBrush.Parse("#6EE7B7");
 
+            bool autoRuntime = AutoRuntimeBox?.IsChecked == true;
+            string perCore = autoRuntime
+                ? (isDe ? $"max. {AutoRuntimeCapBox?.Value} Min" : $"up to {AutoRuntimeCapBox?.Value} min")
+                : (isDe ? $"{MinutesBox.Value} Min" : $"{MinutesBox.Value} min");
+
             DurationHint.Text = total <= TimeSpan.Zero
                 ? ""
                 : (isDe
-                    ? $"⏱️ Statischer Test: {selectedCores} Kerne × {MinutesBox.Value} Min × {IterationsBox.Value} Durchgänge{phaseNote} = {total:h\\:mm} Std."
-                    : $"⏱️ Static test: {selectedCores} cores × {MinutesBox.Value} min × {IterationsBox.Value} passes{phaseNote} = {total:h\\:mm} hrs");
+                    ? $"⏱️ Statischer Test: {selectedCores} Kerne × {perCore} × {IterationsBox.Value} Durchgänge{phaseNote} = höchstens {total:h\\:mm} Std."
+                    : $"⏱️ Static test: {selectedCores} cores × {perCore} × {IterationsBox.Value} passes{phaseNote} = at most {total:h\\:mm} hrs");
 
-            DurationHintSub.Text = isDe
-                ? "Prüft die aktuellen CO-Werte auf Stabilität, ohne sie zu verändern."
-                : "Tests the current CO values for stability without changing them.";
+            DurationHintSub.Text = autoRuntime
+                ? (isDe
+                    ? "Jeder Kern läuft, bis das Testprogramm seinen kompletten Umfang einmal durchhat — meist deutlich kürzer als die Obergrenze. Prüft die aktuellen CO-Werte, ohne sie zu verändern."
+                    : "Each core runs until the engine has been through its whole workload once — usually well short of the cap. Tests the current CO values without changing them.")
+                : (isDe
+                    ? "Prüft die aktuellen CO-Werte auf Stabilität, ohne sie zu verändern."
+                    : "Tests the current CO values for stability without changing them.");
         }
 
         if (PhasePlanText is not null)
@@ -2409,8 +2778,8 @@ public partial class MainWindow : Window
             Row(core).Margin = margin;
 
         Log(LocalizationService.Pick(
-            $"{_recommended.Count} Wert(e) übernommen. Jetzt unten rechts „{LocalizationService.Get("ApplyLive")}“ drücken, damit sie wirksam werden.",
-            $"Applied {_recommended.Count} value(s). Now press “{LocalizationService.Get("ApplyLive")}” at the bottom right to make them take effect."),
+            $"{_recommended.Count} Wert(e) übernommen. Jetzt unter der Kerntabelle „{LocalizationService.Get("ApplyLive")}“ drücken, damit sie wirksam werden.",
+            $"Applied {_recommended.Count} value(s). Now press “{LocalizationService.Get("ApplyLive")}” below the core table to make them take effect."),
             LogLevel.Success);
 
         // Selecting exactly the affected cores makes the obvious next step a single click.
@@ -2536,6 +2905,97 @@ public partial class MainWindow : Window
     private CoreRow Row(int index) => _rows[index];
 
     /// <summary>
+    /// Files what just happened to a core under the value it was actually tested at. Called
+    /// while the row still holds that value — the auto-tuner overwrites it a moment later.
+    /// </summary>
+    private void RememberOutcome(int core, bool passed)
+    {
+        int margin = (int)Row(core).Margin;
+
+        if (passed) CoreKnowledgeService.RecordPass(_knowledge, core, margin);
+        else CoreKnowledgeService.RecordFailure(_knowledge, core, margin);
+
+        CoreKnowledgeService.Save(SettingsRoot, _knowledge, CurrentBiosVersion);
+        Row(core).Knowledge = _knowledge.GetValueOrDefault(core);
+        UpdateKnowledgeSummary();
+    }
+
+    /// <summary>
+    /// A crash is the strongest failure signal there is, and until now it was the one the
+    /// program threw away: the search state died with the machine and the only record was a
+    /// log line nothing reads. Recorded here so the value is never proposed again.
+    /// </summary>
+    private void RememberCrash(int core, int margin)
+    {
+        CoreKnowledgeService.RecordFailure(_knowledge, core, margin);
+        CoreKnowledgeService.Save(SettingsRoot, _knowledge, CurrentBiosVersion);
+        Row(core).Knowledge = _knowledge.GetValueOrDefault(core);
+        UpdateKnowledgeSummary();
+    }
+
+    private string CurrentBiosVersion => _audit?.Bios.BiosVersion ?? _knowledgeBios;
+
+    /// <summary>
+    /// States what the tuner remembers in one line, so its floor is never a silent constraint.
+    /// </summary>
+    private void UpdateKnowledgeSummary()
+    {
+        if (KnowledgeSummaryText is null) return;
+
+        int known = _knowledge.Count;
+        int bad = CoreKnowledgeService.CoresWithKnownBad(_knowledge);
+
+        KnowledgeSummaryText.Text = known == 0
+            ? LocalizationService.Get("KnowledgeEmpty")
+            : string.Format(LocalizationService.Get("KnowledgeSummary"), known, bad);
+
+        ResetKnowledgeButton.IsEnabled = known > 0;
+
+        // A firmware change invalidates the evidence without invalidating the file, which is
+        // the one case where keeping the memory is actively misleading.
+        string current = _audit?.Bios.BiosVersion ?? "";
+        bool changed = known > 0
+            && !string.IsNullOrEmpty(current)
+            && !string.IsNullOrEmpty(_knowledgeBios)
+            && !string.Equals(current, _knowledgeBios, StringComparison.OrdinalIgnoreCase);
+
+        BiosChangedPanel.IsVisible = changed;
+        if (changed)
+            BiosChangedText.Text = string.Format(
+                LocalizationService.Get("KnowledgeBiosChanged"), _knowledgeBios, current);
+    }
+
+    private async void OnResetKnowledge(object? sender, RoutedEventArgs e)
+    {
+        if (_knowledge.Count == 0) return;
+
+        bool ok = await ConfirmDialog.ShowAsync(
+            this,
+            string.Format(LocalizationService.Get("KnowledgeResetConfirm"),
+                _knowledge.Count, CoreKnowledgeService.CoresWithKnownBad(_knowledge)),
+            LocalizationService.Get("ConfirmYes"));
+        if (!ok) return;
+
+        CoreKnowledgeService.Reset(SettingsRoot);
+        _knowledge.Clear();
+        _knowledgeBios = CurrentBiosVersion;
+
+        PushKnowledgeToRows();
+        UpdateKnowledgeSummary();
+
+        Log(LocalizationService.Get("KnowledgeResetDone"), LogLevel.Success);
+    }
+
+    private void PushKnowledgeToRows()
+    {
+        foreach (var row in _rows)
+        {
+            row.ChipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+            row.Knowledge = _knowledge.GetValueOrDefault(row.Index);
+        }
+    }
+
+    /// <summary>
     /// Locks down everything that cannot take effect mid-run. Leaving these live meant the UI
     /// accepted changes it then silently ignored. The temperature cut-off stays editable on
     /// purpose - raising a safety limit must never require stopping the run first.
@@ -2566,6 +3026,10 @@ public partial class MainWindow : Window
             StartButton.Classes.Set("danger", false);
             UpdateStartButtonState();
         }
+
+        // Selection and per-core values cannot take effect once a run has started, and the
+        // table was the one place still accepting edits the run would silently ignore.
+        CoreList.IsEnabled = !running;
 
         ApplyButton.IsEnabled = !running && _smu.IsAvailable;
         CopyBiosButton.IsEnabled = !running;
@@ -2601,6 +3065,88 @@ public partial class MainWindow : Window
     /// <c>Text += …</c> re-copied and re-laid-out the entire buffer on every line, which an
     /// overnight run turns into a real cost. Colour by level so errors do not read as successes.
     /// </summary>
+    // ══════════════════════════════════════════════════════════════
+    // Toast
+    //
+    // Everything the program had to say about a refused or completed action went to the log,
+    // and the log tab is closed on startup. "No core selected", "nothing to do - no value was
+    // changed" and "SMU unavailable" therefore looked, from the outside, like the button
+    // simply not working. Anything at Warn or above now says so on screen.
+    // ══════════════════════════════════════════════════════════════
+
+    private readonly DispatcherTimer _toastTimer = new();
+    private int _unseenWarnings;
+
+    private void ShowToast(string message, LogLevel level)
+    {
+        if (Toast is null) return;
+
+        ToastGlyph.Text = level switch
+        {
+            LogLevel.Error => "⛔",
+            LogLevel.Warn => "⚠️",
+            LogLevel.Success => "✅",
+            _ => "ℹ️",
+        };
+        ToastText.Text = message;
+        ToastText.Foreground = SolidColorBrush.Parse(level switch
+        {
+            LogLevel.Error => "#FECACA",
+            LogLevel.Warn => "#FDE68A",
+            LogLevel.Success => "#A7F3D0",
+            _ => "#CBD5E1",
+        });
+
+        Toast.Classes.Set("danger", level == LogLevel.Error);
+        Toast.Classes.Set("warning", level == LogLevel.Warn);
+        Toast.Classes.Set("success", level == LogLevel.Success);
+        Toast.IsVisible = true;
+
+        // An error stays up longer than a confirmation: it is the one the reader may need to
+        // act on, and it competes with whatever they were already doing.
+        _toastTimer.Stop();
+        _toastTimer.Interval = TimeSpan.FromSeconds(level == LogLevel.Error ? 9 : 5);
+        _toastTimer.Start();
+    }
+
+    private void OnDismissToast(object? sender, RoutedEventArgs e)
+    {
+        _toastTimer.Stop();
+        if (Toast is not null) Toast.IsVisible = false;
+    }
+
+    /// <summary>
+    /// A toast the reader missed must not be the only trace of a warning, so the log tab keeps
+    /// a count until the log is actually opened.
+    /// </summary>
+    private void UpdateLogBadge()
+    {
+        if (LogWarningBadge is null) return;
+        LogWarningBadge.IsVisible = _unseenWarnings > 0;
+        LogWarningCount.Text = _unseenWarnings > 99 ? "99+" : _unseenWarnings.ToString();
+    }
+
+    /// <summary>Expanded height of the bottom dock, in device-independent pixels.</summary>
+    private const double DockHeightOpen = 150;
+
+    /// <summary>Collapsed height: enough for the tab strip and the card's own padding.</summary>
+    private const double DockHeightCollapsed = 46;
+
+    private void OnToggleBottomDock(object? sender, RoutedEventArgs e)
+    {
+        if (BottomContent is null || DockCollapseButton is null || RootGrid is null) return;
+
+        bool open = DockCollapseButton.IsChecked == true;
+        BottomContent.IsVisible = open;
+
+        // The row itself has to shrink, not just its content: it is a pixel row so the
+        // splitter above keeps something concrete to resize against.
+        RootGrid.RowDefinitions[4].Height =
+            new GridLength(open ? DockHeightOpen : DockHeightCollapsed, GridUnitType.Pixel);
+
+        DockCollapseButton.Content = open ? "⌄" : "⌃";
+    }
+
     private void Log(string message, LogLevel level = LogLevel.Info)
     {
         string line = $"[{DateTime.Now:HH:mm:ss}] {message}\n";
@@ -2625,6 +3171,18 @@ public partial class MainWindow : Window
         while (inlines.Count > MaxLogLines) inlines.RemoveAt(0);
 
         LogScroller?.ScrollToEnd();
+
+        if (level >= LogLevel.Warn)
+        {
+            ShowToast(message, level);
+
+            // Only count it as unseen while the log is not the visible tab.
+            if (LogContainer?.IsVisible != true || BottomContent?.IsVisible != true)
+            {
+                _unseenWarnings++;
+                UpdateLogBadge();
+            }
+        }
     }
 
     private async void OnCopyLog(object? sender, RoutedEventArgs e)

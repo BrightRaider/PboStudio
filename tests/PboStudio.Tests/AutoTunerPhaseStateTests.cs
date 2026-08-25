@@ -16,6 +16,10 @@ public class AutoTunerPhaseStateTests
         public bool IsAlive => true;
         public TimeSpan CpuTime { get; private set; }
 
+        /// <summary>These fakes never report a completed sweep, so a plan using the
+        /// automatic runtime falls back to its cap - which is what the tests want.</summary>
+        public int WorkloadCyclesCompleted => 0;
+
         public IReadOnlyList<Failure> DrainFailures()
         {
             CpuTime += TimeSpan.FromSeconds(1);

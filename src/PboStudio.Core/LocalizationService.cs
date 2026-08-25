@@ -231,6 +231,75 @@ public static class LocalizationService
             "YcAlgo" => isDe ? "y-cruncher Algorithmen" : "y-cruncher algorithms",
             "YcAlgoTooltip" => isDe ? "Welche Rechenkerne von y-cruncher gefahren werden. Das CO-Preset enthält genau die Algorithmen, die erfahrungsgemäß am zuverlässigsten instabile Kerne aufdecken." : "Which y-cruncher workloads run. The CO preset contains exactly the algorithms that experience shows expose unstable cores most reliably.",
 
+            // ---- Instruction set / FFT / y-cruncher option labels ----
+            // These sat in the XAML as English literals and stayed English in a German UI.
+            "ModeSse" => isDe ? "SSE (für CO empfohlen)" : "SSE (recommended for CO)",
+            "ModeAvx" => isDe ? "AVX" : "AVX",
+            "ModeAvx2" => isDe ? "AVX2 (hohe Last)" : "AVX2 (high load)",
+            "ModeAvx512" => isDe ? "AVX-512 (Zen 4 / Zen 5, Maximallast)" : "AVX-512 (Zen 4 / Zen 5, max load)",
+
+            "YcAlgoPresetCo" => isDe ? "Curve Optimizer (SFTv4, SVT, FFTv4, N63, VT3)" : "Curve Optimizer (SFTv4, SVT, FFTv4, N63, VT3)",
+            "YcAlgoPresetAll" => isDe ? "Vollständig (alle 8 Algorithmen)" : "Comprehensive (all 8 algorithms)",
+            "YcAlgoPresetFast" => isDe ? "Schnellsuche (VT3, FFTv4, N63)" : "Fast discovery (VT3, FFTv4, N63)",
+            "YcAlgoPresetCustom" => isDe ? "Eigene Auswahl…" : "Custom selection…",
+            "YcSeconds" => isDe ? "Sekunden je Algorithmus" : "Seconds per algorithm",
+            "YcMemory" => isDe ? "Speicher für y-cruncher" : "Memory for y-cruncher",
+            "YcBinary" => isDe ? "y-cruncher Binärdatei" : "y-cruncher binary",
+            "YcBinaryAuto" => isDe ? "Automatisch (passend zur CPU)" : "Automatic (matched to the CPU)",
+            "YcBinaryHint" => isDe
+                ? "Die Binärdatei bestimmt den Befehlssatz und damit die Lastart. „00-x86“ erzeugt die geringste Hitze und den höchsten Boost, die Zen-Varianten fahren AVX2/AVX-512 und ziehen deutlich mehr Strom. Ein CO-Wert, der unter der einen hält, kann unter der anderen durchfallen — beide zu prüfen ist der Sinn der Auswahl."
+                : "The binary decides the instruction set and therefore the kind of load. “00-x86” produces the least heat and the highest boost; the Zen builds run AVX2/AVX-512 and draw far more current. A CO value that holds under one can fail under the other — testing both is the point of choosing.",
+
+            // ---- Runtime ----
+            // ---- Auto-tuner memory ----
+            "KnowledgeEmpty" => isDe
+                ? "Gedächtnis: noch nichts über die Kerne bekannt."
+                : "Memory: nothing known about the cores yet.",
+            "KnowledgeSummary" => isDe
+                ? "Gedächtnis: {0} Kern(e) erfasst, davon {1} mit belegtem Fehlwert (⛒)."
+                : "Memory: {0} core(s) on record, {1} with a value that failed (⛒).",
+            "KnowledgeReset" => isDe ? "Zurücksetzen" : "Reset",
+            "KnowledgeResetTooltip" => isDe
+                ? "Verwirft alles, was frühere Läufe über die Kerne festgestellt haben. Danach steht dem Auto-Tuner wieder der volle Bereich bis zum Chip-Limit offen — auch Werte, die schon einmal abgestürzt sind. Sinnvoll nach einem BIOS-/AGESA-Update, geändertem RAM-Profil oder neuer Kühlung."
+                : "Discards everything earlier runs established about the cores. The auto-tuner then has the full range down to the chip limit open again — including values that have already crashed. Worth doing after a BIOS/AGESA update, a changed memory profile or new cooling.",
+            "KnowledgeResetConfirm" => isDe
+                ? "Gedächtnis für {0} Kern(e) verwerfen, darunter {1} mit belegtem Fehlwert?\n\nDer Auto-Tuner darf danach wieder bis zum Chip-Limit absenken — auch auf Werte, bei denen das System bereits abgestürzt ist."
+                : "Discard the memory for {0} core(s), {1} of them with a value that failed?\n\nThe auto-tuner may then descend to the chip limit again — including values the system has already crashed at.",
+            "KnowledgeResetDone" => isDe
+                ? "🧹 Kern-Gedächtnis verworfen. Der Auto-Tuner beginnt bei den nächsten Läufen ohne Vorwissen."
+                : "🧹 Core memory discarded. The auto-tuner starts the next runs with no prior knowledge.",
+            "KnowledgeBiosChanged" => isDe
+                ? "⚠️ Das Gedächtnis stammt von BIOS {0}, aktuell läuft {1}. Ein AGESA-Update verändert Boost-Verhalten und Spannungskurven — die alten Beobachtungen beschreiben unter Umständen ein anderes Verhalten als das jetzige. Zurücksetzen erwägen."
+                : "⚠️ The memory was gathered under BIOS {0}; {1} is running now. An AGESA update changes boost behaviour and voltage curves, so the old observations may describe a machine that no longer behaves that way. Consider resetting.",
+
+            "AutoRuntime" => isDe ? "Laufzeit automatisch (ein voller Durchlauf je Kern)" : "Automatic runtime (one full sweep per core)",
+            "AutoRuntimeTooltip" => isDe
+                ? "Statt fester Minuten wird jeder Kern belastet, bis das Testprogramm seinen kompletten Umfang einmal durchlaufen hat — bei Prime95 also alle FFT-Größen des Bereichs, bei y-cruncher alle gewählten Algorithmen. Ein Bereich wie „Huge“ braucht dafür 33–51 Minuten; mit 6 Minuten läuft nur ein Bruchteil davon."
+                : "Instead of fixed minutes, each core is stressed until the engine has worked through its whole list once — every FFT size in the range for Prime95, every selected algorithm for y-cruncher. A range like “Huge” needs 33-51 minutes for that; six minutes only gets through a fraction.",
+            "AutoRuntimeCap" => isDe ? "Obergrenze je Kern (Min.)" : "Upper bound per core (min)",
+            "AutoRuntimeCapHint" => isDe
+                ? "Sicherheitsnetz: Meldet das Testprogramm keinen abgeschlossenen Durchlauf, wird der Kern spätestens nach dieser Zeit freigegeben."
+                : "Safety net: if the engine never reports a completed sweep, the core is released after this time regardless.",
+            "AutoRuntimeActive" => isDe ? "automatisch" : "automatic",
+
+            "SpreadSmt" => isDe ? "Einen Thread über beide SMT-Threads verteilen" : "Spread one thread across both SMT siblings",
+            "SpreadSmtTooltip" => isDe
+                ? "Es läuft weiterhin nur ein Worker, er darf aber zwischen beiden logischen Threads des Kerns wandern. Windows schiebt die Last dann hin und her und erzeugt Übergänge, die weder ein fest angehefteter Thread noch zwei ausgelastete Threads produzieren. Ohne SMT und bei 2 Threads wirkungslos."
+                : "Still a single worker, but free to move between both logical processors of the core. Windows then shifts the load back and forth and creates transitions that neither a pinned thread nor two saturated threads produce. No effect without SMT or at two threads.",
+
+            "OrderCorePairs" => isDe ? "Kern-Paare (Übergänge testen)" : "Core pairs (test hand-overs)",
+
+            "IsolateCore" => isDe ? "Andere Kerne während des Tests auf 0 setzen" : "Park other cores at 0 while testing",
+            "IsolateCoreTooltip" => isDe
+                ? "Setzt alle nicht getesteten Kerne für die Dauer ihres Slots auf Curve Optimizer 0. Ohne das kann ein Hardware-Fehler, den ein ganz anderer Kern verursacht hat, dem gerade getesteten angelastet werden — und dessen Wert wird für einen Fehler entschärft, den er nie hatte. Kostet einen SMU-Schreibzugriff je Kern und Slot."
+                : "Sets every core that is not under test to Curve Optimizer 0 for the duration of its slot. Without it, a hardware error caused by an entirely different core can be charged to the one being measured — and its value gets backed off for a fault it never had. Costs one SMU write per core per slot.",
+
+            "RestorePoint" => isDe ? "Wiederherstellungspunkt vor dem Auto-Tuner anlegen" : "Create a restore point before the auto-tuner",
+            "RestorePointHint" => isDe
+                ? "Der Auto-Tuner treibt Kerne bewusst über ihre Stabilitätsgrenze. Ein instabiler Kern fällt nicht immer sauber aus — er kann beschädigen, was gerade geschrieben wurde, bis hin zur Registry. Der Wiederherstellungspunkt ist der Unterschied zwischen „neu starten“ und „Windows neu installieren“."
+                : "The auto-tuner deliberately drives cores past the point where they are stable, and an unstable core does not always fail cleanly — it can corrupt whatever was being written, up to and including the registry. The restore point is the difference between rebooting and reinstalling Windows.",
+            "RestorePointWorking" => isDe ? "Wiederherstellungspunkt wird angelegt — das dauert einen Moment…" : "Creating a restore point — this takes a moment…",
+
             // ---- System tab ----
             "SafetyTempLimit" => isDe ? "Notfall-Temperaturlimit (°C)" : "Emergency temperature limit (°C)",
             "SafetyTempTooltip" => isDe ? "Übersteigt die CPU-Temperatur diesen Wert, wird der Testlauf sofort abgebrochen. Bleibt auch während eines Laufs änderbar." : "If the CPU temperature exceeds this value the run is aborted immediately. Stays editable during a run.",
@@ -244,7 +313,11 @@ public static class LocalizationService
             // ---- Workspace tabs ----
             "TabGraph" => isDe ? "📊 Live-Telemetrie" : "📊 Live telemetry",
             "TabLog" => isDe ? "📜 Protokoll" : "📜 Log",
-            "TabSetup" => isDe ? "🎯 Setup" : "🎯 Setup",
+            "TabSetup" => isDe ? "🎯 Profil & Start" : "🎯 Profile & start",
+            "AdvancedTabs" => isDe ? "Erweitert" : "Advanced",
+            "AdvancedTabsTooltip" => isDe
+                ? "Wird für einen normalen Lauf nicht gebraucht: das gewählte Profil bringt Testprogramm, Lastart, Laufzeit und Kern-Reihenfolge bereits mit. Hier drin wird das übersteuert."
+                : "Not needed for an ordinary run: the selected profile already carries the engine, workload, runtime and core order. What is in here overrides that.",
             "TabEngine" => isDe ? "⚡ Engine" : "⚡ Engine",
             "TabSystem" => isDe ? "🛡️ System" : "🛡️ System",
             "CopyLog" => isDe ? "Kopieren" : "Copy",
@@ -254,8 +327,14 @@ public static class LocalizationService
                 ? "Öffnet den Ordner mit den Protokolldateien. Jeder Programmstart schreibt eine eigene Datei, die laufend mitgeschrieben wird — sie überlebt also auch einen Absturz oder Bluescreen."
                 : "Opens the folder holding the log files. Every program start writes its own file continuously, so it survives a crash or bluescreen.",
             "Shortcuts" => isDe
-                ? "⌨️ F5 Start/Stop · Strg+S Live · Strg+C BIOS · Strg+L Sprache"
-                : "⌨️ F5 start/stop · Ctrl+S live · Ctrl+C BIOS · Ctrl+L language",
+                ? "⌨️ F5 Start/Stop · Strg+S Live · Strg+Umschalt+C BIOS · Strg+L Sprache"
+                : "⌨️ F5 start/stop · Ctrl+S live · Ctrl+Shift+C BIOS · Ctrl+L language",
+            "CollapseDockTooltip" => isDe
+                ? "Klappt Graph und Protokoll ein. Gibt der Kerntabelle rund 110 Pixel zurück — bei vielen Kernen oder hoher Windows-Skalierung sind das mehrere zusätzlich sichtbare Zeilen."
+                : "Collapses the graph and log. Gives the core table about 110 pixels back — with many cores or high Windows scaling that is several more visible rows.",
+            "LogWarningBadgeTooltip" => isDe
+                ? "So viele Warnungen und Fehler sind aufgelaufen, seit das Protokoll zuletzt offen war."
+                : "Warnings and errors that have accumulated since the log was last open.",
 
             // ---- Results ----
             "ResultPassTitle" => isDe ? "✓ Bestanden — kein Kern ist durchgefallen." : "✓ Passed — no core failed.",
@@ -316,6 +395,19 @@ public static class LocalizationService
             "WizardWebsite" => isDe ? "Website" : "Website",
             "WizardInstallAll" => isDe ? "⬇ Alles Fehlende installieren" : "⬇ Install everything missing",
             "WizardRecheck" => isDe ? "🔄 Erneut prüfen" : "🔄 Check again",
+
+            // The three cards are a sequence, not a menu: PawnIO gates SMU access and is the
+            // only one that needs a restart, so numbering them is information, not decoration.
+            "WizardStep1" => isDe ? "SCHRITT 1" : "STEP 1",
+            "WizardStep2" => isDe ? "SCHRITT 2" : "STEP 2",
+            "WizardStep3" => isDe ? "SCHRITT 3" : "STEP 3",
+            "WizardRestartApp" => isDe ? "🔄 PboStudio jetzt neu starten" : "🔄 Restart PboStudio now",
+            "WizardNextPawnIo" => isDe
+                ? "Als Nächstes: PawnIO installieren (Schritt 1). Ohne den Treiber laufen Stresstests zwar, aber CO-Werte lassen sich weder lesen noch setzen — und nach der Installation muss PboStudio einmal neu starten."
+                : "Next: install PawnIO (step 1). Without the driver stress tests still run, but CO values can neither be read nor written — and PboStudio has to restart once afterwards.",
+            "WizardNextEngine" => isDe
+                ? "Als Nächstes: mindestens ein Testprogramm laden. Ohne Prime95 oder y-cruncher lässt sich kein Lauf starten."
+                : "Next: download at least one stress engine. Without Prime95 or y-cruncher no run can be started.",
             "WizardReady" => isDe ? "✅ Alles bereit — du kannst testen." : "✅ All set — you are ready to test.",
             "WizardMissing" => isDe ? "⚠️ Es fehlen noch {0} Komponente(n)." : "⚠️ {0} component(s) still missing.",
             "WizardInstalled" => isDe ? "✅ Installiert" : "✅ Installed",

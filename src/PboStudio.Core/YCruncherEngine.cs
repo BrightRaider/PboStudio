@@ -9,15 +9,30 @@ public enum ZenGeneration { Unknown, Zen1, Zen2, Zen3, Zen4, Zen5 }
 public sealed record YCruncherOptions(
     IReadOnlyList<string> Algorithms,
     int SecondsPerTest = 60,
-    string Memory = "64M")
+    string Memory = "64M",
+    bool SpreadAcrossSmt = false)
 {
+    /// <summary>
+    /// Every algorithm tag y-cruncher 0.8.x accepts, in the order its own menu lists them.
+    /// <para>
+    /// The names matter literally: they are passed straight to the command line, and the
+    /// v0.7 spellings "SFT" and "FFT" were silently renamed to "SFTv4" and "FFTv4". They are
+    /// not aliases - "Command Lines.txt" lists aliases explicitly (N64, VST) and these two are
+    /// not among them - so the old tags asked for tests that no longer exist under that name.
+    /// </para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> AllAlgorithms =
+        ["BKT", "BBP", "SFTv4", "SNT", "SVT", "FFTv4", "N63", "VT3"];
+
     /// <summary>
     /// VT3 earns its place in the default set: it is the algorithm most often credited with
     /// catching Curve Optimizer instability that Prime95 runs straight past.
     /// </summary>
-    public static YCruncherOptions Default => new(["BKT", "BBP", "SFT", "SNT", "SVT", "FFT", "N63", "VT3"]);
+    public static YCruncherOptions Default => new(AllAlgorithms);
 
-    public static YCruncherOptions CurveOptimizer => new(["SFT", "SVT", "FFT", "N63", "VT3"]);
+    public static YCruncherOptions CurveOptimizer => new(["SFTv4", "SVT", "FFTv4", "N63", "VT3"]);
+
+    public static YCruncherOptions FastDiscovery => new(["VT3", "FFTv4", "N63"]);
 }
 
 /// <summary>
@@ -41,6 +56,35 @@ public sealed class YCruncherEngine : IStressEngine
     }
 
     /// <summary>
+    /// The binaries worth offering by hand, coldest instruction set first. Which one runs
+    /// changes what is actually being tested: "00-x86" produces the least heat and therefore
+    /// the highest boost clock, while the Zen-native builds exercise AVX2/AVX-512 and pull far
+    /// more current. A Curve Optimizer value that holds under one can fail under the other, so
+    /// picking the binary is a test decision, not an installation detail.
+    /// </summary>
+    public static readonly IReadOnlyList<(string Prefix, string Label)> SelectableBinaries =
+    [
+        ("00-x86", "00-x86 · Legacy x86 (lowest load, highest boost)"),
+        ("04-P4P", "04-P4P · SSE3"),
+        ("13-HSW", "13-HSW ~ Airi · AVX2"),
+        ("17-ZN1", "17-ZN1 ~ Yukina · Zen 1"),
+        ("19-ZN2", "19-ZN2 ~ Kagari · Zen 2/3 (AVX2)"),
+        ("22-ZN4", "22-ZN4 ~ Kizuna · Zen 4 (AVX-512)"),
+        ("24-ZN5", "24-ZN5 ~ Komari · Zen 5 (AVX-512)"),
+    ];
+
+    /// <summary>Binaries this installation actually ships, so the picker cannot offer a dead entry.</summary>
+    public static IReadOnlyList<(string Prefix, string Label)> AvailableBinaries(string installRoot)
+    {
+        string binaries = Path.Combine(installRoot, "Binaries");
+        if (!Directory.Exists(binaries)) return [];
+
+        var present = Directory.EnumerateFiles(binaries, "*.exe").Select(Path.GetFileName).ToList();
+        return [.. SelectableBinaries.Where(b =>
+            present.Any(f => f!.StartsWith(b.Prefix, StringComparison.OrdinalIgnoreCase)))];
+    }
+
+    /// <summary>
     /// Picks the binary matching this CPU from y-cruncher's Binaries folder.
     ///
     /// The top-level y-cruncher.exe is only a launcher: it selects one of these and runs it as a
@@ -48,10 +92,22 @@ public sealed class YCruncherEngine : IStressEngine
     /// never ours to configure. Addressing the binary directly is what makes single-core testing
     /// possible at all.
     /// </summary>
-    public static string? FindBinaryFor(string installRoot, ZenGeneration generation)
+    /// <param name="explicitPrefix">
+    /// Overrides the automatic choice. Falls back to auto-detection when the requested binary
+    /// is not present, because an installation that lacks it must still be able to run.
+    /// </param>
+    public static string? FindBinaryFor(string installRoot, ZenGeneration generation, string? explicitPrefix = null)
     {
         string binaries = Path.Combine(installRoot, "Binaries");
         if (!Directory.Exists(binaries)) return null;
+
+        if (!string.IsNullOrWhiteSpace(explicitPrefix))
+        {
+            string? chosen = Directory
+                .EnumerateFiles(binaries, "*.exe")
+                .FirstOrDefault(f => Path.GetFileName(f).StartsWith(explicitPrefix, StringComparison.OrdinalIgnoreCase));
+            if (chosen is not null) return chosen;
+        }
 
         // Names carry their architecture as a prefix, e.g. "19-ZN2 ~ Kagari.exe".
         string[] preferred = generation switch
@@ -94,7 +150,7 @@ public sealed class YCruncherEngine : IStressEngine
             $"logfile:\"{logPath}\" stress -M:{_options.Memory} -D:{_options.SecondsPerTest} " +
             string.Join(' ', _options.Algorithms);
 
-        nuint mask = threads >= 2 ? core.AffinityMask : core.FirstThreadMask;
+        nuint mask = core.MaskFor(threads, _options.SpreadAcrossSmt);
 
         // The jail has to exist before the process runs any code, otherwise y-cruncher has
         // already read the machine's full processor count and sized itself for it.
@@ -165,6 +221,15 @@ internal sealed class YCruncherSession : IStressSession
         return drained;
     }
 
+    /// <summary>
+    /// y-cruncher prints "Iteration: N" once per complete pass over the selected algorithms.
+    /// The header for pass N appears when that pass begins, so the count of headers seen minus
+    /// the one currently running is the number of finished sweeps.
+    /// </summary>
+    private int _iterationHeaders;
+
+    public int WorkloadCyclesCompleted => Math.Max(0, _iterationHeaders - 1);
+
     private void ScanLog()
     {
         if (!File.Exists(_logPath)) return;
@@ -179,6 +244,8 @@ internal sealed class YCruncherSession : IStressSession
 
             while (reader.ReadLine() is { } line)
             {
+                if (line.Contains("Iteration:", StringComparison.OrdinalIgnoreCase)) _iterationHeaders++;
+
                 if (line.Contains("passed", StringComparison.OrdinalIgnoreCase)) continue;
 
                 // Expected noise: the job object denies every processor outside the mask, and

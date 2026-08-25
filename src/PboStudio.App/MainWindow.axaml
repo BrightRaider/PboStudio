@@ -5,12 +5,16 @@
         Title="PboStudio – CoreCycler &amp; PBO Curve Optimizer Studio"
         Icon="/icon.png"
         Width="1180" Height="740"
-        MinWidth="900" MinHeight="560"
+        MinWidth="900" MinHeight="480"
         KeyDown="OnMainWindowKeyDown"
         RequestedThemeVariant="Dark">
 
-  <!-- Row 3 is the splitter; it resizes the star workspace against the fixed bottom dock. -->
-  <Grid RowDefinitions="Auto,Auto,*,Auto,128" Margin="12">
+  <!-- Row 3 is the splitter; it resizes the star workspace against the bottom dock. The dock
+       row stays a pixel row so the splitter keeps working, and the collapse toggle drives its
+       height between DockHeightOpen and just the tab strip. It is 150 rather than the old 128
+       because three telemetry lanes plus their labels need the room - and at 150 % Windows
+       scaling the toggle is what buys the core table its rows back. -->
+  <Grid x:Name="RootGrid" RowDefinitions="Auto,Auto,*,Auto,150" Margin="12">
 
     <!-- ═══════════════════════════════════════════════════════════
          HEADER
@@ -57,6 +61,21 @@
 
             <WrapPanel x:Name="MetricStrip" ItemWidth="NaN" VerticalAlignment="Center">
 
+              <!-- Temperature leads the strip: it is the only number here that ends a run. -->
+              <Border Classes="chip" Margin="0,0,6,4" x:Name="TempChip"
+                      BorderThickness="1" BorderBrush="{StaticResource BorderStrong}">
+                <StackPanel Spacing="3">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock x:Name="TempLabel" Classes="metricLabel" Text="TEMP" />
+                    <TextBlock x:Name="TempValue" Classes="metricValue" FontWeight="Bold" Text="–" />
+                  </StackPanel>
+                  <Border Width="72" Height="3" CornerRadius="1" Background="{StaticResource BorderSubtle}" HorizontalAlignment="Left">
+                    <Border x:Name="TempBar" Width="0" Height="3" CornerRadius="1"
+                            Background="{StaticResource AccentPrimary}" HorizontalAlignment="Left" />
+                  </Border>
+                </StackPanel>
+              </Border>
+
               <Border Classes="chip" Margin="0,0,6,4" x:Name="BoostChip">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <TextBlock x:Name="BoostLabel" Classes="metricLabel" Text="CLOCK" />
@@ -98,19 +117,6 @@
                   </StackPanel>
                   <Border Width="72" Height="2" CornerRadius="1" Background="{StaticResource BorderSubtle}" HorizontalAlignment="Left">
                     <Border x:Name="EdcBar" Width="0" Height="2" CornerRadius="1"
-                            Background="{StaticResource AccentPrimary}" HorizontalAlignment="Left" />
-                  </Border>
-                </StackPanel>
-              </Border>
-
-              <Border Classes="chip" Margin="0,0,6,4" x:Name="TempChip">
-                <StackPanel Spacing="3">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock x:Name="TempLabel" Classes="metricLabel" Text="TEMP" />
-                    <TextBlock x:Name="TempValue" Classes="metricValue" Text="–" />
-                  </StackPanel>
-                  <Border Width="72" Height="2" CornerRadius="1" Background="{StaticResource BorderSubtle}" HorizontalAlignment="Left">
-                    <Border x:Name="TempBar" Width="0" Height="2" CornerRadius="1"
                             Background="{StaticResource AccentPrimary}" HorizontalAlignment="Left" />
                   </Border>
                 </StackPanel>
@@ -222,8 +228,10 @@
             </StackPanel>
           </Border>
 
-          <!-- Table header. Column widths mirror the row template exactly. -->
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,126,50,*" Margin="8,0,4,6">
+          <!-- Table header. ColumnDefinitions are assigned in the constructor from the same
+               CoreRow.ColumnsFor() the row template binds to, because Avalonia has no
+               SharedSizeGroup and two independent "Auto" columns drifted apart. -->
+          <Grid DockPanel.Dock="Top" x:Name="CoreTableHeader" ColumnDefinitions="128,126,50,*" Margin="8,0,4,6">
             <StackPanel Grid.Column="0" x:Name="HeaderLabelSpacer" Orientation="Horizontal"
                         Spacing="6" VerticalAlignment="Center">
               <!-- Not IsThreeState: a click must only ever mean all-on or all-off. The
@@ -256,24 +264,28 @@
           <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0">
             <Border Height="1" Background="{StaticResource BorderSubtle}" />
             <TextBlock x:Name="ApplySectionTitle" Classes="sectionTitle" />
+            <!-- The hints wrap to two lines rather than being trimmed. At the 900 px minimum
+                 width each column is about 152 px, and "dauerhaft · geplante Aufgabe ·
+                 Adminrechte" needs roughly 220 - so the ellipsis hid exactly the part that
+                 explains what the option costs. -->
             <Grid ColumnDefinitions="*,12,*,12,*">
               <StackPanel Grid.Column="0" Spacing="3">
                 <Button x:Name="ApplyButton" Classes="secondary" HorizontalAlignment="Stretch"
                         Click="OnApplyCurveOptimizer" />
                 <TextBlock x:Name="ApplyLiveHint" Classes="caption" TextAlignment="Center"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
               </StackPanel>
               <StackPanel Grid.Column="2" Spacing="3">
                 <Button x:Name="CopyBiosButton" Classes="secondary" HorizontalAlignment="Stretch"
                         Click="OnCopyBiosValues" />
                 <TextBlock x:Name="ApplyBiosHint" Classes="caption" TextAlignment="Center"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
               </StackPanel>
               <StackPanel Grid.Column="4" Spacing="3">
                 <CheckBox x:Name="AutostartBox" Click="OnToggleAutostart"
                           HorizontalAlignment="Center" MinHeight="28" />
                 <TextBlock x:Name="ApplyAutostartHint" Classes="caption" TextAlignment="Center"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                           TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Grid>
           </StackPanel>
@@ -290,11 +302,16 @@
                   <Border Background="{StaticResource SurfaceInset}" BorderBrush="#1B202D" BorderThickness="1"
                           CornerRadius="{StaticResource RadiusSm}" Padding="8,1" Margin="0,0,0,2">
                     <StackPanel Spacing="0">
+                      <!-- Column 0 is Auto, but the panel inside it is pinned to
+                           CoreRow.LabelWidth - the same value the header grid is built from in
+                           the constructor. ColumnDefinitions itself cannot be bound. -->
                       <Grid ColumnDefinitions="Auto,126,50,*">
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
                                     Width="{Binding LabelWidth}" VerticalAlignment="Center">
-                          <CheckBox Classes="compact" IsChecked="{Binding Selected}" ToolTip.Tip="{Binding SelectTooltip}" />
+                          <CheckBox Classes="compact" IsChecked="{Binding Selected}"
+                                    AutomationProperties.Name="{Binding CoreName}"
+                                    ToolTip.Tip="{Binding SelectTooltip}" />
                           <Border Classes="chip tiny" IsVisible="{Binding HasCcd}"
                                   Background="{Binding CcdBrush}" BorderBrush="Transparent"
                                   ToolTip.Tip="{Binding CcdTooltip}">
@@ -308,30 +325,71 @@
                                      ToolTip.Tip="{Binding QualityTooltip}" />
                           <TextBlock Text="🔒" IsVisible="{Binding IsLocked}" FontSize="11"
                                      VerticalAlignment="Center" ToolTip.Tip="{Binding LockedTooltip}" />
+                          <!-- This core has a value on record that failed; the auto-tuner's
+                               floor is raised accordingly and the mark says why. -->
+                          <TextBlock Text="{Binding KnowledgeGlyph}" IsVisible="{Binding HasKnownBad}"
+                                     FontSize="10" Foreground="{StaticResource StateWarning}"
+                                     VerticalAlignment="Center" ToolTip.Tip="{Binding KnowledgeTooltip}" />
                         </StackPanel>
 
+                        <!-- FormatString carries the sign: a Curve Optimizer value of +5 shown
+                             as "5" is genuinely ambiguous in a column that also holds -30. -->
                         <NumericUpDown Grid.Column="1" Classes="compact" Value="{Binding Margin}"
                                        Minimum="{Binding MinLimit}" Maximum="{Binding MaxLimit}"
-                                       Increment="1" FormatString="0" ShowButtonSpinner="True"
+                                       Increment="1" FormatString="+0;-0;0" ShowButtonSpinner="True"
                                        BorderBrush="{Binding RiskBrush}" BorderThickness="1"
+                                       AutomationProperties.Name="{Binding CoreName}"
                                        ToolTip.Tip="{Binding MarginTooltip}"
                                        VerticalAlignment="Center" />
 
-                        <TextBlock Grid.Column="2" Text="{Binding DeltaLabel}"
-                                   Foreground="{Binding DeltaBrush}" FontSize="{StaticResource FontCaption}"
-                                   FontWeight="SemiBold" VerticalAlignment="Center"
-                                   HorizontalAlignment="Center" ToolTip.Tip="{Binding DeltaTooltip}" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
+                                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                          <!-- Second channel for the risk bar, which is otherwise colour only -->
+                          <TextBlock Text="{Binding RiskGlyph}" IsVisible="{Binding IsHighRisk}"
+                                     Foreground="{Binding RiskBrush}" FontSize="{StaticResource FontCaption}"
+                                     VerticalAlignment="Center" ToolTip.Tip="{Binding RiskTooltip}" />
+                          <TextBlock Text="{Binding DeltaLabel}"
+                                     Foreground="{Binding DeltaBrush}" FontSize="{StaticResource FontCaption}"
+                                     FontWeight="SemiBold" VerticalAlignment="Center"
+                                     ToolTip.Tip="{Binding DeltaTooltip}" />
+                        </StackPanel>
 
-                        <Border Grid.Column="3" Classes="statusPill" Margin="10,0,0,0"
-                                Background="{Binding StatusBackground}">
-                          <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="{Binding StatusGlyph}" FontSize="{StaticResource FontCaption}"
-                                       Foreground="{Binding StatusColor}" VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding Status}" FontSize="{StaticResource FontCaption}"
-                                       FontWeight="SemiBold" Foreground="{Binding StatusColor}"
-                                       VerticalAlignment="Center" />
-                          </StackPanel>
-                        </Border>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0"
+                                    VerticalAlignment="Center">
+                          <Border Classes="statusPill" Background="{Binding StatusBackground}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <TextBlock Text="{Binding StatusGlyph}" FontSize="{StaticResource FontCaption}"
+                                         Foreground="{Binding StatusColor}" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding Status}" FontSize="{StaticResource FontCaption}"
+                                         FontWeight="SemiBold" Foreground="{Binding StatusColor}"
+                                         VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Border>
+
+                          <!-- Where the auto-tuner has been on this core: -25 ✕ · -22 ✕ · -19 ✓ -->
+                          <ItemsControl ItemsSource="{Binding TuneTrail}" IsVisible="{Binding HasTrail}"
+                                        VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="3" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Border Classes="chip tiny" Background="{Binding Background}"
+                                        BorderBrush="Transparent" ToolTip.Tip="{Binding Tooltip}">
+                                  <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <TextBlock Text="{Binding Label}" FontSize="9" FontWeight="Bold"
+                                               FontFamily="{StaticResource FontMono}"
+                                               Foreground="{Binding Foreground}" />
+                                    <TextBlock Text="{Binding Glyph}" FontSize="9"
+                                               Foreground="{Binding Foreground}" />
+                                  </StackPanel>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
                       </Grid>
 
                       <!-- How far this core has travelled from its start value toward the chip limit -->
@@ -354,14 +412,22 @@
 
           <TextBlock DockPanel.Dock="Top" x:Name="TestControlsTitle" Classes="sectionTitle" Margin="0,0,0,8" />
 
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,4,*,4,*" Margin="0,0,0,10">
-            <RadioButton Grid.Column="0" x:Name="RightTabSetupBtn" Classes="segment"
+          <!-- Setup leads on its own row; the two expert surfaces sit below it under a label
+               that says what they are. A profile carries the whole configuration, so for most
+               runs the row below is never touched — and it should not look like a step. -->
+          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,10">
+            <RadioButton x:Name="RightTabSetupBtn" Classes="segment lead"
                          GroupName="RightTabs" IsChecked="True" IsCheckedChanged="OnRightTabChanged" />
-            <RadioButton Grid.Column="2" x:Name="RightTabEngineBtn" Classes="segment"
-                         GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
-            <RadioButton Grid.Column="4" x:Name="RightTabSystemBtn" Classes="segment"
-                         GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
-          </Grid>
+
+            <Grid ColumnDefinitions="Auto,*,4,*">
+              <TextBlock Grid.Column="0" x:Name="AdvancedTabsLabel" Classes="caption"
+                         VerticalAlignment="Center" Margin="2,0,8,0" TextWrapping="NoWrap" />
+              <RadioButton Grid.Column="1" x:Name="RightTabEngineBtn" Classes="segment sub"
+                           GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
+              <RadioButton Grid.Column="3" x:Name="RightTabSystemBtn" Classes="segment sub"
+                           GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
+            </Grid>
+          </StackPanel>
 
           <!-- Progress lives outside the tabs: it must stay visible whichever tab is open -->
           <Border DockPanel.Dock="Top" x:Name="ProgressPanel" Classes="panel info"
@@ -396,9 +462,17 @@
                   <TextBlock x:Name="TestProfileLabel" Classes="label" />
                   <ComboBox x:Name="ProfileBox" SelectedIndex="0" HorizontalAlignment="Stretch"
                             SelectionChanged="OnProfileChanged">
+                    <!-- The category eyebrow puts the five shelves the profiles were always
+                         sorted into in front of the reader, instead of leaving thirteen
+                         equally-weighted names to be told apart by their wording. -->
                     <ComboBox.ItemTemplate>
                       <DataTemplate>
-                        <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontCaption}" TextWrapping="Wrap" />
+                        <StackPanel Spacing="1">
+                          <TextBlock Text="{Binding Category}" FontSize="9" FontWeight="Bold"
+                                     Foreground="{StaticResource TextFaint}"
+                                     IsVisible="{Binding Category, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          <TextBlock Text="{Binding Name}" FontSize="{StaticResource FontCaption}" TextWrapping="Wrap" />
+                        </StackPanel>
                       </DataTemplate>
                     </ComboBox.ItemTemplate>
                   </ComboBox>
@@ -445,6 +519,21 @@
                       <ProgressBar x:Name="AutoTunerProgressBar" Minimum="0" Maximum="1" Value="0"
                                    Height="4" Foreground="{StaticResource AccentAuto}" />
                     </StackPanel>
+
+                    <!-- What the tuner remembers, and the way to make it forget. Its floor comes
+                         from here, so the reader has to be able to see and clear it. -->
+                    <Border Height="1" Background="{StaticResource BorderSubtle}" />
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Grid.Column="0" x:Name="KnowledgeSummaryText" Classes="caption"
+                                 VerticalAlignment="Center" TextWrapping="Wrap" />
+                      <Button Grid.Column="1" x:Name="ResetKnowledgeButton" Classes="ghost"
+                              Click="OnResetKnowledge" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    </Grid>
+
+                    <Border x:Name="BiosChangedPanel" Classes="panel warning" IsVisible="False" Padding="8,6">
+                      <TextBlock x:Name="BiosChangedText" Classes="caption"
+                                 Foreground="{StaticResource StateWarning}" TextWrapping="Wrap" />
+                    </Border>
                   </StackPanel>
                 </Border>
               </StackPanel>
@@ -464,6 +553,18 @@
                   </StackPanel>
                 </Grid>
 
+                <!-- Six fixed minutes only get through part of a preset like Huge, where one
+                     full FFT sweep takes 33-51 minutes. This runs each core until the engine
+                     has actually been through everything once. -->
+                <CheckBox x:Name="AutoRuntimeBox" IsCheckedChanged="OnAutoRuntimeChanged" />
+
+                <StackPanel x:Name="AutoRuntimeCapPanel" Spacing="3" IsVisible="False">
+                  <TextBlock x:Name="AutoRuntimeCapLabel" Classes="label" />
+                  <NumericUpDown x:Name="AutoRuntimeCapBox" Value="60" Minimum="5" Maximum="600"
+                                 Increment="5" FormatString="0" ValueChanged="OnRuntimeChanged" />
+                  <TextBlock x:Name="AutoRuntimeCapHint" Classes="caption" />
+                </StackPanel>
+
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock x:Name="EngineLabel" Classes="label" />
@@ -476,12 +577,18 @@
                   </StackPanel>
                   <StackPanel Grid.Column="2" Spacing="3">
                     <TextBlock x:Name="ThreadsLabel" Classes="label" />
-                    <ComboBox x:Name="ThreadsBox" SelectedIndex="0" HorizontalAlignment="Stretch">
+                    <ComboBox x:Name="ThreadsBox" SelectedIndex="0" HorizontalAlignment="Stretch"
+                              SelectionChanged="OnThreadsChanged">
                       <ComboBoxItem x:Name="ThreadOpt0" Content="1 Thread" />
                       <ComboBoxItem x:Name="ThreadOpt1" Content="2 Threads (SMT)" />
                     </ComboBox>
                   </StackPanel>
                 </Grid>
+
+                <!-- One worker, but free to move between both SMT siblings. The scheduler then
+                     shifts it back and forth, which neither a hard pin nor two saturated
+                     threads produces. Only meaningful at one thread. -->
+                <CheckBox x:Name="SpreadSmtBox" />
 
                 <StackPanel x:Name="PrimeOptionsPanel" Spacing="8">
                   <StackPanel Spacing="3">
@@ -524,13 +631,51 @@
                   </StackPanel>
                 </StackPanel>
 
-                <StackPanel x:Name="YcAlgoPanel" Spacing="3" IsVisible="False">
-                  <TextBlock x:Name="YcAlgoLabel" Classes="label" />
-                  <ComboBox x:Name="YcAlgoBox" SelectedIndex="0" HorizontalAlignment="Stretch">
-                    <ComboBoxItem x:Name="YcAlgoOpt0" Content="Curve Optimizer (VT3, SFT, SVT, FFT, N63)" />
-                    <ComboBoxItem x:Name="YcAlgoOpt1" Content="Comprehensive (All 8 Algorithms)" />
-                    <ComboBoxItem x:Name="YcAlgoOpt2" Content="Fast Discovery (VT3, FFT, N63)" />
-                  </ComboBox>
+                <StackPanel x:Name="YcAlgoPanel" Spacing="8" IsVisible="False">
+                  <StackPanel Spacing="3">
+                    <TextBlock x:Name="YcAlgoLabel" Classes="label" />
+                    <ComboBox x:Name="YcAlgoBox" SelectedIndex="0" HorizontalAlignment="Stretch"
+                              SelectionChanged="OnYcAlgoChanged">
+                      <ComboBoxItem x:Name="YcAlgoOpt0" />
+                      <ComboBoxItem x:Name="YcAlgoOpt1" />
+                      <ComboBoxItem x:Name="YcAlgoOpt2" />
+                      <ComboBoxItem x:Name="YcAlgoOptCustom" />
+                    </ComboBox>
+                  </StackPanel>
+
+                  <!-- Free algorithm choice. Generated from YCruncherOptions.AllAlgorithms so
+                       the list can never drift from the tags actually passed on the command line. -->
+                  <ItemsControl x:Name="YcAlgoChecks" IsVisible="False">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
+
+                  <Grid ColumnDefinitions="*,8,*">
+                    <StackPanel Grid.Column="0" Spacing="3">
+                      <TextBlock x:Name="YcSecondsLabel" Classes="label" />
+                      <NumericUpDown x:Name="YcSecondsBox" Value="60" Minimum="5" Maximum="600"
+                                     Increment="5" FormatString="0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="3">
+                      <TextBlock x:Name="YcMemoryLabel" Classes="label" />
+                      <ComboBox x:Name="YcMemoryBox" SelectedIndex="1" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Default" />
+                        <ComboBoxItem Content="64M" />
+                        <ComboBoxItem Content="128M" />
+                        <ComboBoxItem Content="256M" />
+                        <ComboBoxItem Content="512M" />
+                      </ComboBox>
+                    </StackPanel>
+                  </Grid>
+
+                  <StackPanel Spacing="3">
+                    <TextBlock x:Name="YcBinaryLabel" Classes="label" />
+                    <ComboBox x:Name="YcBinaryBox" SelectedIndex="0" HorizontalAlignment="Stretch" />
+                    <TextBlock x:Name="YcBinaryHint" Classes="caption" />
+                  </StackPanel>
                 </StackPanel>
 
                 <Grid ColumnDefinitions="*,8,*">
@@ -554,6 +699,7 @@
                     <ComboBoxItem x:Name="OrderOpt1" Content="Alternate" />
                     <ComboBoxItem x:Name="OrderOpt2" Content="Random" />
                     <ComboBoxItem x:Name="OrderOpt3" />
+                    <ComboBoxItem x:Name="OrderOpt4" />
                   </ComboBox>
 
                   <StackPanel x:Name="CustomOrderPanel" IsVisible="False" Spacing="3" Margin="0,3,0,0">
@@ -584,6 +730,18 @@
 
                 <CheckBox x:Name="TreatWheaAsErrorBox" IsChecked="True" />
 
+                <!-- Parks every other core at 0 while one is under test, so a machine check
+                     raised elsewhere cannot be charged to the core being measured. -->
+                <CheckBox x:Name="IsolateCoreBox" />
+
+                <Border Classes="panel danger" x:Name="RestorePointPanel">
+                  <StackPanel Spacing="6">
+                    <CheckBox x:Name="RestorePointBox" IsChecked="True" />
+                    <TextBlock x:Name="RestorePointHint" Classes="caption"
+                               Foreground="{StaticResource StateDanger}" />
+                  </StackPanel>
+                </Border>
+
                 <StackPanel Spacing="3">
                   <TextBlock x:Name="PostTestActionLabel" Classes="label" />
                   <ComboBox x:Name="PostTestActionBox" SelectedIndex="0" HorizontalAlignment="Stretch">
@@ -612,13 +770,25 @@
          ═══════════════════════════════════════════════════════════ -->
     <Border Grid.Row="4" Classes="card" Padding="10,8">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,6">
-          <RadioButton Grid.Column="0" x:Name="TabGraphButton" Classes="segment" GroupName="BottomTabs"
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,0,0,6">
+          <ToggleButton Grid.Column="0" x:Name="DockCollapseButton" Classes="ghost"
+                        IsChecked="True" Content="⌄" FontSize="13" Padding="7,2" Margin="0,0,6,0"
+                        VerticalAlignment="Center" IsCheckedChanged="OnToggleBottomDock" />
+          <RadioButton Grid.Column="1" x:Name="TabGraphButton" Classes="segment" GroupName="BottomTabs"
                        IsChecked="True" Padding="12,5" IsCheckedChanged="OnBottomTabChanged" />
-          <RadioButton Grid.Column="1" x:Name="TabLogButton" Classes="segment" GroupName="BottomTabs"
-                       Padding="12,5" Margin="6,0,0,0" IsCheckedChanged="OnBottomTabChanged" />
+          <RadioButton Grid.Column="2" x:Name="TabLogButton" Classes="segment" GroupName="BottomTabs"
+                       Padding="12,5" Margin="6,0,0,0" IsCheckedChanged="OnBottomTabChanged">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock x:Name="TabLogText" VerticalAlignment="Center" />
+              <!-- Survives a dismissed toast: a warning stays countable until the log is opened -->
+              <Border x:Name="LogWarningBadge" Classes="countBadge" IsVisible="False">
+                <TextBlock x:Name="LogWarningCount" FontSize="9" FontWeight="Bold"
+                           Foreground="#241C08" HorizontalAlignment="Center" />
+              </Border>
+            </StackPanel>
+          </RadioButton>
 
-          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Button x:Name="CopyLogButton" Classes="ghost" Click="OnCopyLog" IsVisible="False" />
             <Button x:Name="OpenLogFolderButton" Classes="ghost" Click="OnOpenLogFolder" IsVisible="False" />
             <Button x:Name="ClearLogButton" Classes="ghost" Click="OnClearLog" IsVisible="False" />
@@ -627,7 +797,7 @@
           </StackPanel>
         </Grid>
 
-        <Panel>
+        <Panel x:Name="BottomContent">
           <local:TelemetryGraphControl x:Name="LiveTelemetryGraph" IsVisible="True" />
 
           <Border x:Name="LogContainer" IsVisible="False" Background="{StaticResource SurfaceConsole}"
@@ -640,6 +810,21 @@
           </Border>
         </Panel>
       </DockPanel>
+    </Border>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         TOAST — warnings used to go only to a log tab that is closed
+         by default, so a refused action looked like nothing happening
+         ═══════════════════════════════════════════════════════════ -->
+    <Border x:Name="Toast" Grid.Row="0" Grid.RowSpan="5" Classes="toast" IsVisible="False"
+            HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,64,0,0"
+            MaxWidth="620" ZIndex="100">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <TextBlock x:Name="ToastGlyph" FontSize="15" VerticalAlignment="Center" />
+        <TextBlock x:Name="ToastText" Classes="body" MaxWidth="500" VerticalAlignment="Center" />
+        <Button x:Name="ToastDismiss" Classes="ghost" Content="✕" Click="OnDismissToast"
+                VerticalAlignment="Center" />
+      </StackPanel>
     </Border>
 
   </Grid>

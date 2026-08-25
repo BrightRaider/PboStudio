@@ -18,6 +18,10 @@ public class AutoTunerApplyMarginTests
 
         public NoOpSession(IReadOnlyList<Failure> failures) => _failures = failures;
 
+        /// <summary>These fakes never report a completed sweep, so a plan using the
+        /// automatic runtime falls back to its cap - which is what the tests want.</summary>
+        public int WorkloadCyclesCompleted => 0;
+
         public IReadOnlyList<Failure> DrainFailures()
         {
             // Keep CpuTime climbing so the runner does not judge the core to have gone idle.

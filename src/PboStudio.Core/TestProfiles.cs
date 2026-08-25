@@ -33,6 +33,13 @@ public sealed record TestProfile(
     int SuspendForSeconds = 1)
 {
     /// <summary>
+    /// Which shelf this profile belongs on. The grouping existed only as source comments, so
+    /// the UI showed thirteen equally-weighted entries and left a newcomer to guess whether
+    /// "Heavy FFTs" comes before or after "Step 1 - SSE".
+    /// </summary>
+    public string Category { get; init; } = "";
+
+    /// <summary>
     /// Every leg this profile runs, in order. Most profiles are a single leg; the combined ones
     /// chain several so nobody has to reconfigure and restart between instruction sets or engines.
     /// </summary>
@@ -90,6 +97,12 @@ public static class TestProfiles
     public static IReadOnlyList<TestProfile> For(string cpuName, bool isGerman = false)
     {
         bool isX3d = cpuName.Contains("X3D", StringComparison.OrdinalIgnoreCase);
+
+        string catEveryday  = isGerman ? "FÜR DEN ALLTAG"      : "EVERYDAY";
+        string catLimit     = isGerman ? "GRENZWERT FINDEN"    : "FINDING THE LIMIT";
+        string catYc        = isGerman ? "NUR Y-CRUNCHER"      : "Y-CRUNCHER ONLY";
+        string catSteps     = isGerman ? "SCHRITT FÜR SCHRITT" : "STEP BY STEP";
+        string catLong      = isGerman ? "DIE LANGEN"          : "THE LONG ONES";
 
         var list = new List<TestProfile>
         {
@@ -190,6 +203,20 @@ public static class TestProfiles
                     : "Large FFTs on both threads. Also loads the memory controller, RAM and FCLK - not meant for CO fine-tuning, but for ruling out memory problems.",
                 Prime95Mode.Avx2, FftPreset.Large, 2, 15, 1, CoreOrder.Sequential),
         };
+
+        // Categories follow the order the list is written in, which is also the order the
+        // dropdown shows. Kept as a table rather than repeated on every entry so the shelves
+        // stay visible in one place.
+        string[] categories =
+        [
+            catEveryday, catEveryday, catEveryday, catEveryday,
+            catLimit, catLimit,
+            catYc, catYc,
+            catSteps, catSteps, catSteps,
+            catLong, catLong,
+        ];
+        for (int i = 0; i < list.Count && i < categories.Length; i++)
+            list[i] = list[i] with { Category = categories[i] };
 
         if (isX3d)
         {

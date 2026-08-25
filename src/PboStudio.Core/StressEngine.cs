@@ -32,6 +32,18 @@ public interface IStressSession : IDisposable
     IReadOnlyList<Failure> DrainFailures();
 
     /// <summary>
+    /// How often this session has worked through its complete workload - every FFT size in the
+    /// preset, every selected y-cruncher algorithm - since it started. Drives the automatic
+    /// runtime, where a core is held under load until it has been tested with everything once
+    /// rather than for a fixed number of minutes.
+    /// <para>
+    /// Engines report this on a best-effort basis by reading their own output, so a session
+    /// that cannot tell stays at 0 forever. Every caller must therefore carry its own time cap.
+    /// </para>
+    /// </summary>
+    int WorkloadCyclesCompleted { get; }
+
+    /// <summary>
     /// Freezes the load briefly so the core drops to idle and has to boost back up. Many Curve
     /// Optimizer values survive hours of uninterrupted load and fail on exactly this transition,
     /// where voltage and frequency move together.

@@ -2,12 +2,45 @@ using System.Diagnostics;
 
 namespace PboStudio.Core;
 
-public enum CoreOrder { Sequential, Alternate, Random, Custom }
+public enum CoreOrder { Sequential, Alternate, Random, Custom, CorePairs }
 
 public sealed record TestPlan
 {
+    /// <summary>
+    /// Sentinel for <see cref="RuntimePerCore"/> meaning "hold this core until the engine has
+    /// worked through its whole list once", rather than for a fixed number of minutes. A six
+    /// minute slot only gets through a fraction of the FFT sizes in a preset like Huge, so a
+    /// core can pass without ever having run most of the test it was nominally given.
+    /// </summary>
+    public static readonly TimeSpan AutoRuntime = TimeSpan.Zero;
+
+    /// <summary>
+    /// Hard ceiling for <see cref="AutoRuntime"/>. Cycle detection reads the engine's own
+    /// output and an engine that never reports one would otherwise pin a core forever, so the
+    /// automatic runtime is always bounded by a wall clock as well.
+    /// </summary>
+    public TimeSpan AutoRuntimeCap { get; init; } = TimeSpan.FromMinutes(60);
+
     public TimeSpan RuntimePerCore { get; init; } = TimeSpan.FromMinutes(6);
+    public bool IsAutoRuntime => RuntimePerCore <= TimeSpan.Zero;
     public int Threads { get; init; } = 1;
+
+    /// <summary>
+    /// Run one worker, but let it roam across both SMT siblings instead of pinning it to the
+    /// first. The scheduler then moves the load between the two logical processors, which
+    /// produces transitions a fixed pin never creates. Ignored without SMT or at two threads.
+    /// </summary>
+    public bool SpreadSingleThreadAcrossSmt { get; init; }
+
+    /// <summary>
+    /// Park every core that is not under test at a margin of 0 for the duration of its slot.
+    /// <para>
+    /// Without this, a machine check raised by some other core's aggressive offset lands in the
+    /// tested core's result and gets it backed off for a fault it never had. Costs one SMU
+    /// write per core per slot and makes the attribution honest.
+    /// </para>
+    /// </summary>
+    public bool IsolateTestedCore { get; init; }
     public int MaxIterations { get; init; } = int.MaxValue;
     public CoreOrder Order { get; init; } = CoreOrder.Sequential;
     public IReadOnlyList<int> CustomOrder { get; init; } = [];
@@ -18,6 +51,19 @@ public sealed record TestPlan
     public TimeSpan DelayBetweenCores { get; init; } = TimeSpan.FromSeconds(2);
     public AutoTunerMode? AutoTuner { get; init; }
     public int MaxNegativeMargin { get; init; } = AutoTunerService.DefaultBiosLimit;
+
+    /// <summary>
+    /// Per-core floor, from what previous runs observed. A core that once took the machine down
+    /// at -30 must not be walked back to -30 to rediscover that, so its floor is one point
+    /// safer. Missing entries fall back to <see cref="MaxNegativeMargin"/>.
+    /// </summary>
+    public IReadOnlyDictionary<int, int>? PerCoreFloor { get; init; }
+
+    /// <summary>Floor actually used for one core.</summary>
+    public int FloorFor(int core) =>
+        PerCoreFloor is { } f && f.TryGetValue(core, out int limit)
+            ? Math.Max(MaxNegativeMargin, limit)
+            : MaxNegativeMargin;
     public IReadOnlyDictionary<int, int>? InitialCoreMargins { get; init; }
 
     /// <summary>
@@ -139,7 +185,7 @@ public sealed class TestRunner
                         int cur = currentMargins[coreIndex];
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: false, _plan.AutoTuner.Value,
-                            _plan.MaxNegativeMargin, _plan.IsGerman,
+                            _plan.FloorFor(coreIndex), _plan.IsGerman,
                             (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
@@ -169,7 +215,7 @@ public sealed class TestRunner
                         int cur = currentMargins[coreIndex];
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: true, _plan.AutoTuner.Value,
-                            _plan.MaxNegativeMargin, _plan.IsGerman,
+                            _plan.FloorFor(coreIndex), _plan.IsGerman,
                             (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
@@ -194,8 +240,34 @@ public sealed class TestRunner
         }
 
     done:
+        RestoreParkedCores(currentMargins);
         Emit(new TestEvent.RunFinished(failures));
         return failures;
+    }
+
+    /// <summary>
+    /// Puts every core back on the margin the run finished with.
+    ///
+    /// Isolation parks the untested cores at 0 for the duration of each slot, so when the run
+    /// ends only the core tested last still holds its own value. Leaving it there would mean
+    /// the table on screen and the processor disagree about every other core - and the user
+    /// would silently lose their undervolt without a single message saying so.
+    /// </summary>
+    private void RestoreParkedCores(IReadOnlyDictionary<int, int> currentMargins)
+    {
+        if (!_plan.IsolateTestedCore || _plan.ApplyMargin is not { } apply) return;
+
+        int restored = 0;
+        foreach (var core in _cores)
+        {
+            if (!currentMargins.TryGetValue(core.Index, out int margin) || margin == 0) continue;
+            if (apply(core.Index, margin)) restored++;
+        }
+
+        if (restored > 0)
+            Emit(new TestEvent.Info(_plan.IsGerman
+                ? $"{restored} geparkte Kern(e) wieder auf ihren Wert gesetzt."
+                : $"Restored {restored} parked core(s) to their value."));
     }
 
     private async Task<List<Failure>> TestCoreAsync(
@@ -214,7 +286,12 @@ public sealed class TestRunner
         // Give the engine a moment to spin up before judging how busy the core is.
         var graceUntil = TimeSpan.FromSeconds(10);
 
-        while (clock.Elapsed < _plan.RuntimePerCore && !ct.IsCancellationRequested)
+        // "auto" runs until the engine has been through its whole workload once, but never
+        // past the cap: cycle detection depends on the engine's own output and must not be
+        // able to hold a core indefinitely if the engine stops reporting.
+        var deadline = _plan.IsAutoRuntime ? _plan.AutoRuntimeCap : _plan.RuntimePerCore;
+
+        while (clock.Elapsed < deadline && !ct.IsCancellationRequested)
         {
             await Task.Delay(1000, ct).ConfigureAwait(false);
 
@@ -225,9 +302,32 @@ public sealed class TestRunner
                 foreach (var hit in wheaHits)
                 {
                     if (hit.IsWarning && !_plan.TreatWheaWarningAsError) continue;
+
+                    // A machine check names the logical processor that raised it. When that is
+                    // some other core, blaming this one would back off a value that was never
+                    // at fault - so it is reported, but not counted against the core under test.
+                    int? blamed = hit.ApicId is { } id ? WheaWatcher.CoreForApicId(id, _cores) : null;
+                    if (blamed is { } other && other != core.Index)
+                    {
+                        Emit(new TestEvent.Info(_plan.IsGerman
+                            ? $"WHEA-Ereignis von Kern {other}, während Kern {core.Index} getestet wurde — nicht diesem Kern angelastet."
+                            : $"WHEA event from core {other} while core {core.Index} was under test — not counted against this core."));
+                        continue;
+                    }
+
                     found.Add(new Failure(FailureKind.MachineCheck, hit.Description, hit.Time));
                 }
                 wheaHits.Clear();
+            }
+
+            // Checked after the drain, never before: a machine check raised in the same second
+            // the sweep finished still belongs to this core's result.
+            if (_plan.IsAutoRuntime && session.WorkloadCyclesCompleted >= 1)
+            {
+                Emit(new TestEvent.Info(_plan.IsGerman
+                    ? $"Kern {core.Index}: kompletter Testdurchlauf nach {clock.Elapsed:h\\:mm\\:ss} abgeschlossen."
+                    : $"Core {core.Index}: full workload completed after {clock.Elapsed:h\\:mm\\:ss}."));
+                break;
             }
 
             var now = clock.Elapsed;
@@ -272,6 +372,23 @@ public sealed class TestRunner
         if (_plan.ApplyMargin is not { } apply) return;
         if (!currentMargins.TryGetValue(coreIndex, out int planned)) return;
 
+        if (_plan.IsolateTestedCore)
+        {
+            // Park the rest at 0 first, so the core under test is the only one that can be the
+            // source of an error while its slot runs.
+            int parked = 0;
+            foreach (var other in _cores)
+            {
+                if (other.Index == coreIndex) continue;
+                if (currentMargins.TryGetValue(other.Index, out int held) && held == 0) continue;
+                if (apply(other.Index, 0)) parked++;
+            }
+            if (parked > 0)
+                Emit(new TestEvent.Info(_plan.IsGerman
+                    ? $"{parked} andere Kern(e) für die Dauer dieses Tests auf 0 geparkt."
+                    : $"Parked {parked} other core(s) at 0 for the duration of this test."));
+        }
+
         bool ok = apply(coreIndex, planned);
         Emit(new TestEvent.Info(ok
             ? (_plan.IsGerman
@@ -294,8 +411,25 @@ public sealed class TestRunner
             // one hot spot from influencing the next core's result.
             CoreOrder.Alternate => [.. Interleave(all)],
             CoreOrder.Custom => [.. _plan.CustomOrder.Where(i => i >= 0 && i < _cores.Count)],
+            CoreOrder.CorePairs => [.. Pairs(all)],
             _ => all,
         };
+    }
+
+    /// <summary>
+    /// Every ordered pair of distinct cores, walked as a flat sequence. The point is the
+    /// handover: some instabilities only show when the load moves from one specific core to
+    /// another, and no ordering that visits each core once can produce that transition.
+    /// </summary>
+    private static IEnumerable<int> Pairs(List<int> all)
+    {
+        foreach (int a in all)
+            foreach (int b in all)
+            {
+                if (a == b) continue;
+                yield return a;
+                yield return b;
+            }
     }
 
     private static IEnumerable<int> Interleave(List<int> all)

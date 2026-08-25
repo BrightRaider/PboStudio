@@ -27,7 +27,10 @@ public sealed record AutoTunerStepResult(
     int NextMargin,
     bool CoreLocked,
     string Advice,
-    AutoTunerCoreState State
+    AutoTunerCoreState State,
+    /// <summary>Whether the core held up at <see cref="OldMargin"/>. Carried so the UI can
+    /// draw the search path without re-deriving it from the direction of the next step.</summary>
+    bool Passed = false
 );
 
 /// <summary>
@@ -76,9 +79,11 @@ public static class AutoTunerService
         state ??= new AutoTunerCoreState();
         int step = StepSize(mode);
 
-        return passed
+        var result = passed
             ? OnPassed(coreIndex, currentMargin, mode, maxLimit, isGerman, state, step)
             : OnFailed(coreIndex, currentMargin, isGerman, state, step);
+
+        return result with { Passed = passed };
     }
 
     private static AutoTunerStepResult OnPassed(

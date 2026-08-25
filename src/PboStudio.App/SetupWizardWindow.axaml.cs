@@ -31,6 +31,13 @@ public partial class SetupWizardWindow : Window
         HeaderTitle.Text = LocalizationService.Get("WizardTitle");
         HeaderSubtitle.Text = LocalizationService.Get("WizardSubtitle");
 
+        // The order is not cosmetic: PawnIO gates SMU access and is the only step that needs
+        // a restart, so doing it first saves the reader a second pass through this window.
+        PawnIoStep.Text = LocalizationService.Get("WizardStep1");
+        Prime95Step.Text = LocalizationService.Get("WizardStep2");
+        YCruncherStep.Text = LocalizationService.Get("WizardStep3");
+        RestartAppButton.Content = LocalizationService.Get("WizardRestartApp");
+
         PawnIoTitle.Text = LocalizationService.Get("WizardPawnIo");
         PawnIoWhat.Text = LocalizationService.Get("WizardPawnIoWhat");
         PawnIoAdminNote.Text = LocalizationService.Get("WizardPawnIoNeedsAdmin");
@@ -89,6 +96,15 @@ public partial class SetupWizardWindow : Window
         SummaryText.Text = missing == 0
             ? LocalizationService.Get("WizardReady")
             : string.Format(LocalizationService.Get("WizardMissing"), missing);
+
+        // Name the next action rather than only counting what is absent.
+        string? next = !status.PawnIoAvailable
+            ? LocalizationService.Get("WizardNextPawnIo")
+            : !status.Prime95Available && !status.YCruncherAvailable
+                ? LocalizationService.Get("WizardNextEngine")
+                : null;
+        SummaryNextStep.IsVisible = next is not null;
+        SummaryNextStep.Text = next ?? "";
         SummaryText.Foreground = SolidColorBrush.Parse(missing == 0 ? "#34D399" : "#FBBF24");
         SummaryBanner.Classes.Set("success", missing == 0);
         SummaryBanner.Classes.Set("warning", missing != 0);
@@ -226,6 +242,9 @@ public partial class SetupWizardWindow : Window
             ProgressLabelText.Text = LocalizationService.Pick(
                 "Installer gestartet. Nach Abschluss auf „Erneut prüfen“ klicken — für vollen SMU-Zugriff ist ein Neustart von PboStudio nötig.",
                 "Installer started. Click “Check again” once it finishes — PboStudio must be restarted for full SMU access.");
+
+            // The app knows it has to restart, so it offers to rather than describing it.
+            RestartAppButton.IsVisible = true;
         }
         catch (Exception ex)
         {
@@ -248,6 +267,32 @@ public partial class SetupWizardWindow : Window
     {
         try { Process.Start(new ProcessStartInfo("https://pawnio.eu/") { UseShellExecute = true }); }
         catch { }
+    }
+
+    /// <summary>
+    /// Relaunches PboStudio so the freshly installed driver is picked up. Elevation is
+    /// requested again by the manifest, which is why this goes through the shell rather than
+    /// starting the process directly.
+    /// </summary>
+    private void OnRestartApp(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            string? exe = Environment.ProcessPath;
+            if (exe is null) return;
+
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+            (Owner as Window)?.Close();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            ProgressLabelText.Foreground = SolidColorBrush.Parse("#F87171");
+            DownloadProgressPanel.IsVisible = true;
+            ProgressLabelText.Text = LocalizationService.Pick(
+                $"Neustart fehlgeschlagen: {ex.Message}. Bitte PboStudio von Hand neu starten.",
+                $"Restart failed: {ex.Message}. Please restart PboStudio by hand.");
+        }
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => Close();

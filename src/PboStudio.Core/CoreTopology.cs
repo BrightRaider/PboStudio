@@ -23,6 +23,17 @@ public sealed record PhysicalCore(
     /// <summary>Affinity mask covering only the first logical processor of this core.</summary>
     public nuint FirstThreadMask => (nuint)1 << LogicalProcessors[0];
 
+    /// <summary>
+    /// The mask a session should run under.
+    /// <para>
+    /// <paramref name="spreadAcrossSmt"/> is the third combination: one worker, but free to move
+    /// between both SMT siblings. The scheduler then shifts the load back and forth, which
+    /// produces transitions that neither a hard pin nor two saturated threads ever create.
+    /// </para>
+    /// </summary>
+    public nuint MaskFor(int threads, bool spreadAcrossSmt = false) =>
+        threads >= 2 || (spreadAcrossSmt && HasSmt) ? AffinityMask : FirstThreadMask;
+
     public override string ToString() =>
         $"Core {Index} (CPU {string.Join("+", LogicalProcessors)}, mask 0x{AffinityMask:X}, L3 group {L3Group}, die {Die})";
 }

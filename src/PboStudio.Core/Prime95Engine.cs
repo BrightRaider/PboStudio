@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Text;
 
@@ -19,7 +20,8 @@ public sealed record Prime95Options(
     FftPreset Fft = FftPreset.Smallest,
     int CustomMinFft = 4,
     int CustomMaxFft = 32,
-    int MemoryMb = 0)
+    int MemoryMb = 0,
+    bool SpreadAcrossSmt = false)
 {
     public (int Min, int Max) FftRange => Fft switch
     {
@@ -98,7 +100,7 @@ public sealed class Prime95Engine : IStressEngine
 
         File.WriteAllText(Path.Combine(workDir, "prime.txt"), BuildConfig(threads), Encoding.ASCII);
 
-        nuint mask = threads >= 2 ? core.AffinityMask : core.FirstThreadMask;
+        nuint mask = core.MaskFor(threads, _options.SpreadAcrossSmt);
 
         // Use CoreJail and PinnedProcess so Prime95 worker threads are strictly confined
         // to their assigned affinity mask from the very first instruction.
@@ -204,6 +206,23 @@ internal sealed class Prime95Session : IStressSession
         return drained;
     }
 
+    /// <summary>
+    /// Pulls the FFT length out of a Prime95 pass line, e.g.
+    /// "Self-test 8960K passed!" or "Self-test 1024K passed!".
+    /// </summary>
+    private static readonly Regex PassedFft =
+        new(@"self-test\s+(\d+)K\s+passed", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// One full sweep is done the moment an FFT size comes round a second time: Prime95 walks
+    /// the preset in order and then starts over, so a repeat is the only signal it gives that
+    /// the list has been exhausted.
+    /// </summary>
+    private readonly HashSet<int> _seenFftSizes = [];
+    private int _cycles;
+
+    public int WorkloadCyclesCompleted => _cycles;
+
     private void ScanResults()
     {
         if (!File.Exists(_resultsPath)) return;
@@ -218,7 +237,18 @@ internal sealed class Prime95Session : IStressSession
 
             while (reader.ReadLine() is { } line)
             {
-                if (line.Contains("passed", StringComparison.OrdinalIgnoreCase)) continue;
+                if (line.Contains("passed", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (PassedFft.Match(line) is { Success: true } m
+                        && int.TryParse(m.Groups[1].Value, out int fft)
+                        && !_seenFftSizes.Add(fft))
+                    {
+                        _cycles++;
+                        _seenFftSizes.Clear();
+                        _seenFftSizes.Add(fft);
+                    }
+                    continue;
+                }
 
                 if (ErrorMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase)))
                     _pending.Add(new Failure(FailureKind.CalculationError, line.Trim(), DateTime.Now));

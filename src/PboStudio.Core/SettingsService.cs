@@ -34,12 +34,28 @@ public sealed class AppSettings
     public int DelayBetweenCores { get; set; } = 2;
 
     // System tab
+    public bool AutoRuntime { get; set; }
+    public int AutoRuntimeCap { get; set; } = 60;
+    public bool SpreadSmt { get; set; }
+    public bool IsolateTestedCore { get; set; }
+    public int YcSeconds { get; set; } = 60;
+    public int YcMemoryIndex { get; set; } = 1;
+    public int YcBinaryIndex { get; set; }
+    public string YcCustomAlgorithms { get; set; } = "";
+
     public int MaxTemp { get; set; } = 90;
     public bool TreatWheaWarningAsError { get; set; } = true;
+
+    /// <summary>Defaults to on: the restore point is cheap and the failure mode it covers is not.</summary>
+    public bool CreateRestorePoint { get; set; } = true;
     public int PostTestAction { get; set; }
     public string WebhookUrl { get; set; } = "";
 
     // Window
+    /// <summary>Whether the graph/log dock was left collapsed. Worth keeping: on a dense
+    /// setup it is a permanent preference, not a per-session one.</summary>
+    public bool BottomDockCollapsed { get; set; }
+
     public double WindowWidth { get; set; }
     public double WindowHeight { get; set; }
 }

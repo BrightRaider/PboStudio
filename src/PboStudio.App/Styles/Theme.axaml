@@ -29,7 +29,10 @@
       <SolidColorBrush x:Key="TextPrimary"    Color="#F8FAFC" />
       <SolidColorBrush x:Key="TextSecondary"  Color="#CBD5E1" />
       <SolidColorBrush x:Key="TextMuted"      Color="#94A3B8" />
-      <SolidColorBrush x:Key="TextFaint"      Color="#64748B" />
+      <!-- Was #64748B: 3.5-4.0:1 against every surface here, i.e. below AA for the caption
+           class, the metric labels and the delta column that all rely on it. #8494A8 clears
+           5.3:1 and still reads as the quiet tier. -->
+      <SolidColorBrush x:Key="TextFaint"      Color="#8494A8" />
 
       <!-- ══════════════════ SEMANTIC ACCENTS ══════════════════ -->
       <SolidColorBrush x:Key="AccentPrimary"  Color="#10B981" />
@@ -57,7 +60,7 @@
       <FontFamily x:Key="FontUi">avares://Avalonia.Fonts.Inter/Assets#Inter, Segoe UI, sans-serif</FontFamily>
       <FontFamily x:Key="FontMono">Cascadia Mono, Consolas, Menlo, monospace</FontFamily>
 
-      <x:Double x:Key="FontMicro">10.5</x:Double>
+      <x:Double x:Key="FontMicro">11</x:Double>
       <x:Double x:Key="FontCaption">11.5</x:Double>
       <x:Double x:Key="FontBody">12.5</x:Double>
       <x:Double x:Key="FontTitle">14</x:Double>
@@ -277,6 +280,41 @@
   </Style>
 
   <!-- ══════════════════════════════════════════════════════════
+       TAB WEIGHTING
+
+       Three equal segments said "three steps, work through them". In practice the first one is
+       the whole application - a profile carries the entire configuration - and the other two
+       are expert surfaces that most people never need to open. Making them look like peers of
+       the first was the single biggest reason the window felt harder than it is.
+
+       Declared after the base .segment rules on purpose: Avalonia resolves by document order,
+       not by specificity, so these have to come last to win.
+       ══════════════════════════════════════════════════════════ -->
+  <Style Selector="RadioButton.segment.lead">
+    <Setter Property="Padding" Value="6,9" />
+    <Setter Property="FontSize" Value="{StaticResource FontBody}" />
+  </Style>
+
+  <Style Selector="RadioButton.segment.sub">
+    <Setter Property="FontSize" Value="{StaticResource FontMicro}" />
+    <Setter Property="Padding" Value="5,4" />
+    <Setter Property="Foreground" Value="{StaticResource TextFaint}" />
+  </Style>
+  <Style Selector="RadioButton.segment.sub /template/ Border#PART_Root">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderSubtle}" />
+  </Style>
+  <!-- Selected, but never the emerald fill: that weight belongs to the primary row alone. -->
+  <Style Selector="RadioButton.segment.sub:checked /template/ Border#PART_Root">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+  </Style>
+  <Style Selector="RadioButton.segment.sub:checked">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- ══════════════════════════════════════════════════════════
        CHIPS & BADGES
        ══════════════════════════════════════════════════════════ -->
   <Style Selector="Border.chip">
@@ -304,6 +342,39 @@
     <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
     <Setter Property="FontWeight" Value="SemiBold" />
     <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TOAST — the one place a warning can be seen without the log open
+       ══════════════════════════════════════════════════════════ -->
+  <Style Selector="Border.toast">
+    <Setter Property="Background" Value="#161B26" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="BoxShadow" Value="0 10 30 -8 #CC000000" />
+  </Style>
+  <Style Selector="Border.toast.warning">
+    <Setter Property="BorderBrush" Value="{StaticResource StateWarning}" />
+    <Setter Property="Background" Value="#241C08" />
+  </Style>
+  <Style Selector="Border.toast.danger">
+    <Setter Property="BorderBrush" Value="{StaticResource StateDangerHi}" />
+    <Setter Property="Background" Value="#2E1418" />
+  </Style>
+  <Style Selector="Border.toast.success">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentPrimary}" />
+    <Setter Property="Background" Value="#0C1A1A" />
+  </Style>
+
+  <!-- Unread-warning count on the log tab, so a dismissed toast stays findable -->
+  <Style Selector="Border.countBadge">
+    <Setter Property="Background" Value="{StaticResource StateWarning}" />
+    <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+    <Setter Property="Padding" Value="5,0" />
+    <Setter Property="MinWidth" Value="16" />
     <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
@@ -400,6 +471,26 @@
        FOCUS VISUALS — the default adorner is nearly invisible on #0B0D12
        ══════════════════════════════════════════════════════════ -->
   <Style Selector=":is(Control):focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{StaticResource StateInfo}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+
+  <!-- The rule above only reaches controls whose template has a PART_ContentPresenter, which
+       buttons do and input controls do not. Without these the 16 Curve Optimizer fields - the
+       most keyboard-driven part of the window - had no visible focus at all. -->
+  <Style Selector="TextBox:focus-within">
+    <Setter Property="BorderBrush" Value="{StaticResource StateInfo}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="NumericUpDown:focus-within">
+    <Setter Property="BorderBrush" Value="{StaticResource StateInfo}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible">
+    <Setter Property="BorderBrush" Value="{StaticResource StateInfo}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="CheckBox:focus-visible /template/ Border#NormalRectangle">
     <Setter Property="BorderBrush" Value="{StaticResource StateInfo}" />
     <Setter Property="BorderThickness" Value="2" />
   </Style>
