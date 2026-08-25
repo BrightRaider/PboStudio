@@ -12,6 +12,28 @@ public sealed record TestPhase(
         : $"{Mode.ToString().ToUpperInvariant()} / {Fft}";
 }
 
+/// <summary>
+/// Stable identity for a profile. Recommendations used to name their target as a display
+/// string and the UI matched it back by counting shared words, because the two lists were
+/// maintained separately and their wording drifted apart. An id cannot drift.
+/// </summary>
+public enum ProfileId
+{
+    RecommendedCombo,
+    HeavyFfts,
+    FullPrime95,
+    QuickCheck,
+    BreakingPoint,
+    HeavyLoad,
+    YCruncherCo,
+    YCruncherAll,
+    Step1Sse,
+    Step2Avx2,
+    SmallFfts,
+    Overnight,
+    MemoryFabric,
+}
+
 public sealed record TestProfile(
     string Name,
     string Explanation,
@@ -38,6 +60,8 @@ public sealed record TestProfile(
     /// "Heavy FFTs" comes before or after "Step 1 - SSE".
     /// </summary>
     public string Category { get; init; } = "";
+
+    public ProfileId Id { get; init; } = ProfileId.HeavyFfts;
 
     /// <summary>
     /// Every leg this profile runs, in order. Most profiles are a single leg; the combined ones
@@ -207,6 +231,15 @@ public static class TestProfiles
         // Categories follow the order the list is written in, which is also the order the
         // dropdown shows. Kept as a table rather than repeated on every entry so the shelves
         // stay visible in one place.
+        ProfileId[] ids =
+        [
+            ProfileId.RecommendedCombo, ProfileId.HeavyFfts, ProfileId.FullPrime95, ProfileId.QuickCheck,
+            ProfileId.BreakingPoint, ProfileId.HeavyLoad,
+            ProfileId.YCruncherCo, ProfileId.YCruncherAll,
+            ProfileId.Step1Sse, ProfileId.Step2Avx2, ProfileId.SmallFfts,
+            ProfileId.Overnight, ProfileId.MemoryFabric,
+        ];
+
         string[] categories =
         [
             catEveryday, catEveryday, catEveryday, catEveryday,
@@ -216,7 +249,7 @@ public static class TestProfiles
             catLong, catLong,
         ];
         for (int i = 0; i < list.Count && i < categories.Length; i++)
-            list[i] = list[i] with { Category = categories[i] };
+            list[i] = list[i] with { Category = categories[i], Id = ids[i] };
 
         if (isX3d)
         {

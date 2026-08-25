@@ -1038,7 +1038,6 @@ public partial class MainWindow : Window
         Tip(ApplyRecommendationButton, "ApplyValuesTooltip");
         ResetWheaButton.Content = LocalizationService.Get("ResetWhea");
         Tip(ResetWheaButton, "ResetWheaTooltip");
-        UseRecommendedProfileButton.Content = LocalizationService.Get("UseProfile");
 
         // Core table
         SelectAllBox.Content = LocalizationService.Get("AllCores");
@@ -1067,6 +1066,8 @@ public partial class MainWindow : Window
         TestRunningText.Text = LocalizationService.Get("TestRunning");
 
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
+        ShowAllProfilesButton.Content = LocalizationService.Get(
+            ShowAllProfilesButton.IsChecked == true ? "HideAllProfiles" : "ShowAllProfiles");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
@@ -1363,20 +1364,9 @@ public partial class MainWindow : Window
             _smu.CpuName, _cores, whea, currentMargins, _recommendationFineMode, LocalizationService.IsGerman);
         RecommendationText.Text = _currentRecommendation.SummaryAdvice;
 
-        // The service already works this out; it used to be computed and thrown away.
-        string wanted = _currentRecommendation.RecommendedProfileName;
-        var match = FindProfileIndex(wanted);
-        if (match >= 0 && ProfileBox.SelectedIndex != match)
-        {
-            RecommendedProfileRow.IsVisible = true;
-            RecommendedProfileText.Text = $"{LocalizationService.Get("RecommendedProfile")}: {ProfileNameAt(match)}";
-            _recommendedProfileIndex = match;
-        }
-        else
-        {
-            RecommendedProfileRow.IsVisible = false;
-            _recommendedProfileIndex = -1;
-        }
+        // The prominent recommendation lives in its own card now, and is derived rather than
+        // matched back from a display string.
+        UpdateNextStep();
 
         if (_currentRecommendation.WheaCorrections.Count > 0)
         {
@@ -1389,44 +1379,98 @@ public partial class MainWindow : Window
         }
     }
 
-    private int _recommendedProfileIndex = -1;
+    // ══════════════════════════════════════════════════════════════
+    // The one recommendation
+    // ══════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Matches the recommended profile name against the actual list by shared words. The two
-    /// are maintained separately and their wording drifts, so an exact or substring compare
-    /// silently found nothing and the recommendation row just never appeared.
-    /// </summary>
-    private int FindProfileIndex(string wanted)
+    private NextStep? _nextStep;
+
+    /// <summary>Index of a profile by identity. Nothing is matched by display name any more.</summary>
+    private int IndexOfProfile(ProfileId id) =>
+        ProfileBox.ItemsSource is IEnumerable<TestProfile> p
+            ? p.ToList().FindIndex(x => x.Id == id)
+            : -1;
+
+    private void UpdateNextStep()
     {
-        if (ProfileBox.ItemsSource is not IEnumerable<TestProfile> profiles || string.IsNullOrWhiteSpace(wanted))
-            return -1;
+        if (NextStepCard is null || ProfileBox.ItemsSource is not IEnumerable<TestProfile> profiles) return;
 
-        static HashSet<string> Tokens(string s) =>
-            [.. s.Split([' ', '-', '–', '(', ')', '&', ',', '.', '/'], StringSplitOptions.RemoveEmptyEntries)
-                 .Select(t => new string([.. t.Where(char.IsLetterOrDigit)]).ToLowerInvariant())
-                 .Where(t => t.Length > 2)];
+        var currentMargins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
+        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
 
-        var target = Tokens(wanted);
-        if (target.Count == 0) return -1;
+        _nextStep = NextStepService.Recommend(
+            _smu.CpuName, _cores, currentMargins, _knowledge, chipLimit, LocalizationService.IsGerman);
 
-        int bestIndex = -1, bestScore = 0;
-        var list = profiles.ToList();
-        for (int i = 0; i < list.Count; i++)
-        {
-            int score = Tokens(list[i].Name).Count(target.Contains);
-            if (score > bestScore) { bestScore = score; bestIndex = i; }
-        }
+        var profile = profiles.FirstOrDefault(p => p.Id == _nextStep.Profile);
+        if (profile is null) return;
 
-        // Two shared words is enough to be meaningful and enough to reject a chance hit.
-        return bestScore >= 2 ? bestIndex : -1;
+        NextStepHeadline.Text = _nextStep.Headline;
+        NextStepProfileName.Text = profile.Name;
+        NextStepDetail.Text = profile.EngineSummary;
+        NextStepReason.Text = _nextStep.Reason;
+
+        ApplyNextStepButton.Content = LocalizationService.Get(
+            _nextStep.UseAutoTuner ? "NextStepApplyTuner" : "NextStepApply");
     }
 
-    private string ProfileNameAt(int index) =>
-        ProfileBox.ItemsSource is IEnumerable<TestProfile> p ? p.ElementAt(index).Name : "";
-
-    private void OnUseRecommendedProfile(object? sender, RoutedEventArgs e)
+    /// <summary>
+    /// Sets up the whole run in one click: the profile, whether the auto-tuner drives it, and
+    /// which cores take part. Everything it touches stays editable afterwards — this is a
+    /// starting point, not a mode.
+    /// </summary>
+    private void OnApplyNextStep(object? sender, RoutedEventArgs e)
     {
-        if (_recommendedProfileIndex >= 0) ProfileBox.SelectedIndex = _recommendedProfileIndex;
+        if (_nextStep is null || _running) return;
+
+        int index = IndexOfProfile(_nextStep.Profile);
+        if (index >= 0) ProfileBox.SelectedIndex = index;
+
+        // Fine steps: the recommendation only reaches for the tuner once the search space is
+        // narrow, and at that point -1 costs nothing extra over -3.
+        AutoTunerModeBox.SelectedIndex = _nextStep.UseAutoTuner ? 2 : 0;
+
+        if (_nextStep.Cores.Count > 0)
+        {
+            var wanted = _nextStep.Cores.ToHashSet();
+            _suppressSelectAll = true;
+            foreach (var row in _rows) row.Selected = wanted.Contains(row.Index);
+            _suppressSelectAll = false;
+            UpdateSelectAllState();
+
+            // Enough passes for the longest descent among the selected cores, or the search
+            // stops halfway and leaves a core neither tuned nor validated.
+            int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+            int slots = _rows
+                .Where(r => wanted.Contains(r.Index))
+                .Select(r => AutoTunerService.WorstCaseSlots(
+                    (int)r.Margin,
+                    _knowledge.TryGetValue(r.Index, out var k) ? k.FloorFor(chipLimit) : chipLimit,
+                    AutoTunerMode.Fein,
+                    int.MaxValue))
+                .DefaultIfEmpty(1)
+                .Max();
+
+            IterationsBox.Value = Math.Clamp(slots, 1, 999);
+        }
+        else
+        {
+            foreach (var row in _rows) row.Selected = true;
+            UpdateSelectAllState();
+        }
+
+        UpdateDurationHint();
+        UpdateStartButtonState();
+
+        Log(string.Format(LocalizationService.Get("NextStepApplied"), _nextStep.Headline), LogLevel.Success);
+    }
+
+    private void OnToggleProfileList(object? sender, RoutedEventArgs e)
+    {
+        if (ProfilePickerPanel is null || ShowAllProfilesButton is null) return;
+
+        bool open = ShowAllProfilesButton.IsChecked == true;
+        ProfilePickerPanel.IsVisible = open;
+        ShowAllProfilesButton.Content = LocalizationService.Get(open ? "HideAllProfiles" : "ShowAllProfiles");
     }
 
     private void OnApplySmartRecommendation(object? sender, RoutedEventArgs e)

@@ -3,7 +3,7 @@
 ## 1.0.2 — 2026-08-25
 
 A UI/UX audit and a feature-by-feature comparison against CoreCycler v0.11.0.3, with the
-findings from both fixed. 129 unit tests. The interface changes have not been seen on screen
+findings from both fixed. 139 unit tests. The interface changes have not been seen on screen
 yet — the hardware run that shook out the engine side was made with an earlier build of this
 release, before the toast layer, the collapsible dock and the auto-tuner memory existed.
 
@@ -77,6 +77,28 @@ release, before the toast layer, the collapsible dock and the auto-tuner memory 
 - **Free y-cruncher algorithm selection**, plus per-algorithm duration, memory, and manual
   binary choice — the binary decides the instruction set, so testing both a cold and a Zen-native
   build is a real strategy that was previously impossible.
+
+### Changed — one recommendation instead of thirteen options
+
+- **The Setup tab leads with a single answer.** Thirteen profiles are thirteen answers to a
+  question nobody asked; what a person wants to know is what to run *now*, and at any moment
+  that has one correct answer. A card names it, says why in terms of this machine, and sets the
+  whole run up in one click — profile, auto-tuner, core selection and pass count. The full list
+  is still there, one click away under "Choose a different profile".
+- **The recommendation was wrong for X3D parts.** It mapped CPU generation to a profile and,
+  for Zen 3 X3D, named the AVX2 profile: the hottest load in the set, on the one design whose
+  stacked cache is most sensitive to temperature — contradicting the project's own X3D guidance
+  elsewhere. It now opens with SSE on every part and says why.
+- **Recommendations no longer match profiles by name.** The service named its target as a
+  display string and the UI matched it back by counting shared words, because the two lists
+  were maintained separately — and they had already drifted ("Full Run - SSE & AVX2 Combined
+  (Recommended)" against the actual "Full Run - Prime95 SSE & AVX2"), so the right profile was
+  being found by luck. Profiles now carry a stable id.
+- **The recommendation knows where you are.** It reads the core memory: nothing measured yet
+  means start with the workhorse; cores still holding a milder value than they could reach
+  means point the auto-tuner at *those cores only*; nothing left to search means run the
+  overnight confirmation. Testing two cores instead of eight is the difference between an
+  evening and a night.
 
 ### Changed — interface
 

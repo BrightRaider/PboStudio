@@ -217,12 +217,6 @@
 
               <TextBlock x:Name="RecommendationText" Classes="body" FontSize="{StaticResource FontCaption}" />
 
-              <StackPanel x:Name="RecommendedProfileRow" Orientation="Horizontal" Spacing="8" IsVisible="False">
-                <TextBlock x:Name="RecommendedProfileText" Classes="caption" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextMuted}" />
-                <Button x:Name="UseRecommendedProfileButton" Classes="ghost" Click="OnUseRecommendedProfile" />
-              </StackPanel>
-
               <TextBlock x:Name="WheaRecommendationText" Classes="body" FontSize="{StaticResource FontCaption}"
                          Foreground="{StaticResource StateDanger}" IsVisible="False" />
             </StackPanel>
@@ -458,7 +452,44 @@
 
               <!-- Tab 1: Setup -->
               <StackPanel x:Name="RightTabSetupPanel" Spacing="8" IsVisible="True" Margin="0,0,4,0">
-                <StackPanel Spacing="4">
+
+                <!-- ── The one answer, before the thirteen alternatives ──
+                     Thirteen profiles are thirteen answers to a question nobody asked. What is
+                     wanted is "what do I run now", and that has a single correct answer at any
+                     moment — derived from the processor and from what has already been
+                     established, both of which the program knows. -->
+                <Border x:Name="NextStepCard" Classes="panel success" Padding="12,10">
+                  <StackPanel Spacing="7">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <TextBlock Text="👉" FontSize="14" VerticalAlignment="Center" />
+                      <TextBlock x:Name="NextStepHeadline" FontSize="{StaticResource FontTitle}"
+                                 FontWeight="Bold" Foreground="{StaticResource AccentPrimaryHi}"
+                                 TextWrapping="Wrap" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Border Background="{StaticResource SurfaceInset}" CornerRadius="4" Padding="9,7">
+                      <StackPanel Spacing="3">
+                        <TextBlock x:Name="NextStepProfileName" FontSize="{StaticResource FontBody}"
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="NextStepDetail" Classes="caption"
+                                   FontFamily="{StaticResource FontMono}" LineHeight="14" />
+                      </StackPanel>
+                    </Border>
+
+                    <TextBlock x:Name="NextStepReason" Classes="body"
+                               FontSize="{StaticResource FontCaption}" LineHeight="16" />
+
+                    <Button x:Name="ApplyNextStepButton" Classes="primary" HorizontalAlignment="Stretch"
+                            MinHeight="34" Click="OnApplyNextStep" />
+                  </StackPanel>
+                </Border>
+
+                <!-- The full list stays available, one click away rather than in the way. -->
+                <ToggleButton x:Name="ShowAllProfilesButton" Classes="ghost" HorizontalAlignment="Left"
+                              IsCheckedChanged="OnToggleProfileList" />
+
+                <StackPanel x:Name="ProfilePickerPanel" Spacing="4" IsVisible="False">
                   <TextBlock x:Name="TestProfileLabel" Classes="label" />
                   <ComboBox x:Name="ProfileBox" SelectedIndex="0" HorizontalAlignment="Stretch"
                             SelectionChanged="OnProfileChanged">

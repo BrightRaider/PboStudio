@@ -82,6 +82,15 @@ public static class LocalizationService
                 ? "Setzt den Fehlerzähler auf null. Alle bisherigen WHEA-Einträge werden ab jetzt ignoriert — sinnvoll, nachdem du neue CO-Werte übernommen hast."
                 : "Resets the error counter to zero. All prior WHEA entries are ignored from now on — useful after you have applied new CO values.",
             "RecommendedProfile" => isDe ? "Empfohlenes Profil" : "Recommended profile",
+
+            // ---- The one recommendation ----
+            "NextStepApply" => isDe ? "✓ Diesen Lauf einrichten" : "✓ Set this run up",
+            "NextStepApplyTuner" => isDe ? "✓ Auto-Tuner so einrichten" : "✓ Set the auto-tuner up like this",
+            "NextStepApplied" => isDe
+                ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt änderbar."
+                : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable.",
+            "ShowAllProfiles" => isDe ? "▸ Anderes Profil wählen (13)" : "▸ Choose a different profile (13)",
+            "HideAllProfiles" => isDe ? "▾ Profilliste schließen" : "▾ Close the profile list",
             "UseProfile" => isDe ? "Profil laden" : "Load profile",
 
             // ---- Core table ----
