@@ -3,7 +3,7 @@
 ## 1.0.2 — 2026-08-25
 
 A UI/UX audit and a feature-by-feature comparison against CoreCycler v0.11.0.3, with the
-findings from both fixed. 139 unit tests. The interface changes have not been seen on screen
+findings from both fixed. 145 unit tests. The interface changes have not been seen on screen
 yet — the hardware run that shook out the engine side was made with an earlier build of this
 release, before the toast layer, the collapsible dock and the auto-tuner memory existed.
 
@@ -80,6 +80,15 @@ release, before the toast layer, the collapsible dock and the auto-tuner memory 
 
 ### Changed — one recommendation instead of thirteen options
 
+- **The card covers the whole journey, starting from an empty machine.** It used to assume the
+  program was ready to run, so somebody opening PboStudio for the first time — no driver, no
+  stress engine — was told to run Heavy FFTs, next to a start button that was greyed out. The
+  first two steps are now the driver and an engine, each saying what the thing is *for*:
+  "install PawnIO" means nothing to a person who has never heard of it. The card carries a
+  warning tint while anything is missing, hides the profile it cannot run, and its button opens
+  the assistant instead.
+- **The first run states that it changes nothing permanently.** A newcomer pointing a tuning
+  tool at their own processor deserves to be told that up front, not to infer it.
 - **The Setup tab leads with a single answer.** Thirteen profiles are thirteen answers to a
   question nobody asked; what a person wants to know is what to run *now*, and at any moment
   that has one correct answer. A card names it, says why in terms of this machine, and sets the

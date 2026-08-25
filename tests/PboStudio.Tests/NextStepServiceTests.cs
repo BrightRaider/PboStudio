@@ -24,9 +24,84 @@ public class NextStepServiceTests
         string cpu,
         Dictionary<int, int> margins,
         Dictionary<int, CoreKnowledge>? knowledge = null,
-        int cores = 8) =>
+        int cores = 8,
+        bool driverReady = true,
+        bool engineReady = true) =>
         NextStepService.Recommend(
-            cpu, Cores(cores), margins, knowledge ?? [], ChipLimit, isGerman: false);
+            cpu, Cores(cores), margins, knowledge ?? [], ChipLimit, isGerman: false,
+            driverReady, engineReady);
+
+    // ── opening the program for the first time ───────────────────
+
+    /// <summary>
+    /// The state a genuinely new user is in: nothing installed. Recommending a test run here
+    /// would sit next to a disabled start button and be useless.
+    /// </summary>
+    [Fact]
+    public void WithNothingInstalledTheFirstStepIsTheDriver()
+    {
+        var step = Recommend(Plain, AllAt(0), driverReady: false, engineReady: false);
+
+        Assert.Equal(TuningStage.InstallDriver, step.Stage);
+        Assert.Equal(NextStepAction.OpenSetup, step.Action);
+        Assert.False(step.ShowProfile);
+    }
+
+    [Fact]
+    public void WithTheDriverInPlaceTheNextStepIsAnEngine()
+    {
+        var step = Recommend(Plain, AllAt(0), driverReady: true, engineReady: false);
+
+        Assert.Equal(TuningStage.InstallEngine, step.Stage);
+        Assert.Equal(NextStepAction.OpenSetup, step.Action);
+        Assert.False(step.ShowProfile);
+    }
+
+    [Fact]
+    public void SetupComesBeforeAnyTuningAdviceEvenWhenCoresAreKnown()
+    {
+        var step = Recommend(Plain, AllAt(-30),
+            Enumerable.Range(0, 8).ToDictionary(i => i, _ => new CoreKnowledge(BestPassed: -30)),
+            driverReady: false);
+
+        Assert.Equal(TuningStage.InstallDriver, step.Stage);
+    }
+
+    /// <summary>
+    /// The setup steps have to explain themselves: "install PawnIO" means nothing to someone
+    /// who has never heard of it.
+    /// </summary>
+    [Fact]
+    public void TheSetupStepsSayWhatTheyAreFor()
+    {
+        var driver = Recommend(Plain, AllAt(0), driverReady: false);
+        var engine = Recommend(Plain, AllAt(0), engineReady: false);
+
+        Assert.Contains("Curve Optimizer", driver.Reason);
+        Assert.Contains("restart", driver.Reason);
+
+        Assert.Contains("Prime95", engine.Reason);
+        Assert.Contains("y-cruncher", engine.Reason);
+    }
+
+    /// <summary>A first run must say that it changes nothing permanently.</summary>
+    [Fact]
+    public void TheFirstRunSaysItIsNotPermanent()
+    {
+        var step = Recommend(Plain, AllAt(0));
+
+        Assert.Equal(TuningStage.Discover, step.Stage);
+        Assert.Contains("nothing permanently", step.Reason);
+        Assert.Contains("BIOS", step.Reason);
+    }
+
+    [Fact]
+    public void TheStagesReadAsANumberedSequenceForANewcomer()
+    {
+        Assert.Contains("Step 1", Recommend(Plain, AllAt(0), driverReady: false).Headline);
+        Assert.Contains("Step 2", Recommend(Plain, AllAt(0), engineReady: false).Headline);
+        Assert.Contains("Step 3", Recommend(Plain, AllAt(0)).Headline);
+    }
 
     private static Dictionary<int, int> AllAt(int value, int cores = 8) =>
         Enumerable.Range(0, cores).ToDictionary(i => i, _ => value);

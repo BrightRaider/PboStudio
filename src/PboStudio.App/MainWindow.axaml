@@ -467,7 +467,8 @@
                                  TextWrapping="Wrap" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <Border Background="{StaticResource SurfaceInset}" CornerRadius="4" Padding="9,7">
+                    <Border x:Name="NextStepProfileBox" Background="{StaticResource SurfaceInset}"
+                            CornerRadius="4" Padding="9,7">
                       <StackPanel Spacing="3">
                         <TextBlock x:Name="NextStepProfileName" FontSize="{StaticResource FontBody}"
                                    FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"

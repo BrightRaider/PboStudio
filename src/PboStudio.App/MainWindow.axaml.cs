@@ -713,6 +713,7 @@ public partial class MainWindow : Window
         }
 
         UpdateStartButtonState();
+        UpdateNextStep();
     }
 
     private void UpdateStartButtonState()
@@ -1399,18 +1400,38 @@ public partial class MainWindow : Window
         int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
 
         _nextStep = NextStepService.Recommend(
-            _smu.CpuName, _cores, currentMargins, _knowledge, chipLimit, LocalizationService.IsGerman);
-
-        var profile = profiles.FirstOrDefault(p => p.Id == _nextStep.Profile);
-        if (profile is null) return;
+            _smu.CpuName, _cores, currentMargins, _knowledge, chipLimit, LocalizationService.IsGerman,
+            driverReady: _dependencies?.PawnIoAvailable ?? _smu.IsAvailable,
+            engineReady: _dependencies is null
+                || _dependencies.Prime95Available
+                || _dependencies.YCruncherAvailable);
 
         NextStepHeadline.Text = _nextStep.Headline;
-        NextStepProfileName.Text = profile.Name;
-        NextStepDetail.Text = profile.EngineSummary;
         NextStepReason.Text = _nextStep.Reason;
 
+        // On the setup stages there is no profile to name yet, and showing one would suggest
+        // something is ready to run.
+        NextStepProfileBox.IsVisible = _nextStep.ShowProfile;
+        if (_nextStep.ShowProfile
+            && profiles.FirstOrDefault(p => p.Id == _nextStep.Profile) is { } profile)
+        {
+            NextStepProfileName.Text = profile.Name;
+            NextStepDetail.Text = profile.EngineSummary;
+        }
+
+        // Setup stages get the warning tint: they are a blocker, not a suggestion.
+        bool setup = _nextStep.Action == NextStepAction.OpenSetup;
+        NextStepCard.Classes.Set("success", !setup);
+        NextStepCard.Classes.Set("warning", setup);
+        NextStepHeadline.Foreground = SolidColorBrush.Parse(setup ? "#FBBF24" : "#34D399");
+
         ApplyNextStepButton.Content = LocalizationService.Get(
-            _nextStep.UseAutoTuner ? "NextStepApplyTuner" : "NextStepApply");
+            setup ? "NextStepOpenSetup"
+            : _nextStep.UseAutoTuner ? "NextStepApplyTuner"
+            : "NextStepApply");
+
+        // The list of thirteen is noise while nothing can run at all.
+        ShowAllProfilesButton.IsVisible = !setup;
     }
 
     /// <summary>
@@ -1421,6 +1442,12 @@ public partial class MainWindow : Window
     private void OnApplyNextStep(object? sender, RoutedEventArgs e)
     {
         if (_nextStep is null || _running) return;
+
+        if (_nextStep.Action == NextStepAction.OpenSetup)
+        {
+            OnOpenSetupWizard(sender, e);
+            return;
+        }
 
         int index = IndexOfProfile(_nextStep.Profile);
         if (index >= 0) ProfileBox.SelectedIndex = index;

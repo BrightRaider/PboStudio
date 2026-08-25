@@ -3,6 +3,12 @@ namespace PboStudio.Core;
 /// <summary>Where a machine stands in the tuning process. Derived, never asked for.</summary>
 public enum TuningStage
 {
+    /// <summary>No kernel driver, so Curve Optimizer values can be neither read nor written.</summary>
+    InstallDriver,
+
+    /// <summary>No stress engine, so nothing can be measured.</summary>
+    InstallEngine,
+
     /// <summary>Nothing has been measured. The first run establishes a baseline.</summary>
     Discover,
 
@@ -11,6 +17,16 @@ public enum TuningStage
 
     /// <summary>Every core is at the most aggressive value it is allowed to reach.</summary>
     Confirm,
+}
+
+/// <summary>What the card's button should do.</summary>
+public enum NextStepAction
+{
+    /// <summary>Open the driver and engine manager.</summary>
+    OpenSetup,
+
+    /// <summary>Configure the run: profile, auto-tuner, core selection, passes.</summary>
+    ConfigureRun,
 }
 
 /// <param name="Profile">Which profile to run. An id, so nothing has to match by name.</param>
@@ -24,7 +40,14 @@ public sealed record NextStep(
     string Headline,
     string Reason,
     bool UseAutoTuner,
-    IReadOnlyList<int> Cores
+    IReadOnlyList<int> Cores,
+    NextStepAction Action = NextStepAction.ConfigureRun,
+
+    /// <summary>
+    /// Set on the setup stages, where naming a profile would be a lie: there is nothing to run
+    /// yet. The card hides the profile box in that case.
+    /// </summary>
+    bool ShowProfile = true
 );
 
 /// <summary>
@@ -42,15 +65,25 @@ public sealed record NextStep(
 /// </summary>
 public static class NextStepService
 {
+    /// <param name="driverReady">PawnIO present, i.e. CO values can be read and written.</param>
+    /// <param name="engineReady">At least one stress engine installed.</param>
     public static NextStep Recommend(
         string cpuName,
         IReadOnlyList<PhysicalCore> cores,
         IReadOnlyDictionary<int, int> currentMargins,
         IReadOnlyDictionary<int, CoreKnowledge> knowledge,
         int chipLimit,
-        bool isGerman)
+        bool isGerman,
+        bool driverReady = true,
+        bool engineReady = true)
     {
         bool isX3d = cpuName.Contains("X3D", StringComparison.OrdinalIgnoreCase);
+
+        // Setup comes first, and it comes first here rather than in a separate banner: a card
+        // that says "run Heavy FFTs" next to a disabled start button is worse than no advice.
+        // The driver leads because it is the only step that also needs a restart.
+        if (!driverReady) return InstallDriver(isGerman);
+        if (!engineReady) return InstallEngine(isGerman);
 
         // A core has room left when it holds a value milder than the floor it is still allowed
         // to try. The floor comes from what this core has already been observed to do, so a
@@ -79,16 +112,46 @@ public static class NextStepService
     }
 
     /// <summary>
+    /// Step one for anybody opening the program for the first time. Says what the driver is
+    /// for, because "install PawnIO" means nothing to someone who has never heard of it.
+    /// </summary>
+    private static NextStep InstallDriver(bool isGerman) =>
+        new(ProfileId.HeavyFfts, TuningStage.InstallDriver,
+            isGerman ? "Schritt 1: Treiber installieren" : "Step 1: install the driver",
+            isGerman
+                ? "PboStudio liest und schreibt die Curve-Optimizer-Werte direkt im Prozessor. Dafür braucht Windows den PawnIO-Treiber — ohne ihn lassen sich Werte weder auslesen noch setzen, und die Live-Anzeige für Takt und Temperatur bleibt leer. Der Assistent lädt und installiert ihn; danach muss PboStudio einmal neu starten."
+                : "PboStudio reads and writes Curve Optimizer values in the processor itself. Windows needs the PawnIO driver for that — without it no value can be read or set, and the live clock and temperature readouts stay empty. The assistant downloads and installs it; PboStudio then has to restart once.",
+            UseAutoTuner: false,
+            Cores: [],
+            Action: NextStepAction.OpenSetup,
+            ShowProfile: false);
+
+    /// <summary>
+    /// Step two: something has to generate the load. Names what the two engines are, since the
+    /// choice looks arbitrary without that.
+    /// </summary>
+    private static NextStep InstallEngine(bool isGerman) =>
+        new(ProfileId.HeavyFfts, TuningStage.InstallEngine,
+            isGerman ? "Schritt 2: Testprogramm laden" : "Step 2: download a stress engine",
+            isGerman
+                ? "Die Last erzeugt ein externes Programm: Prime95 rechnet Primzahlen und belastet den Kern bei Höchsttakt, y-cruncher berechnet Pi und beansprucht Cache und Speicher ganz anders. Beide sind kostenlos, der Assistent lädt sie von den Seiten der Hersteller. Eines reicht zum Starten — beide zu haben ist besser, weil ein Kern das eine bestehen und am anderen scheitern kann."
+                : "The load comes from an external program: Prime95 computes primes and stresses the core at peak clock, y-cruncher computes pi and leans on cache and memory in a completely different way. Both are free and the assistant fetches them from the vendors' own pages. One is enough to start — having both is better, because a core can pass one and fail the other.",
+            UseAutoTuner: false,
+            Cores: [],
+            Action: NextStepAction.OpenSetup,
+            ShowProfile: false);
+
+    /// <summary>
     /// Nothing measured yet. SSE across the Heavy range is the workhorse: it exposes an
     /// undervolted core fastest, and because it is the coolest of the Prime95 modes it is the
     /// right first load on every part, X3D included.
     /// </summary>
     private static NextStep Discover(string cpuName, bool isX3d, bool isGerman) =>
         new(ProfileId.HeavyFfts, TuningStage.Discover,
-            isGerman ? "Erst einmal herausfinden, wo du stehst" : "First, find out where you stand",
+            isGerman ? "Schritt 3: den ersten Testlauf machen" : "Step 3: make the first run",
             isGerman
-                ? $"Für den {cpuName} ist noch nichts gemessen. „Heavy FFTs“ ist der Standardeinstieg: SSE deckt instabile Kerne am schnellsten auf und erzeugt dabei die geringste Hitze{(isX3d ? " — bei einem X3D ist genau das wichtig, weil der gestapelte Cache empfindlich auf Temperatur reagiert" : "")}."
-                : $"Nothing has been measured on the {cpuName} yet. “Heavy FFTs” is the standard opener: SSE exposes unstable cores fastest and produces the least heat doing it{(isX3d ? " — which matters on an X3D, whose stacked cache is sensitive to temperature" : "")}.",
+                ? $"Für den {cpuName} ist noch nichts gemessen. „Heavy FFTs“ ist der Standardeinstieg: SSE deckt instabile Kerne am schnellsten auf und erzeugt dabei die geringste Hitze{(isX3d ? " — bei einem X3D wichtig, weil der gestapelte Cache empfindlich auf Temperatur reagiert" : "")}.\n\nDieser Lauf verändert nichts dauerhaft: er belastet jeden Kern nacheinander mit den Werten, die gerade anliegen, und hält fest, welcher durchfällt. Erst danach wird über neue Werte entschieden — und auch die gelten nur bis zum nächsten Neustart, solange du sie nicht ins BIOS überträgst."
+                : $"Nothing has been measured on the {cpuName} yet. “Heavy FFTs” is the standard opener: SSE exposes unstable cores fastest and produces the least heat doing it{(isX3d ? " — which matters on an X3D, whose stacked cache is sensitive to temperature" : "")}.\n\nThis run changes nothing permanently: it loads each core in turn at whatever values are currently set and records which ones fail. New values come after that — and even those only last until the next reboot unless you carry them into the BIOS.",
             UseAutoTuner: false,
             Cores: []);
 

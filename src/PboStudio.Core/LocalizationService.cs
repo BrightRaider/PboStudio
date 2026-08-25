@@ -85,6 +85,7 @@ public static class LocalizationService
 
             // ---- The one recommendation ----
             "NextStepApply" => isDe ? "✓ Diesen Lauf einrichten" : "✓ Set this run up",
+            "NextStepOpenSetup" => isDe ? "⚙️ Assistent öffnen" : "⚙️ Open the assistant",
             "NextStepApplyTuner" => isDe ? "✓ Auto-Tuner so einrichten" : "✓ Set the auto-tuner up like this",
             "NextStepApplied" => isDe
                 ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt änderbar."
