@@ -261,6 +261,23 @@ public static class LocalizationService
                 : "The binary decides the instruction set and therefore the kind of load. “00-x86” produces the least heat and the highest boost; the Zen builds run AVX2/AVX-512 and draw far more current. A CO value that holds under one can fail under the other — testing both is the point of choosing.",
 
             // ---- Runtime ----
+            // ---- Real-world crash ----
+            "CrashTitle" => isDe ? "Absturz seit dem letzten Start" : "A crash since the last session",
+            "CrashRecord" => isDe ? "✓ Als instabil vermerken" : "✓ Record as unstable",
+            "CrashDismiss" => isDe ? "Ignorieren" : "Ignore",
+            "CrashRecorded" => isDe
+                ? "💥 {0} Kern(e) aus dem Windows-Ereignisprotokoll als instabil vermerkt. Der Auto-Tuner geht dort nicht mehr hin."
+                : "💥 Recorded {0} core(s) from the Windows event log as unstable. The auto-tuner will not go there again.",
+
+            // ---- Guardband ----
+            "Guardband" => isDe ? "Sicherheitsabstand beim Fixieren" : "Headroom when locking",
+            "GuardbandHint" => isDe
+                ? "Der Stresstest findet den Grenzwert — den Punkt, an dem der Kern unter genau dieser Last gerade noch hält. Der Alltag ist nicht diese Last: Temperaturen schwanken, und ein Spiel mit geringer Auslastung treibt den Kern auf seinen höchsten Boost-Takt, wo ein negatives Offset am wenigsten Spannung übrig hat. Fixiert wird deshalb einige Stufen darüber. 0 fixiert den gemessenen Grenzwert selbst."
+                : "The stress test finds the boundary — the point where the core just holds under that particular load. Everyday use is not that load: temperatures drift, and a light-load game drives the core to its highest boost clock, where a negative offset has the least voltage to give. Cores are therefore locked a few points above it. 0 locks the measured boundary itself.",
+            "GuardbandTooltip" => isDe
+                ? "Empfohlen: 3 bis 5. Bevorzugte Kerne (🥇🥈) bekommen automatisch 2 Stufen mehr, weil sie am höchsten boosten und die Windows-Hintergrundlast tragen."
+                : "Recommended: 3 to 5. Preferred cores (🥇🥈) automatically get 2 points more, because they boost highest and carry the Windows background work.",
+
             // ---- Auto-tuner memory ----
             "KnowledgeEmpty" => isDe
                 ? "Gedächtnis: noch nichts über die Kerne bekannt."

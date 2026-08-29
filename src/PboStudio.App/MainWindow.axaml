@@ -149,6 +149,22 @@
         <TextBlock x:Name="SupportText" Classes="caption" Foreground="{StaticResource StateWarning}"
                    IsVisible="False" />
 
+        <!-- A fatal machine check that happened while the program was not running. The
+             auto-tuner only ever learned from its own test slots; this is the other half. -->
+        <Border x:Name="CrashPanel" Classes="panel danger" IsVisible="False">
+          <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="💥" FontSize="14" />
+              <TextBlock x:Name="CrashTitle" Classes="title" Foreground="{StaticResource StateDanger}" />
+            </StackPanel>
+            <TextBlock x:Name="CrashText" Classes="body" Foreground="#FECACA" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+              <Button x:Name="RecordCrashButton" Classes="primary" Click="OnRecordCrash" />
+              <Button x:Name="DismissCrashButton" Classes="secondary" Click="OnDismissCrash" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
         <!-- Interrupted run / BSOD recovery -->
         <Border x:Name="RecoveryPanel" Classes="panel danger" IsVisible="False">
           <StackPanel Spacing="6">
@@ -544,6 +560,16 @@
                       <ComboBoxItem x:Name="AutoTunerOpt1" />
                       <ComboBoxItem x:Name="AutoTunerOpt2" />
                     </ComboBox>
+
+                    <!-- Headroom between the measured boundary and the value that gets locked.
+                         Without it the user is handed the exact edge the stress test found. -->
+                    <Grid ColumnDefinitions="*,Auto" x:Name="GuardbandRow">
+                      <TextBlock Grid.Column="0" x:Name="GuardbandLabel" Classes="label"
+                                 VerticalAlignment="Center" TextWrapping="Wrap" />
+                      <NumericUpDown Grid.Column="1" x:Name="GuardbandBox" Value="3" Minimum="0" Maximum="15"
+                                     Increment="1" FormatString="+0;-0;0" Width="92" Margin="8,0,0,0" />
+                    </Grid>
+                    <TextBlock x:Name="GuardbandHint" Classes="caption" />
 
                     <StackPanel x:Name="AutoTunerProgressPanel" Spacing="3" IsVisible="False">
                       <TextBlock x:Name="AutoTunerProgressText" Classes="caption"

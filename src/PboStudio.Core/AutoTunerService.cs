@@ -67,6 +67,30 @@ public static class AutoTunerService
     /// <summary>Symmetric: searching up in bigger jumps than it came down would skip candidates.</summary>
     public static int StepSize(AutoTunerMode mode) => mode == AutoTunerMode.Grob ? 3 : 1;
 
+    /// <summary>
+    /// Points of headroom left between the most aggressive value a core survived and the value
+    /// it is actually locked at.
+    ///
+    /// A stress test finds the boundary margin — the value at which the core just barely holds
+    /// under that particular load. Everyday use is not that load: temperature drifts, other
+    /// cores come and go, and a light-load game swings the core to its highest boost clock,
+    /// where a negative offset has the least voltage to give. Locking the boundary itself hands
+    /// the user a value with nothing left for any of that, and it fails in a way the test never
+    /// reproduces — a hard reboot mid-game with WHEA 18 in the event log.
+    /// </summary>
+    public const int DefaultGuardband = 3;
+
+    /// <summary>
+    /// Extra headroom for the cores CPPC ranks highest. They boost furthest, and Windows puts
+    /// its background work on them, so they spend the most time in exactly the state that
+    /// exposes an over-aggressive curve.
+    /// </summary>
+    public const int PreferredCoreExtraGuardband = 2;
+
+    /// <summary>Where a core is locked, given what it actually survived.</summary>
+    public static int ApplyGuardband(int lastKnownGood, int guardband) =>
+        Math.Min(0, lastKnownGood + Math.Max(0, guardband));
+
     public static AutoTunerStepResult CalculateNextStep(
         int coreIndex,
         int currentMargin,
@@ -74,21 +98,36 @@ public static class AutoTunerService
         AutoTunerMode mode,
         int maxLimit = DefaultBiosLimit,
         bool isGerman = false,
-        AutoTunerCoreState? state = null)
+        AutoTunerCoreState? state = null,
+        int guardband = 0)
     {
         state ??= new AutoTunerCoreState();
         int step = StepSize(mode);
 
         var result = passed
-            ? OnPassed(coreIndex, currentMargin, mode, maxLimit, isGerman, state, step)
-            : OnFailed(coreIndex, currentMargin, isGerman, state, step);
+            ? OnPassed(coreIndex, currentMargin, mode, maxLimit, isGerman, state, step, guardband)
+            : OnFailed(coreIndex, currentMargin, isGerman, state, step, guardband);
 
         return result with { Passed = passed };
     }
 
+    /// <summary>
+    /// Names the headroom in the advice line, so a locked value that differs from the one that
+    /// was measured never looks like a mistake.
+    /// </summary>
+    private static string GuardNote(int tested, int locked, bool isGerman)
+    {
+        int gap = locked - tested;
+        if (gap <= 0) return " (🔒)";
+
+        return isGerman
+            ? $" (🔒) — {gap} Stufen Sicherheitsabstand auf den gemessenen Grenzwert {tested}"
+            : $" (🔒) — {gap} points of headroom over the measured boundary of {tested}";
+    }
+
     private static AutoTunerStepResult OnPassed(
         int coreIndex, int currentMargin, AutoTunerMode mode, int maxLimit,
-        bool isGerman, AutoTunerCoreState state, int step)
+        bool isGerman, AutoTunerCoreState state, int step, int guardband)
     {
         var learned = state with { LastKnownGood = currentMargin };
 
@@ -96,21 +135,23 @@ public static class AutoTunerService
         // below it is known bad. There is nothing left to look for.
         if (state.Ascending)
         {
+            int safe = ApplyGuardband(currentMargin, guardband);
             return new AutoTunerStepResult(
-                coreIndex, currentMargin, currentMargin, CoreLocked: true,
+                coreIndex, currentMargin, safe, CoreLocked: true,
                 isGerman
-                    ? $"🎯 Kern {coreIndex}: stabil bei {currentMargin} — tiefere Werte sind durchgefallen. Fixiert (🔒)."
-                    : $"🎯 Core {coreIndex}: stable at {currentMargin} — lower values failed. Locked (🔒).",
+                    ? $"🎯 Kern {coreIndex}: stabil bei {currentMargin} — tiefere Werte sind durchgefallen. Fixiert bei {safe}{GuardNote(currentMargin, safe, isGerman)}."
+                    : $"🎯 Core {coreIndex}: stable at {currentMargin} — lower values failed. Locked at {safe}{GuardNote(currentMargin, safe, isGerman)}.",
                 learned);
         }
 
         if (currentMargin <= maxLimit)
         {
+            int safe = ApplyGuardband(currentMargin, guardband);
             return new AutoTunerStepResult(
-                coreIndex, currentMargin, currentMargin, CoreLocked: true,
+                coreIndex, currentMargin, safe, CoreLocked: true,
                 isGerman
-                    ? $"🎯 Kern {coreIndex}: CPU-Limit ({maxLimit}) bestanden und fixiert (🔒)."
-                    : $"🎯 Core {coreIndex}: passed at the CPU limit ({maxLimit}) and locked (🔒).",
+                    ? $"🎯 Kern {coreIndex}: Limit ({maxLimit}) bestanden, fixiert bei {safe}{GuardNote(currentMargin, safe, isGerman)}."
+                    : $"🎯 Core {coreIndex}: passed at the limit ({maxLimit}), locked at {safe}{GuardNote(currentMargin, safe, isGerman)}.",
                 learned);
         }
 
@@ -124,16 +165,17 @@ public static class AutoTunerService
     }
 
     private static AutoTunerStepResult OnFailed(
-        int coreIndex, int currentMargin, bool isGerman, AutoTunerCoreState state, int step)
+        int coreIndex, int currentMargin, bool isGerman, AutoTunerCoreState state, int step, int guardband)
     {
         // A value this core already survived is proven, so there is no reason to test it again.
         if (state.LastKnownGood is { } good)
         {
+            int safe = ApplyGuardband(good, guardband);
             return new AutoTunerStepResult(
-                coreIndex, currentMargin, good, CoreLocked: true,
+                coreIndex, currentMargin, safe, CoreLocked: true,
                 isGerman
-                    ? $"⚠️ Kern {coreIndex} instabil bei {currentMargin}. Zurück auf den zuletzt bestandenen Wert {good} und fixiert (🔒)."
-                    : $"⚠️ Core {coreIndex} unstable at {currentMargin}. Back to the last value it passed, {good}, and locked (🔒).",
+                    ? $"⚠️ Kern {coreIndex} instabil bei {currentMargin}. Zuletzt bestanden: {good}. Fixiert bei {safe}{GuardNote(good, safe, isGerman)}."
+                    : $"⚠️ Core {coreIndex} unstable at {currentMargin}. Last passed at {good}. Locked at {safe}{GuardNote(good, safe, isGerman)}.",
                 state);
         }
 

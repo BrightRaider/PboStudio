@@ -3,7 +3,7 @@
 ## 1.0.2 — 2026-08-25
 
 A UI/UX audit and a feature-by-feature comparison against CoreCycler v0.11.0.3, with the
-findings from both fixed. 147 unit tests. The interface changes have not been seen on screen
+findings from both fixed. 164 unit tests. The interface changes have not been seen on screen
 yet — the hardware run that shook out the engine side was made with an earlier build of this
 release, before the toast layer, the collapsible dock and the auto-tuner memory existed.
 
@@ -40,6 +40,36 @@ release, before the toast layer, the collapsible dock and the auto-tuner memory 
   exactly the part that says what each option costs ("permanent · scheduled task · needs admin").
 - The post-recommendation message pointed at the bottom **right**; the apply block is below the
   core table on the left.
+
+### Added — the failure a stress test cannot produce
+
+A Ryzen 7 5800X3D passed hours of Prime95 and y-cruncher, then hard-reset during an ordinary
+game. Windows logged two fatal WHEA 18 cache-hierarchy errors in the same second, APIC 0 and
+APIC 9 — physical cores 0 and 4 — with the uncorrected and context-corrupt bits set. One of
+those cores was sitting at -20, nowhere near its limit.
+
+That is the gap: a continuous full load holds the core at a lower boost clock, while a
+light-load game swings it to its highest single-core frequency, where a negative offset has the
+least voltage left to give. The test never visits the state that fails.
+
+- **Headroom when locking.** The auto-tuner used to lock the boundary margin itself — the exact
+  value at which the core just barely held under that particular load, with nothing in reserve
+  for temperature drift or a load pattern the test never produced. It now locks a configurable
+  number of points above it, default 3. The measured boundary is still recorded, and the advice
+  line names both so the difference never looks like a mistake.
+- **Preferred cores get more.** The cores CPPC ranks highest boost furthest and carry the
+  Windows background work, so they get two extra points on top.
+- **A micro-burst profile.** Sub-second pulsing — hundreds of transitions a minute instead of a
+  dozen — driven by its own timer rather than the runner's one-second tick. It runs the
+  *coolest* load in the set, SSE on one thread, on purpose: heating the core with AVX2 would
+  pull the clock away from the state that fails. The occupancy check now measures against the
+  configured duty cycle, or every micro-burst slot would be reported as a core gone idle.
+- **Crashes that happen outside a test run are picked up.** The auto-tuner only ever learned
+  from its own slots, which is the smaller half of the evidence; a crash while gaming left its
+  only trace in an event log nothing read. Fatal machine checks are now read at startup, mapped
+  to cores by APIC id, and offered for recording. Offered, not written: values applied live are
+  lost in the reboot, so the margin a core holds afterwards may be milder than the one that
+  failed, and recording that on a guess would cap the core far too tightly.
 
 ### Added — the auto-tuner remembers
 

@@ -50,6 +50,15 @@ public interface IStressSession : IDisposable
     /// </summary>
     void Pause(TimeSpan duration);
 
+    /// <summary>
+    /// Freezes the load and leaves it frozen. Paired with <see cref="Resume"/> so a caller can
+    /// drive its own timing — the micro-burst mode pulses far faster than the runner's
+    /// one-second monitoring tick, and <see cref="Pause"/> blocks for its whole duration.
+    /// </summary>
+    void Suspend();
+
+    void Resume();
+
     void Stop();
 }
 

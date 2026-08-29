@@ -30,6 +30,9 @@ public class AutoTunerApplyMarginTests
         }
 
         public void Pause(TimeSpan duration) { }
+        public void Suspend() { }
+        public void Resume() { }
+
         public void Stop() { }
         public void Dispose() { }
     }

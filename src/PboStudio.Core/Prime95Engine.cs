@@ -262,6 +262,17 @@ internal sealed class Prime95Session : IStressSession
         }
     }
 
+    public void Suspend()
+    {
+        if (!IsAlive) return;
+        try { Native.NtSuspendProcess(_process.Handle); } catch { }
+    }
+
+    public void Resume()
+    {
+        try { Native.NtResumeProcess(_process.Handle); } catch { }
+    }
+
     public void Pause(TimeSpan duration)
     {
         if (!IsAlive) return;

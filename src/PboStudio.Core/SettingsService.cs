@@ -48,6 +48,9 @@ public sealed class AppSettings
 
     /// <summary>Defaults to on: the restore point is cheap and the failure mode it covers is not.</summary>
     public bool CreateRestorePoint { get; set; } = true;
+
+    /// <summary>Points of headroom between the measured boundary and the locked value.</summary>
+    public int Guardband { get; set; } = AutoTunerService.DefaultGuardband;
     public int PostTestAction { get; set; }
     public string WebhookUrl { get; set; } = "";
 

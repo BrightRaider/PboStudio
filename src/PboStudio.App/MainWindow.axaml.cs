@@ -450,6 +450,7 @@ public partial class MainWindow : Window
         _clock.Tick += (_, _) => UpdateClock();
         StartWatchdog();
         CheckInterruptedRun();
+        CheckRealWorldCrashes();
 
         // After ApplyLocalization, because LoadProfiles resets the profile selection and
         // OnProfileChanged overwrites the engine controls from the preset.
@@ -534,6 +535,7 @@ public partial class MainWindow : Window
         MaxTempBox.Value = s.MaxTemp;
         TreatWheaAsErrorBox.IsChecked = s.TreatWheaWarningAsError;
         RestorePointBox.IsChecked = s.CreateRestorePoint;
+        GuardbandBox.Value = s.Guardband;
         DockCollapseButton.IsChecked = !s.BottomDockCollapsed;
         OnToggleBottomDock(null, new RoutedEventArgs());
 
@@ -590,6 +592,7 @@ public partial class MainWindow : Window
         s.MaxTemp = (int)(MaxTempBox.Value ?? 90);
         s.TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true;
         s.CreateRestorePoint = RestorePointBox.IsChecked == true;
+        s.Guardband = (int)(GuardbandBox.Value ?? AutoTunerService.DefaultGuardband);
         s.BottomDockCollapsed = DockCollapseButton.IsChecked != true;
         s.PostTestAction = PostTestActionBox.SelectedIndex;
         s.WebhookUrl = WebhookBox.Text ?? "";
@@ -971,6 +974,60 @@ public partial class MainWindow : Window
         OnStartStop(sender, e);
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Crashes that happened while the program was not running
+    // ══════════════════════════════════════════════════════════════
+
+    private IReadOnlyList<WheaCrash> _pendingCrashes = [];
+
+    /// <summary>
+    /// Offers to fold a real-world crash into the core memory.
+    ///
+    /// Deliberately an offer rather than an automatic write: values applied live are lost in a
+    /// reboot, so the margin a core holds afterwards may be milder than the one that actually
+    /// failed. Recording that on a guess would cap the core far too tightly.
+    /// </summary>
+    private void CheckRealWorldCrashes()
+    {
+        _pendingCrashes = WheaCrashService.Unacknowledged(SettingsRoot, _cores);
+        if (_pendingCrashes.Count == 0) return;
+
+        var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
+
+        CrashTitle.Text = LocalizationService.Get("CrashTitle");
+        CrashText.Text = WheaCrashService.Describe(_pendingCrashes, margins, LocalizationService.IsGerman);
+        RecordCrashButton.Content = LocalizationService.Get("CrashRecord");
+        DismissCrashButton.Content = LocalizationService.Get("CrashDismiss");
+        CrashPanel.IsVisible = true;
+
+        Log(WheaCrashService.Describe(_pendingCrashes, margins, LocalizationService.IsGerman), LogLevel.Error);
+    }
+
+    private void OnRecordCrash(object? sender, RoutedEventArgs e)
+    {
+        foreach (var crash in _pendingCrashes)
+            CoreKnowledgeService.RecordFailure(_knowledge, crash.Core, (int)Row(crash.Core).Margin);
+
+        CoreKnowledgeService.Save(SettingsRoot, _knowledge, CurrentBiosVersion);
+        PushKnowledgeToRows();
+        UpdateKnowledgeSummary();
+        UpdateNextStep();
+
+        Log(string.Format(LocalizationService.Get("CrashRecorded"), _pendingCrashes.Count), LogLevel.Success);
+        DismissCrashes();
+    }
+
+    private void OnDismissCrash(object? sender, RoutedEventArgs e) => DismissCrashes();
+
+    private void DismissCrashes()
+    {
+        if (_pendingCrashes.Count > 0)
+            WheaCrashService.Acknowledge(SettingsRoot, _pendingCrashes.Max(c => c.Time));
+
+        _pendingCrashes = [];
+        CrashPanel.IsVisible = false;
+    }
+
     private void OnDismissRecovery(object? sender, RoutedEventArgs e)
     {
         string workRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "engines", "runs"));
@@ -1074,6 +1131,9 @@ public partial class MainWindow : Window
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
         AutoTunerOpt1.Content = LocalizationService.Get("AutoTunerCoarse");
         AutoTunerOpt2.Content = LocalizationService.Get("AutoTunerFine");
+        GuardbandLabel.Text = LocalizationService.Get("Guardband");
+        GuardbandHint.Text = LocalizationService.Get("GuardbandHint");
+        Tip(GuardbandBox, "GuardbandTooltip");
         ResetKnowledgeButton.Content = LocalizationService.Get("KnowledgeReset");
         Tip(ResetKnowledgeButton, "KnowledgeResetTooltip");
         UpdateKnowledgeSummary();
@@ -2037,6 +2097,18 @@ public partial class MainWindow : Window
             TunerState = tunerState,
             LockedCores = lockedCores,
             IsGerman = LocalizationService.IsGerman,
+            // Micro-bursting is a property of the profile, not of the pause boxes: it pulses
+            // hundreds of times a minute, far below what a whole-second setting can express.
+            Transient = ProfileBox.SelectedItem is TestProfile tp
+                ? tp.Transient
+                : TransientMode.Periodic,
+
+            Guardband = (int)(GuardbandBox.Value ?? AutoTunerService.DefaultGuardband),
+            PreferredCores = _rows
+                .Where(r => r.QualityRank != CoreQualityRank.Standard)
+                .Select(r => r.Index)
+                .ToHashSet(),
+
             SuspendPeriodically = pauseInterval > 0 && pauseDuration > 0,
             SuspendEvery = TimeSpan.FromSeconds(pauseInterval),
             SuspendFor = TimeSpan.FromSeconds(pauseDuration),

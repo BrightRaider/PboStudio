@@ -59,6 +59,22 @@ public sealed record TestPlan
     /// </summary>
     public IReadOnlyDictionary<int, int>? PerCoreFloor { get; init; }
 
+    /// <summary>
+    /// Headroom left between the value a core is measured to survive and the value it is locked
+    /// at. A stress test finds the boundary; everyday use is not the stress test.
+    /// </summary>
+    public int Guardband { get; init; } = AutoTunerService.DefaultGuardband;
+
+    /// <summary>
+    /// Cores CPPC ranks highest. They boost furthest and carry the background work, so they get
+    /// the extra headroom on top of <see cref="Guardband"/>.
+    /// </summary>
+    public IReadOnlySet<int> PreferredCores { get; init; } = new HashSet<int>();
+
+    public int GuardbandFor(int core) => PreferredCores.Contains(core)
+        ? Guardband + AutoTunerService.PreferredCoreExtraGuardband
+        : Guardband;
+
     /// <summary>Floor actually used for one core.</summary>
     public int FloorFor(int core) =>
         PerCoreFloor is { } f && f.TryGetValue(core, out int limit)
@@ -95,6 +111,50 @@ public sealed record TestPlan
     public bool SuspendPeriodically { get; init; } = true;
     public TimeSpan SuspendEvery { get; init; } = TimeSpan.FromSeconds(30);
     public TimeSpan SuspendFor { get; init; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>How the load is interrupted.</summary>
+    public TransientMode Transient { get; init; } = TransientMode.Periodic;
+
+    /// <summary>Micro-burst: how long the load runs before each interruption.</summary>
+    public TimeSpan BurstLoad { get; init; } = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Micro-burst: how long the core is left idle between bursts.</summary>
+    public TimeSpan BurstIdle { get; init; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Share of wall time the load is actually running under the current transient settings.
+    /// The idle check compares measured occupancy against this rather than against a solid
+    /// 100 %, or micro-bursting would report every core as having gone idle.
+    /// </summary>
+    public double ExpectedDutyCycle
+    {
+        get
+        {
+            if (Transient != TransientMode.MicroBurst) return 1.0;
+
+            double cycle = (BurstLoad + BurstIdle).TotalMilliseconds;
+            return cycle <= 0 ? 1.0 : BurstLoad.TotalMilliseconds / cycle;
+        }
+    }
+}
+
+/// <summary>How the load is interrupted so the core has to boost back up.</summary>
+public enum TransientMode
+{
+    /// <summary>A pause every N seconds. Roughly a dozen transitions in a six-minute slot.</summary>
+    Periodic,
+
+    /// <summary>
+    /// Sub-second pulsing, hundreds of transitions per minute.
+    /// <para>
+    /// This exists because of a real failure: cores validated as stable under continuous load
+    /// threw WHEA 18 (cache hierarchy error) during ordinary gaming. A game engine swings
+    /// between idle and peak boost far faster than a periodic pause does, and it is the rate of
+    /// voltage change on the way back up that a too-aggressive curve cannot follow. Continuous
+    /// full load never produces that edge, so a value can pass for hours and still fail in use.
+    /// </para>
+    /// </summary>
+    MicroBurst,
 }
 
 public abstract record TestEvent
@@ -186,7 +246,8 @@ public sealed class TestRunner
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: false, _plan.AutoTuner.Value,
                             _plan.FloorFor(coreIndex), _plan.IsGerman,
-                            (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null));
+                            (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null),
+                            _plan.GuardbandFor(coreIndex));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
                         Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
@@ -216,7 +277,8 @@ public sealed class TestRunner
                         var res = AutoTunerService.CalculateNextStep(
                             coreIndex, cur, passed: true, _plan.AutoTuner.Value,
                             _plan.FloorFor(coreIndex), _plan.IsGerman,
-                            (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null));
+                            (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null),
+                            _plan.GuardbandFor(coreIndex));
                         currentMargins[coreIndex] = res.NextMargin;
                         tunerState[coreIndex] = res.State;
                         Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
@@ -278,6 +340,12 @@ public sealed class TestRunner
         var found = new List<Failure>();
         using var session = _engine.Start(core, _plan.Threads);
 
+        // Micro-bursting runs on its own clock: the monitoring loop below ticks once a second
+        // and the pulses are measured in hundreds of milliseconds.
+        using var pulser = _plan.Transient == TransientMode.MicroBurst
+            ? StartPulser(session, ct)
+            : null;
+
         var clock = Stopwatch.StartNew();
         var lastCpu = session.CpuTime;
         var lastCheck = clock.Elapsed;
@@ -332,7 +400,9 @@ public sealed class TestRunner
 
             var now = clock.Elapsed;
 
-            if (_plan.SuspendPeriodically && now >= nextSuspend)
+            if (_plan.SuspendPeriodically
+                && _plan.Transient == TransientMode.Periodic
+                && now >= nextSuspend)
             {
                 session.Pause(_plan.SuspendFor);
                 nextSuspend = clock.Elapsed + _plan.SuspendEvery;
@@ -350,10 +420,12 @@ public sealed class TestRunner
                 double wall = (now - lastCheck).TotalSeconds;
                 double busy = (cpu - lastCpu).TotalSeconds;
 
-                // Half the expected occupancy means the load is not where it should be.
-                if (wall > 0 && busy / wall < _plan.Threads * 0.5)
+                // Half the expected occupancy means the load is not where it should be — and
+                // "expected" has to account for micro-bursting, which idles the core on purpose.
+                double expected = _plan.Threads * _plan.ExpectedDutyCycle;
+                if (wall > 0 && busy / wall < expected * 0.5)
                     found.Add(new Failure(FailureKind.WentIdle,
-                        $"Core {core.Index} ran at {busy / wall:F2} of {_plan.Threads} expected thread(s).",
+                        $"Core {core.Index} ran at {busy / wall:F2} of {expected:F2} expected thread(s).",
                         DateTime.Now));
             }
             lastCpu = cpu;
@@ -364,6 +436,40 @@ public sealed class TestRunner
 
         session.Stop();
         return found;
+    }
+
+    /// <summary>
+    /// Pulses the load on and off for the length of a slot, faster than the monitoring loop
+    /// ticks. Always resumes on the way out: leaving the process suspended would look exactly
+    /// like a core that went idle, and the next slot would inherit a frozen engine.
+    /// </summary>
+    private CancellationTokenSource StartPulser(IStressSession session, CancellationToken ct)
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var load = _plan.BurstLoad;
+        var idle = _plan.BurstIdle;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    await Task.Delay(load, cts.Token).ConfigureAwait(false);
+                    session.Suspend();
+                    await Task.Delay(idle, cts.Token).ConfigureAwait(false);
+                    session.Resume();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
+            finally
+            {
+                try { session.Resume(); } catch { }
+            }
+        }, cts.Token);
+
+        return cts;
     }
 
     /// <summary>Puts the processor at the value about to be measured, and says so out loud.</summary>

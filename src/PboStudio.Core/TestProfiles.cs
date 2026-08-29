@@ -32,6 +32,7 @@ public enum ProfileId
     SmallFfts,
     Overnight,
     MemoryFabric,
+    MicroBurst,
 }
 
 public sealed record TestProfile(
@@ -62,6 +63,12 @@ public sealed record TestProfile(
     public string Category { get; init; } = "";
 
     public ProfileId Id { get; init; } = ProfileId.HeavyFfts;
+
+    /// <summary>
+    /// How this profile interrupts the load. Micro-bursting pulses far below the one-second
+    /// granularity <see cref="SuspendEverySeconds"/> can express, so it needs its own flag.
+    /// </summary>
+    public TransientMode Transient { get; init; } = TransientMode.Periodic;
 
     /// <summary>
     /// Every leg this profile runs, in order. Most profiles are a single leg; the combined ones
@@ -226,6 +233,17 @@ public static class TestProfiles
                     ? "Große FFTs auf beiden Threads. Belastet Speichercontroller, RAM und FCLK mit — nicht für CO-Feintuning gedacht, sondern um Speicherprobleme auszuschließen."
                     : "Large FFTs on both threads. Also loads the memory controller, RAM and FCLK - not meant for CO fine-tuning, but for ruling out memory problems.",
                 Prime95Mode.Avx2, FftPreset.Large, 2, 15, 1, CoreOrder.Sequential),
+
+            // Deliberately the *coolest* load in the set, not the hottest. The failure this
+            // reproduces happens at light load: the core boosts to its highest single-core
+            // clock, which is exactly where a negative offset has the least voltage to give.
+            // AVX2 would heat the core and pull the clock down, away from the failing state.
+            new(isGerman ? "⚡ Micro-Bursts – Spiele-Lastwechsel" : "⚡ Micro-bursts - game-style transitions",
+                isGerman
+                    ? "SSE auf einem Thread, im Takt von Sekundenbruchteilen an- und abgeschaltet: hunderte Lastwechsel pro Minute statt einem Dutzend. Das bildet nach, was eine Spiele-Engine tut — und trifft damit den Fall, den Dauerlast nie erzeugt: der Kern springt aus dem Leerlauf auf Höchsttakt, und die Spannung muss schnell genug mitkommen. Kerne, die stundenlang Prime95 überstehen und dann im Spiel mit WHEA 18 abstürzen, fallen hier durch."
+                    : "SSE on one thread, switched on and off in fractions of a second: hundreds of transitions per minute instead of a dozen. It mimics what a game engine does, and so covers the case continuous load never produces — the core jumping from idle to peak boost with the voltage having to keep up. Cores that survive hours of Prime95 and then crash in a game with WHEA 18 fail here.",
+                Prime95Mode.Sse, FftPreset.HeavyShort, 1, 10, 2, CoreOrder.Sequential)
+            { Transient = TransientMode.MicroBurst },
         };
 
         // Categories follow the order the list is written in, which is also the order the
@@ -238,6 +256,7 @@ public static class TestProfiles
             ProfileId.YCruncherCo, ProfileId.YCruncherAll,
             ProfileId.Step1Sse, ProfileId.Step2Avx2, ProfileId.SmallFfts,
             ProfileId.Overnight, ProfileId.MemoryFabric,
+            ProfileId.MicroBurst,
         ];
 
         string[] categories =
@@ -247,6 +266,7 @@ public static class TestProfiles
             catYc, catYc,
             catSteps, catSteps, catSteps,
             catLong, catLong,
+            catLimit,
         ];
         for (int i = 0; i < list.Count && i < categories.Length; i++)
             list[i] = list[i] with { Category = categories[i], Id = ids[i] };

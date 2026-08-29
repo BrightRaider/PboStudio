@@ -27,6 +27,9 @@ public class AutoTunerPhaseStateTests
         }
 
         public void Pause(TimeSpan duration) { }
+        public void Suspend() { }
+        public void Resume() { }
+
         public void Stop() { }
         public void Dispose() { }
     }
@@ -58,6 +61,9 @@ public class AutoTunerPhaseStateTests
 
         TestPlan PlanFor(IDictionary<int, int> seed) => new()
         {
+            // No guardband here: this test is about a locked core staying out of later phases,
+            // and the safety headroom would shift every expected value by 3.
+            Guardband = 0,
             RuntimePerCore = TimeSpan.FromMilliseconds(20),
             MaxIterations = 3,
             Order = CoreOrder.Sequential,
@@ -112,6 +118,9 @@ public class AutoTunerPhaseStateTests
 
         var plan = new TestPlan
         {
+            // No guardband here: these tests are about the search state surviving a phase
+            // boundary, and the safety headroom would shift every expected value by 3.
+            Guardband = 0,
             RuntimePerCore = TimeSpan.FromMilliseconds(20),
             MaxIterations = 1,
             Order = CoreOrder.Sequential,
@@ -145,6 +154,9 @@ public class AutoTunerPhaseStateTests
 
         var plan = new TestPlan
         {
+            // No guardband here: these tests are about the search state surviving a phase
+            // boundary, and the safety headroom would shift every expected value by 3.
+            Guardband = 0,
             RuntimePerCore = TimeSpan.FromMilliseconds(20),
             MaxIterations = 1,
             Order = CoreOrder.Sequential,
