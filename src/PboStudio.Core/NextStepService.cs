@@ -47,7 +47,13 @@ public sealed record NextStep(
     /// Set on the setup stages, where naming a profile would be a lie: there is nothing to run
     /// yet. The card hides the profile box in that case.
     /// </summary>
-    bool ShowProfile = true
+    bool ShowProfile = true,
+
+    /// <summary>
+    /// The mechanics behind the advice. Belongs in a tooltip, not on the card: the card had
+    /// grown to four paragraphs, two of which were source-code comments about phase ordering.
+    /// </summary>
+    string Detail = ""
 );
 
 /// <summary>
@@ -119,12 +125,15 @@ public static class NextStepService
         new(ProfileId.HeavyFfts, TuningStage.InstallDriver,
             isGerman ? "Schritt 1: Treiber installieren" : "Step 1: install the driver",
             isGerman
-                ? "PboStudio liest und schreibt die Curve-Optimizer-Werte direkt im Prozessor. Dafür braucht Windows den PawnIO-Treiber — ohne ihn lassen sich Werte weder auslesen noch setzen, und die Live-Anzeige für Takt und Temperatur bleibt leer. Der Assistent lädt und installiert ihn; danach muss PboStudio einmal neu starten."
-                : "PboStudio reads and writes Curve Optimizer values in the processor itself. Windows needs the PawnIO driver for that — without it no value can be read or set, and the live clock and temperature readouts stay empty. The assistant downloads and installs it; PboStudio then has to restart once.",
+                ? "Ohne den PawnIO-Treiber lassen sich keine CO-Werte lesen oder setzen."
+                : "Without the PawnIO driver no CO value can be read or set.",
             UseAutoTuner: false,
             Cores: [],
             Action: NextStepAction.OpenSetup,
-            ShowProfile: false);
+            ShowProfile: false,
+            Detail: isGerman
+                ? "PboStudio spricht den Prozessor direkt an. Dafür braucht Windows einen Kernel-Treiber — ohne ihn bleibt auch die Live-Anzeige für Takt und Temperatur leer. Der Assistent lädt und installiert ihn; danach muss PboStudio einmal neu starten."
+                : "PboStudio addresses the processor directly, which Windows needs a kernel driver for. Without it the live clock and temperature readouts stay empty too. The assistant downloads and installs it; PboStudio then has to restart once.");
 
     /// <summary>
     /// Step two: something has to generate the load. Names what the two engines are, since the
@@ -134,12 +143,15 @@ public static class NextStepService
         new(ProfileId.HeavyFfts, TuningStage.InstallEngine,
             isGerman ? "Schritt 2: Testprogramm laden" : "Step 2: download a stress engine",
             isGerman
-                ? "Die Last erzeugt ein externes Programm: Prime95 rechnet Primzahlen und belastet den Kern bei Höchsttakt, y-cruncher berechnet Pi und beansprucht Cache und Speicher ganz anders. Beide sind kostenlos, der Assistent lädt sie von den Seiten der Hersteller. Eines reicht zum Starten — beide zu haben ist besser, weil ein Kern das eine bestehen und am anderen scheitern kann."
-                : "The load comes from an external program: Prime95 computes primes and stresses the core at peak clock, y-cruncher computes pi and leans on cache and memory in a completely different way. Both are free and the assistant fetches them from the vendors' own pages. One is enough to start — having both is better, because a core can pass one and fail the other.",
+                ? "Die Last erzeugt ein externes Programm. Eines reicht zum Starten."
+                : "The load comes from an external program. One is enough to start.",
             UseAutoTuner: false,
             Cores: [],
             Action: NextStepAction.OpenSetup,
-            ShowProfile: false);
+            ShowProfile: false,
+            Detail: isGerman
+                ? "Prime95 rechnet Primzahlen und belastet den Kern bei Höchsttakt; y-cruncher berechnet Pi und beansprucht Cache und Speicher ganz anders. Beide sind kostenlos und werden von den Seiten der Hersteller geladen. Beide zu haben ist besser, weil ein Kern das eine bestehen und am anderen scheitern kann."
+                : "Prime95 computes primes and stresses the core at peak clock; y-cruncher computes pi and leans on cache and memory in a completely different way. Both are free and come from the vendors' own pages. Having both is better, because a core can pass one and fail the other.");
 
     /// <summary>
     /// Nothing measured yet, so the first run is a plain validation of whatever is set — and
@@ -153,8 +165,11 @@ public static class NextStepService
         new(ProfileId.RecommendedCombo, TuningStage.Discover,
             isGerman ? "Schritt 3: den ersten Testlauf machen" : "Step 3: make the first run",
             isGerman
-                ? $"Für den {cpuName} ist noch nichts gemessen. „Heavy FFTs“ ist der Standardeinstieg: SSE deckt instabile Kerne am schnellsten auf und erzeugt dabei die geringste Hitze{(isX3d ? " — bei einem X3D wichtig, weil der gestapelte Cache empfindlich auf Temperatur reagiert" : "")}.\n\nDieser Lauf verändert nichts dauerhaft: er belastet jeden Kern nacheinander mit den Werten, die gerade anliegen, und hält fest, welcher durchfällt. Erst danach wird über neue Werte entschieden — und auch die gelten nur bis zum nächsten Neustart, solange du sie nicht ins BIOS überträgst."
-                : $"Nothing has been measured on the {cpuName} yet. “Heavy FFTs” is the standard opener: SSE exposes unstable cores fastest and produces the least heat doing it{(isX3d ? " — which matters on an X3D, whose stacked cache is sensitive to temperature" : "")}.\n\nThis run changes nothing permanently: it loads each core in turn at whatever values are currently set and records which ones fail. New values come after that — and even those only last until the next reboot unless you carry them into the BIOS.",
+                ? $"Für den {cpuName} ist noch nichts gemessen. Dieser Lauf verändert nichts dauerhaft — er prüft nur, was gerade anliegt."
+                : $"Nothing has been measured on the {cpuName} yet. This run changes nothing permanently — it only checks what is currently set.",
+            Detail: isGerman
+                ? $"Der Standard ist der Wechsel beider Testprogramme: erst Prime95 SSE für Höchsttakt und Vdroop-Grenzen, danach y-cruncher für Vektor- und Cache-Last. Ein Kern kann das eine bestehen und am anderen scheitern.{(isX3d ? " SSE steht vorn, was bei einem X3D hilft: der gestapelte Cache reagiert empfindlich auf Temperatur." : "")} Neue Werte gelten nur bis zum Neustart, solange sie nicht im BIOS stehen."
+                : $"The standard is to alternate both engines: Prime95 SSE first, for peak boost and Vdroop limits, then y-cruncher for vector and cache load. A core can pass one and fail the other.{(isX3d ? " SSE leads, which helps on an X3D: the stacked cache is sensitive to temperature." : "")} New values only last until the next reboot unless they go into the BIOS.",
             UseAutoTuner: false,
             Cores: []);
 
@@ -180,14 +195,15 @@ public static class NextStepService
                 ? $"Auto-Tuner auf {(open.Count == 1 ? $"Kern {list}" : $"die Kerne {list}")} ansetzen"
                 : $"Point the auto-tuner at {(open.Count == 1 ? $"core {list}" : $"cores {list}")}",
             isGerman
-                ? $"{(open.Count == 1 ? "Dieser Kern hält" : "Diese Kerne halten")} noch einen milderen Wert, als nach bisherigem Stand möglich wäre. "
-                  + $"{(few ? "Die übrigen Kerne sind ausgereizt und bleiben außen vor — das spart den Großteil der Laufzeit. " : "")}"
-                  + "Der Auto-Tuner senkt schrittweise ab und fixiert den ersten Wert, der hält; Werte, bei denen ein Kern schon einmal durchgefallen ist, fasst er nicht mehr an.\n\n"
-                  + "Hier läuft bewusst nur Prime95, nicht der Wechsel mit y-cruncher: ein Kern, der in der ersten Phase fixiert wird, ist aus der zweiten ausgeschlossen und bekäme y-cruncher gar nicht mehr zu sehen. Die zweite Lastart kommt beim Absichern danach."
-                : $"{(open.Count == 1 ? "This core holds" : "These cores hold")} a milder value than what is currently known to be reachable. "
-                  + $"{(few ? "The rest are maxed out and stay out of the run, which saves most of the runtime. " : "")}"
-                  + "The auto-tuner steps down and locks the first value that holds; values a core has already failed at are off limits.\n\n"
-                  + "This stage deliberately runs Prime95 alone rather than alternating with y-cruncher: a core locked in the first phase is excluded from the second and would never see y-cruncher at all. The second load type comes with the confirmation run afterwards.",
+                ? $"{(open.Count == 1 ? "Dieser Kern hält" : "Diese Kerne halten")} noch einen milderen Wert als möglich."
+                  + $"{(few ? " Die übrigen sind ausgereizt und bleiben draußen." : "")}"
+                : $"{(open.Count == 1 ? "This core holds" : "These cores hold")} a milder value than it could."
+                  + $"{(few ? " The rest are maxed out and stay out of the run." : "")}",
+            Detail: isGerman
+                ? "Der Auto-Tuner senkt schrittweise ab und fixiert den ersten Wert, der hält. Werte, bei denen ein Kern schon einmal durchgefallen ist, fasst er nicht mehr an.\n\n"
+                  + "Hier läuft nur Prime95: ein Kern, der in der ersten Phase fixiert wird, ist aus der zweiten ausgeschlossen und bekäme y-cruncher gar nicht zu sehen. Die zweite Lastart kommt beim Absichern."
+                : "The auto-tuner steps down and locks the first value that holds. Values a core has already failed at are off limits.\n\n"
+                  + "Only Prime95 runs here: a core locked in the first phase is excluded from the second and would never see y-cruncher. The second load type comes with the confirmation run.",
             UseAutoTuner: true,
             Cores: open);
     }
@@ -200,10 +216,13 @@ public static class NextStepService
         new(ProfileId.Overnight, TuningStage.Confirm,
             isGerman ? "Jetzt absichern" : "Now confirm it",
             isGerman
-                ? "Jeder Kern steht auf dem aggressivsten Wert, der nach bisherigem Stand zulässig ist. Der Absicherungslauf fährt SSE über alle FFT-Größen, danach AVX, AVX2 und y-cruncher — vier Lastarten, beide Testprogramme. Erst das rechtfertigt, die Werte ins BIOS zu übertragen."
-                + (isX3d ? " Behalte die Temperatur im Auge: der AVX2-Abschnitt ist auf einem X3D der heißeste Teil des Laufs." : "")
-                : "Every core sits at the most aggressive value currently known to be allowed. The overnight run sweeps SSE across every FFT size, then AVX, AVX2 and y-cruncher — four load types across both engines. Only that justifies committing the values to the BIOS."
-                + (isX3d ? " Watch the temperature: on an X3D the AVX2 leg is the hottest part of the run." : ""),
+                ? "Jeder Kern steht auf dem aggressivsten Wert, der zulässig ist. Jetzt fehlt nur noch der Beweis."
+                : "Every core sits at the most aggressive value allowed. All that is left is proving it.",
+            Detail: isGerman
+                ? "Der Absicherungslauf fährt SSE über alle FFT-Größen, danach AVX, AVX2 und y-cruncher — vier Lastarten, beide Testprogramme. Erst das rechtfertigt, die Werte ins BIOS zu übertragen."
+                  + (isX3d ? " Behalte die Temperatur im Auge: der AVX2-Abschnitt ist auf einem X3D der heißeste Teil." : "")
+                : "The overnight run sweeps SSE across every FFT size, then AVX, AVX2 and y-cruncher — four load types across both engines. Only that justifies committing the values to the BIOS."
+                  + (isX3d ? " Watch the temperature: on an X3D the AVX2 leg is the hottest part." : ""),
             UseAutoTuner: false,
             Cores: []);
 }

@@ -120,6 +120,7 @@ public sealed class CoreRow : INotifyPropertyChanged
             Raise(nameof(HasKnownBad));
             Raise(nameof(KnowledgeGlyph));
             Raise(nameof(KnowledgeTooltip));
+            RaiseAdvisory();
         }
     }
     private CoreKnowledge? _knowledge;
@@ -332,6 +333,80 @@ public sealed class CoreRow : INotifyPropertyChanged
         _ => "#1A1E2B",
     });
 
+    // ─────────────────────────── advisory ───────────────────────────
+
+    /// <summary>
+    /// How many WHEA errors this core has raised since the baseline was reset.
+    /// </summary>
+    public int WheaCount
+    {
+        get => _wheaCount;
+        set { _wheaCount = value; RaiseAdvisory(); }
+    }
+    private int _wheaCount;
+
+    /// <summary>
+    /// One line of plain text replacing what used to be four separate marks on the row: a
+    /// known-bad glyph, a risk glyph, a risk bar and a delta arrow, all saying overlapping
+    /// things in four different vocabularies. Whichever fact matters most wins the space.
+    /// </summary>
+    public string Advisory
+    {
+        get
+        {
+            if (_wheaCount > 0)
+                return LocalizationService.IsGerman
+                    ? $"{_wheaCount}× Hardwarefehler"
+                    : $"{_wheaCount}× hardware error";
+
+            if (_knowledge?.WorstFailed is { } bad)
+                return LocalizationService.IsGerman
+                    ? $"stürzte ab bei {bad}"
+                    : $"crashed at {bad}";
+
+            if (_margin <= MinLimit && _margin < 0)
+                return LocalizationService.IsGerman ? "am Chip-Limit" : "at the chip limit";
+
+            return "";
+        }
+    }
+
+    public bool HasAdvisory => Advisory.Length > 0;
+
+    /// <summary>Red for something that actually failed, amber for a boundary not yet crossed.</summary>
+    public IBrush AdvisoryForeground => SolidColorBrush.Parse(
+        _wheaCount > 0 || _knowledge?.WorstFailed is not null ? "#FCA5A5" : "#FCD34D");
+
+    public IBrush AdvisoryBackground => SolidColorBrush.Parse(
+        _wheaCount > 0 || _knowledge?.WorstFailed is not null ? "#2E1418" : "#241C08");
+
+    public string AdvisoryTooltip
+    {
+        get
+        {
+            if (_wheaCount > 0)
+                return LocalizationService.Pick(
+                    $"Dieser Kern hat seit dem letzten Zurücksetzen {_wheaCount} korrigierte Hardwarefehler gemeldet. Das ist das früheste Anzeichen für ein zu aggressives Offset — oft lange bevor etwas abstürzt.",
+                    $"This core has reported {_wheaCount} corrected hardware errors since the last reset. That is the earliest sign of a too-aggressive offset, often long before anything crashes.");
+
+            if (_knowledge is not null && _knowledge.WorstFailed is not null)
+                return CoreKnowledgeService.Describe(_knowledge, ChipLimit, LocalizationService.IsGerman);
+
+            return LocalizationService.Pick(
+                $"Dieser Kern steht auf dem tiefsten Wert, den der Prozessor zulässt ({MinLimit}). Tiefer geht nicht.",
+                $"This core sits at the lowest value the processor allows ({MinLimit}). There is nothing below it.");
+        }
+    }
+
+    private void RaiseAdvisory()
+    {
+        Raise(nameof(Advisory));
+        Raise(nameof(HasAdvisory));
+        Raise(nameof(AdvisoryForeground));
+        Raise(nameof(AdvisoryBackground));
+        Raise(nameof(AdvisoryTooltip));
+    }
+
     public void RefreshLocalization()
     {
         Raise(nameof(CoreName));
@@ -343,6 +418,7 @@ public sealed class CoreRow : INotifyPropertyChanged
         Raise(nameof(LockedTooltip));
         Raise(nameof(RiskTooltip));
         Raise(nameof(KnowledgeTooltip));
+        RaiseAdvisory();
         RaiseStatusDerived();
     }
 
@@ -357,6 +433,7 @@ public sealed class CoreRow : INotifyPropertyChanged
         Raise(nameof(IsHighRisk));
         Raise(nameof(DeltaLabel));
         Raise(nameof(IsChanged));
+        RaiseAdvisory();
     }
 
     private void RaiseStatusDerived()
@@ -931,11 +1008,16 @@ public partial class MainWindow : Window
         RecoveryTitle.Text = LocalizationService.Pick(
             $"Unerwarteter System-Neustart bei Kern {core}",
             $"Unexpected system restart on core {core}");
+        // Just what happened. The number this panel proposes lives on its own button, so it
+        // cannot be read as a third opinion alongside the advisory on the row and the
+        // recommendation in the right-hand panel.
         RecoveryText.Text = LocalizationService.Pick(
-            $"Der letzte Lauf wurde in Durchgang {_interruptedState.CurrentIteration} auf Kern {core} abgebrochen (Curve Optimizer: {currentMargin}). " +
-            $"Das ist das typische Bild eines instabilen Kerns.\nEmpfehlung: Den Wert für Kern {core} um 4 Punkte entschärfen ({currentMargin} → {currentMargin + 4}) und den Lauf mit den restlichen Kernen fortsetzen.",
-            $"The last run was cut short during pass {_interruptedState.CurrentIteration} on core {core} (Curve Optimizer: {currentMargin}). " +
-            $"That is the classic signature of an unstable core.\nRecommendation: back core {core} off by 4 points ({currentMargin} → {currentMargin + 4}) and resume with the remaining cores.");
+            $"Durchgang {_interruptedState.CurrentIteration} bei Curve Optimizer {currentMargin} — das typische Bild eines instabilen Kerns.",
+            $"Pass {_interruptedState.CurrentIteration} at Curve Optimizer {currentMargin} — the classic signature of an unstable core.");
+
+        ResumeRunButton.Content = LocalizationService.Pick(
+            $"✓ Auf {currentMargin + 4} entschärfen und fortsetzen",
+            $"✓ Back off to {currentMargin + 4} and resume");
 
         RememberCrash(core, currentMargin);
 
@@ -1036,18 +1118,6 @@ public partial class MainWindow : Window
         _interruptedState = null;
     }
 
-    private CpuTuningRecommendation? _currentRecommendation;
-    private bool _recommendationFineMode;
-
-    private void OnToggleRecommendationPrecision(object? sender, RoutedEventArgs e)
-    {
-        _recommendationFineMode = !_recommendationFineMode;
-        RecommendationModeButton.Content = LocalizationService.Get(_recommendationFineMode ? "FineMode" : "CoarseMode");
-        Log(LocalizationService.Pick(
-            $"WHEA-Korrektur umgestellt auf: {(_recommendationFineMode ? "Fein (+2)" : "Grob (+4)")}",
-            $"WHEA mitigation switched to: {(_recommendationFineMode ? "Fine (+2)" : "Coarse (+4)")}"));
-        UpdateSmartRecommendations();
-    }
 
     // ══════════════════════════════════════════════════════════════
     // Localization
@@ -1089,11 +1159,6 @@ public partial class MainWindow : Window
         DismissRecoveryButton.Content = LocalizationService.Get("RecoveryDismiss");
 
         // Recommendation card
-        RecommendationTitleText.Text = LocalizationService.Get("SmartRecommendationTitle");
-        RecommendationModeButton.Content = LocalizationService.Get(_recommendationFineMode ? "FineMode" : "CoarseMode");
-        Tip(RecommendationModeButton, "CoarseFineTooltip");
-        ApplyRecommendationButton.Content = LocalizationService.Get("ApplyValues");
-        Tip(ApplyRecommendationButton, "ApplyValuesTooltip");
         ResetWheaButton.Content = LocalizationService.Get("ResetWhea");
         Tip(ResetWheaButton, "ResetWheaTooltip");
 
@@ -1124,6 +1189,7 @@ public partial class MainWindow : Window
         TestRunningText.Text = LocalizationService.Get("TestRunning");
 
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
+        NextStepDetailHint.Text = LocalizationService.Get("NextStepDetailHint");
         ShowAllProfilesButton.Content = LocalizationService.Get(
             ShowAllProfilesButton.IsChecked == true ? "HideAllProfiles" : "ShowAllProfiles");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
@@ -1420,24 +1486,16 @@ public partial class MainWindow : Window
             whea = whea.Where(e => e.Time > resetTime.Value).ToList();
         }
 
-        var currentMargins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
-        _currentRecommendation = CpuRecommendationService.GetRecommendation(
-            _smu.CpuName, _cores, whea, currentMargins, _recommendationFineMode, LocalizationService.IsGerman);
-        RecommendationText.Text = _currentRecommendation.SummaryAdvice;
+        // Per-core error counts land on the row they belong to. They used to be collected into
+        // a paragraph in a card of its own, next to two other panels proposing different
+        // numbers for the same core.
+        foreach (var row in _rows)
+            row.WheaCount = whea.Count(e =>
+                e.ApicId is { } id && WheaWatcher.CoreForApicId(id, _cores) == row.Index);
 
-        // The prominent recommendation lives in its own card now, and is derived rather than
-        // matched back from a display string.
+        ResetWheaButton.IsVisible = _rows.Any(r => r.WheaCount > 0);
+
         UpdateNextStep();
-
-        if (_currentRecommendation.WheaCorrections.Count > 0)
-        {
-            WheaRecommendationText.IsVisible = true;
-            WheaRecommendationText.Text = string.Join("\n", _currentRecommendation.WheaCorrections);
-        }
-        else
-        {
-            WheaRecommendationText.IsVisible = false;
-        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1468,6 +1526,10 @@ public partial class MainWindow : Window
 
         NextStepHeadline.Text = _nextStep.Headline;
         NextStepReason.Text = _nextStep.Reason;
+
+        // The mechanics live in the tooltip now; the card carries one sentence.
+        NextStepDetailHint.IsVisible = _nextStep.Detail.Length > 0;
+        ToolTip.SetTip(NextStepCard, _nextStep.Detail);
 
         // On the setup stages there is no profile to name yet, and showing one would suggest
         // something is ready to run.
@@ -1557,25 +1619,8 @@ public partial class MainWindow : Window
 
         bool open = ShowAllProfilesButton.IsChecked == true;
         ProfilePickerPanel.IsVisible = open;
+        NextStepDetailHint.Text = LocalizationService.Get("NextStepDetailHint");
         ShowAllProfilesButton.Content = LocalizationService.Get(open ? "HideAllProfiles" : "ShowAllProfiles");
-    }
-
-    private void OnApplySmartRecommendation(object? sender, RoutedEventArgs e)
-    {
-        if (_currentRecommendation is null) return;
-
-        int count = 0;
-        foreach (var row in _rows)
-        {
-            if (_currentRecommendation.SuggestedCoreMargins.TryGetValue(row.Index, out int suggested))
-            {
-                row.Margin = suggested;
-                count++;
-            }
-        }
-        Log(LocalizationService.Pick(
-            $"💡 Empfehlung für {_smu.CpuName} auf {count} Kerne angewendet.",
-            $"💡 Applied the recommendation for {_smu.CpuName} to {count} cores."), LogLevel.Success);
     }
 
     private async void OnCopyBiosValues(object? sender, RoutedEventArgs e)
@@ -3176,7 +3221,6 @@ public partial class MainWindow : Window
 
         ApplyButton.IsEnabled = !running && _smu.IsAvailable;
         CopyBiosButton.IsEnabled = !running;
-        ApplyRecommendationButton.IsEnabled = !running;
         SetAllMaxButton.IsEnabled = !running;
         SetAllOriginalButton.IsEnabled = !running;
 

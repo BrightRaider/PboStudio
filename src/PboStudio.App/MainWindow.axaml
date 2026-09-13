@@ -52,11 +52,18 @@
           <!-- Watchdog + live metrics. The watchdog is width-capped and trims, so it can never
                squeeze the telemetry chips off the row; the chips wrap instead of clipping. -->
           <DockPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0" LastChildFill="True">
+            <!-- The reset moved here from the removed recommendation card: it belongs next to
+                 the count it clears, not in a panel of its own. -->
             <Border x:Name="WatchdogBadgeBorder" DockPanel.Dock="Left" Classes="panel success"
-                    Padding="9,5" MaxWidth="360" Margin="0,0,10,0" VerticalAlignment="Center">
-              <TextBlock x:Name="WatchdogText" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
-                         Foreground="{StaticResource AccentPrimary}" TextTrimming="CharacterEllipsis"
-                         Text="🛡️ WATCHDOG: Monitoring active" />
+                    Padding="9,5" MaxWidth="420" Margin="0,0,10,0" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock x:Name="WatchdogText" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentPrimary}" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           Text="🛡️ WATCHDOG: Monitoring active" />
+                <Button x:Name="ResetWheaButton" Classes="ghost" Click="OnResetWheaBaseline"
+                        IsVisible="False" VerticalAlignment="Center" Padding="6,2" />
+              </StackPanel>
             </Border>
 
             <WrapPanel x:Name="MetricStrip" ItemWidth="NaN" VerticalAlignment="Center">
@@ -214,29 +221,10 @@
       <Border Grid.Column="0" Classes="card" Padding="12" Margin="0,0,10,0">
         <DockPanel>
 
-          <!-- Smart recommendation -->
-          <Border DockPanel.Dock="Top" x:Name="RecommendationCard" Classes="panel success"
-                  Padding="9,6" Margin="0,0,0,8">
-            <StackPanel Spacing="4">
-              <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                  <TextBlock Text="💡" FontSize="13" VerticalAlignment="Center" />
-                  <TextBlock x:Name="RecommendationTitleText" Classes="sectionTitle"
-                             Foreground="{StaticResource AccentPrimaryHi}" VerticalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                  <Button x:Name="RecommendationModeButton" Classes="secondary" Click="OnToggleRecommendationPrecision" />
-                  <Button x:Name="ApplyRecommendationButton" Classes="primary" Click="OnApplySmartRecommendation" />
-                  <Button x:Name="ResetWheaButton" Classes="secondary" Click="OnResetWheaBaseline" />
-                </StackPanel>
-              </Grid>
-
-              <TextBlock x:Name="RecommendationText" Classes="body" FontSize="{StaticResource FontCaption}" />
-
-              <TextBlock x:Name="WheaRecommendationText" Classes="body" FontSize="{StaticResource FontCaption}"
-                         Foreground="{StaticResource StateDanger}" IsVisible="False" />
-            </StackPanel>
-          </Border>
+          <!-- The "smart recommendation" card used to sit here: a per-generation lookup that
+               announced a target value for every Zen 3 chip alike, next to two other panels
+               proposing different numbers for the same core. Its WHEA counts now appear on the
+               row they belong to, and the single recommendation lives in the right-hand panel. -->
 
           <!-- Table header. ColumnDefinitions are assigned in the constructor from the same
                CoreRow.ColumnsFor() the row template binds to, because Avalonia has no
@@ -335,11 +323,6 @@
                                      ToolTip.Tip="{Binding QualityTooltip}" />
                           <TextBlock Text="🔒" IsVisible="{Binding IsLocked}" FontSize="11"
                                      VerticalAlignment="Center" ToolTip.Tip="{Binding LockedTooltip}" />
-                          <!-- This core has a value on record that failed; the auto-tuner's
-                               floor is raised accordingly and the mark says why. -->
-                          <TextBlock Text="{Binding KnowledgeGlyph}" IsVisible="{Binding HasKnownBad}"
-                                     FontSize="10" Foreground="{StaticResource StateWarning}"
-                                     VerticalAlignment="Center" ToolTip.Tip="{Binding KnowledgeTooltip}" />
                         </StackPanel>
 
                         <!-- FormatString carries the sign: a Curve Optimizer value of +5 shown
@@ -352,20 +335,25 @@
                                        ToolTip.Tip="{Binding MarginTooltip}"
                                        VerticalAlignment="Center" />
 
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
-                                    VerticalAlignment="Center" HorizontalAlignment="Center">
-                          <!-- Second channel for the risk bar, which is otherwise colour only -->
-                          <TextBlock Text="{Binding RiskGlyph}" IsVisible="{Binding IsHighRisk}"
-                                     Foreground="{Binding RiskBrush}" FontSize="{StaticResource FontCaption}"
-                                     VerticalAlignment="Center" ToolTip.Tip="{Binding RiskTooltip}" />
-                          <TextBlock Text="{Binding DeltaLabel}"
-                                     Foreground="{Binding DeltaBrush}" FontSize="{StaticResource FontCaption}"
-                                     FontWeight="SemiBold" VerticalAlignment="Center"
-                                     ToolTip.Tip="{Binding DeltaTooltip}" />
-                        </StackPanel>
+                        <TextBlock Grid.Column="2" Text="{Binding DeltaLabel}"
+                                   Foreground="{Binding DeltaBrush}" FontSize="{StaticResource FontCaption}"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   HorizontalAlignment="Center"
+                                   ToolTip.Tip="{Binding DeltaTooltip}" />
 
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0"
                                     VerticalAlignment="Center">
+
+                          <!-- One line of plain text instead of four marks. A known-bad value, a
+                               WHEA count and the chip limit used to show up as separate glyphs
+                               plus a colour-only bar, all saying overlapping things at once. -->
+                          <Border Classes="chip tiny" IsVisible="{Binding HasAdvisory}"
+                                  Background="{Binding AdvisoryBackground}" BorderBrush="Transparent"
+                                  ToolTip.Tip="{Binding AdvisoryTooltip}">
+                            <TextBlock Text="{Binding Advisory}" FontSize="10"
+                                       Foreground="{Binding AdvisoryForeground}" />
+                          </Border>
+
                           <Border Classes="statusPill" Background="{Binding StatusBackground}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                               <TextBlock Text="{Binding StatusGlyph}" FontSize="{StaticResource FontCaption}"
@@ -402,11 +390,6 @@
                         </StackPanel>
                       </Grid>
 
-                      <!-- How far this core has travelled from its start value toward the chip limit -->
-                      <ProgressBar Height="2" Minimum="0" Maximum="1" Value="{Binding RiskFraction}"
-                                   Foreground="{Binding RiskBrush}" Background="Transparent"
-                                   Margin="0,1,0,0" CornerRadius="1"
-                                   ToolTip.Tip="{Binding RiskTooltip}" />
                     </StackPanel>
                   </Border>
                 </DataTemplate>
@@ -496,6 +479,8 @@
 
                     <TextBlock x:Name="NextStepReason" Classes="body"
                                FontSize="{StaticResource FontCaption}" LineHeight="16" />
+
+                    <TextBlock x:Name="NextStepDetailHint" Classes="caption" IsVisible="False" />
 
                     <Button x:Name="ApplyNextStepButton" Classes="primary" HorizontalAlignment="Stretch"
                             MinHeight="34" Click="OnApplyNextStep" />

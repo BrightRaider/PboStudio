@@ -84,6 +84,7 @@ public static class LocalizationService
             "RecommendedProfile" => isDe ? "Empfohlenes Profil" : "Recommended profile",
 
             // ---- The one recommendation ----
+            "NextStepDetailHint" => isDe ? "Details im Tooltip" : "Details in the tooltip",
             "NextStepApply" => isDe ? "✓ Diesen Lauf einrichten" : "✓ Set this run up",
             "NextStepOpenSetup" => isDe ? "⚙️ Assistent öffnen" : "⚙️ Open the assistant",
             "NextStepApplyTuner" => isDe ? "✓ Auto-Tuner so einrichten" : "✓ Set the auto-tuner up like this",

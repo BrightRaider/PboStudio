@@ -77,11 +77,11 @@ public class NextStepServiceTests
         var driver = Recommend(Plain, AllAt(0), driverReady: false);
         var engine = Recommend(Plain, AllAt(0), engineReady: false);
 
-        Assert.Contains("Curve Optimizer", driver.Reason);
-        Assert.Contains("restart", driver.Reason);
+        Assert.Contains("CO value", Explanation(driver));
+        Assert.Contains("restart", Explanation(driver));
 
-        Assert.Contains("Prime95", engine.Reason);
-        Assert.Contains("y-cruncher", engine.Reason);
+        Assert.Contains("Prime95", Explanation(engine));
+        Assert.Contains("y-cruncher", Explanation(engine));
     }
 
     /// <summary>A first run must say that it changes nothing permanently.</summary>
@@ -91,8 +91,8 @@ public class NextStepServiceTests
         var step = Recommend(Plain, AllAt(0));
 
         Assert.Equal(TuningStage.Discover, step.Stage);
-        Assert.Contains("nothing permanently", step.Reason);
-        Assert.Contains("BIOS", step.Reason);
+        Assert.Contains("nothing permanently", Explanation(step));
+        Assert.Contains("BIOS", Explanation(step));
     }
 
     [Fact]
@@ -102,6 +102,13 @@ public class NextStepServiceTests
         Assert.Contains("Step 2", Recommend(Plain, AllAt(0), engineReady: false).Headline);
         Assert.Contains("Step 3", Recommend(Plain, AllAt(0)).Headline);
     }
+
+    /// <summary>
+    /// Everything the card can tell the reader — the one line it shows plus the mechanics in
+    /// its tooltip. The split between the two is a presentation decision; these tests care that
+    /// the explanation exists somewhere the reader can reach it.
+    /// </summary>
+    private static string Explanation(NextStep step) => step.Reason + " " + step.Detail;
 
     private static Dictionary<int, int> AllAt(int value, int cores = 8) =>
         Enumerable.Range(0, cores).ToDictionary(i => i, _ => value);
@@ -149,7 +156,7 @@ public class NextStepServiceTests
 
         var profile = TestProfiles.For(Plain, isGerman: false).Single(p => p.Id == step.Profile);
         Assert.Single(profile.Phases);
-        Assert.Contains("y-cruncher", step.Reason);
+        Assert.Contains("y-cruncher", Explanation(step));
     }
 
     [Fact]
@@ -179,7 +186,7 @@ public class NextStepServiceTests
         // Whatever it picks, the first phase must be SSE rather than AVX2.
         var profile = TestProfiles.For(X3d, isGerman: false).Single(p => p.Id == step.Profile);
         Assert.Equal(Prime95Mode.Sse, profile.Mode);
-        Assert.Contains("X3D", step.Reason);
+        Assert.Contains("X3D", Explanation(step));
     }
 
     // ── narrowing ────────────────────────────────────────────────
@@ -269,7 +276,7 @@ public class NextStepServiceTests
         var step = Recommend(X3d, AllAt(-30),
             Enumerable.Range(0, 8).ToDictionary(i => i, _ => new CoreKnowledge(BestPassed: -30)));
 
-        Assert.Contains("X3D", step.Reason);
+        Assert.Contains("X3D", Explanation(step));
     }
 
     // ── identity, not names ──────────────────────────────────────
