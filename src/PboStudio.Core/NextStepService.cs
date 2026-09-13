@@ -197,7 +197,7 @@ public static class NextStepService
             isGerman
                 ? $"{(open.Count == 1 ? "Dieser Kern hält" : "Diese Kerne halten")} noch einen milderen Wert als möglich."
                   + $"{(few ? " Die übrigen sind ausgereizt und bleiben draußen." : "")}"
-                : $"{(open.Count == 1 ? "This core holds" : "These cores hold")} a milder value than it could."
+                : $"{(open.Count == 1 ? "This core holds" : "These cores hold")} a milder value than {(open.Count == 1 ? "it" : "they")} could."
                   + $"{(few ? " The rest are maxed out and stay out of the run." : "")}",
             Detail: isGerman
                 ? "Der Auto-Tuner senkt schrittweise ab und fixiert den ersten Wert, der hält. Werte, bei denen ein Kern schon einmal durchgefallen ist, fasst er nicht mehr an.\n\n"

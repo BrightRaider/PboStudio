@@ -89,7 +89,7 @@ public sealed class CoreRow : INotifyPropertyChanged
     public static double WidthForCcd(bool multiCcd) => multiCcd ? 176 : 128;
 
     public static string ColumnsFor(bool multiCcd) =>
-        $"{WidthForCcd(multiCcd)},126,50,*";
+        $"{WidthForCcd(multiCcd)},126,26,*";
 
     public CoreQualityRank QualityRank { get; set; } = CoreQualityRank.Standard;
 
@@ -354,15 +354,17 @@ public sealed class CoreRow : INotifyPropertyChanged
     {
         get
         {
-            if (_wheaCount > 0)
-                return LocalizationService.IsGerman
-                    ? $"{_wheaCount}× Hardwarefehler"
-                    : $"{_wheaCount}× hardware error";
-
+            // A crash outranks a corrected-error count: one took the machine down, the other
+            // is a warning the processor absorbed.
             if (_knowledge?.WorstFailed is { } bad)
                 return LocalizationService.IsGerman
                     ? $"stürzte ab bei {bad}"
                     : $"crashed at {bad}";
+
+            if (_wheaCount > 0)
+                return LocalizationService.IsGerman
+                    ? $"{_wheaCount}× Hardwarefehler"
+                    : $"{_wheaCount}× hardware error";
 
             if (_margin <= MinLimit && _margin < 0)
                 return LocalizationService.IsGerman ? "am Chip-Limit" : "at the chip limit";
@@ -384,13 +386,18 @@ public sealed class CoreRow : INotifyPropertyChanged
     {
         get
         {
+            if (_knowledge is not null && _knowledge.WorstFailed is not null)
+                return CoreKnowledgeService.Describe(_knowledge, ChipLimit, LocalizationService.IsGerman)
+                    + (_wheaCount > 0
+                        ? LocalizationService.Pick(
+                            $" Dazu {_wheaCount} korrigierte Hardwarefehler seit dem letzten Zurücksetzen.",
+                            $" Plus {_wheaCount} corrected hardware errors since the last reset.")
+                        : "");
+
             if (_wheaCount > 0)
                 return LocalizationService.Pick(
                     $"Dieser Kern hat seit dem letzten Zurücksetzen {_wheaCount} korrigierte Hardwarefehler gemeldet. Das ist das früheste Anzeichen für ein zu aggressives Offset — oft lange bevor etwas abstürzt.",
                     $"This core has reported {_wheaCount} corrected hardware errors since the last reset. That is the earliest sign of a too-aggressive offset, often long before anything crashes.");
-
-            if (_knowledge is not null && _knowledge.WorstFailed is not null)
-                return CoreKnowledgeService.Describe(_knowledge, ChipLimit, LocalizationService.IsGerman);
 
             return LocalizationService.Pick(
                 $"Dieser Kern steht auf dem tiefsten Wert, den der Prozessor zulässt ({MinLimit}). Tiefer geht nicht.",
@@ -1504,6 +1511,12 @@ public partial class MainWindow : Window
 
     private NextStep? _nextStep;
 
+    /// <summary>"about 1:40 hrs", or "up to" when the auto-tuner decides when to stop.</summary>
+    private string DurationLabel(TimeSpan span) =>
+        _nextStep?.UseAutoTuner == true || AutoRuntimeBox?.IsChecked == true
+            ? LocalizationService.Pick($"höchstens {span:h\\:mm} Std.", $"up to {span:h\\:mm} hrs")
+            : LocalizationService.Pick($"ca. {span:h\\:mm} Std.", $"about {span:h\\:mm} hrs");
+
     /// <summary>Index of a profile by identity. Nothing is matched by display name any more.</summary>
     private int IndexOfProfile(ProfileId id) =>
         ProfileBox.ItemsSource is IEnumerable<TestProfile> p
@@ -1538,7 +1551,18 @@ public partial class MainWindow : Window
             && profiles.FirstOrDefault(p => p.Id == _nextStep.Profile) is { } profile)
         {
             NextStepProfileName.Text = profile.Name;
-            NextStepDetail.Text = profile.EngineSummary;
+
+            // How long this will take is the number a person weighs before pressing start.
+            // It used to live below the fold in a panel of its own.
+            var estimate = EstimateTotalRuntime(
+                _nextStep.UseAutoTuner ? AutoTunerMode.Fein : null,
+                chipLimit,
+                profile.Phases.Count);
+
+            NextStepDetail.Text = estimate > TimeSpan.Zero
+                ? profile.EngineSummary + "\n"
+                  + LocalizationService.Pick("Dauer: ", "Takes: ") + DurationLabel(estimate)
+                : profile.EngineSummary;
         }
 
         // Setup stages get the warning tint: they are a blocker, not a suggestion.

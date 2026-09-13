@@ -229,7 +229,7 @@
           <!-- Table header. ColumnDefinitions are assigned in the constructor from the same
                CoreRow.ColumnsFor() the row template binds to, because Avalonia has no
                SharedSizeGroup and two independent "Auto" columns drifted apart. -->
-          <Grid DockPanel.Dock="Top" x:Name="CoreTableHeader" ColumnDefinitions="128,126,50,*" Margin="8,0,4,6">
+          <Grid DockPanel.Dock="Top" x:Name="CoreTableHeader" ColumnDefinitions="128,126,26,*" Margin="8,0,4,6">
             <StackPanel Grid.Column="0" x:Name="HeaderLabelSpacer" Orientation="Horizontal"
                         Spacing="6" VerticalAlignment="Center">
               <!-- Not IsThreeState: a click must only ever mean all-on or all-off. The
@@ -303,7 +303,7 @@
                       <!-- Column 0 is Auto, but the panel inside it is pinned to
                            CoreRow.LabelWidth - the same value the header grid is built from in
                            the constructor. ColumnDefinitions itself cannot be bound. -->
-                      <Grid ColumnDefinitions="Auto,126,50,*">
+                      <Grid ColumnDefinitions="Auto,126,26,*">
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6"
                                     Width="{Binding LabelWidth}" VerticalAlignment="Center">
