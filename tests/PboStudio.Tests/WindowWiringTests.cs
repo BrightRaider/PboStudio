@@ -156,6 +156,29 @@ public class WindowWiringTests
             Assert.Contains(control, advanced);
     }
 
+    /// <summary>
+    /// How long it will take belongs above the start button, not inside a tab: choosing Auto or
+    /// Advanced used to mean starting a run of unknown length, because the only estimate on
+    /// screen lived in the Tests tab. One control, outside all three, so it cannot become three
+    /// copies that disagree.
+    /// </summary>
+    [Fact]
+    public void TheRuntimeEstimateSitsOutsideTheTabs()
+    {
+        var tabs = ByTab();
+
+        foreach (var tab in tabs.Values)
+            Assert.DoesNotContain("DurationHintBorder", tab);
+
+        Assert.Contains("DurationHintBorder", Names(Xaml));
+
+        // And directly above the button it informs.
+        string xaml = Xaml;
+        int estimate = xaml.IndexOf("x:Name=\"DurationHintBorder\"", StringComparison.Ordinal);
+        int button = xaml.IndexOf("x:Name=\"StartButton\"", StringComparison.Ordinal);
+        Assert.InRange(button - estimate, 0, 900);
+    }
+
     /// <summary>Nothing left pointing at a control that was taken out of the markup.</summary>
     [Fact]
     public void TheCodeDoesNotReferToControlsThatNoLongerExist()

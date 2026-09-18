@@ -452,8 +452,23 @@
             </StackPanel>
           </Border>
 
-          <!-- Sticky footer: one call to action, nothing competing with it -->
+          <!-- Sticky footer: how long it will take, then the one call to action. The estimate
+               used to live inside the Tests tab, so choosing Auto or Advanced meant starting a
+               run of unknown length. It is one control here rather than three copies, and it
+               says whatever the tab in front is about to do. -->
           <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
+            <!-- Two facts: how long, and what will really run after the knobs below have
+                 had their say. The sentence explaining what a static test is moved into the
+                 tooltip; it was the middle line of a box whose first line is the point. -->
+            <Border x:Name="DurationHintBorder" Classes="panel success" Padding="9,7">
+              <StackPanel Spacing="2">
+                <TextBlock x:Name="DurationHint" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
+                <TextBlock x:Name="PhasePlanText" Classes="caption" FontFamily="{StaticResource FontMono}"
+                           Foreground="{StaticResource TextMuted}" LineHeight="14" />
+                <TextBlock x:Name="DurationHintSub" IsVisible="False" />
+              </StackPanel>
+            </Border>
             <Border x:Name="StartDivider" Height="1" Background="{StaticResource BorderSubtle}" />
             <Button x:Name="StartButton" Classes="primary hero" Click="OnStartStop" />
           </StackPanel>
@@ -577,18 +592,6 @@
                              Margin="2,1,0,0" Foreground="{StaticResource StateInfo}" />
                 </StackPanel>
 
-                <!-- Two facts: how long, and what will really run after the knobs below have
-                     had their say. The sentence explaining what a static test is moved into the
-                     tooltip; it was the middle line of a box whose first line is the point. -->
-                <Border x:Name="DurationHintBorder" Classes="panel success" Padding="9,7">
-                  <StackPanel Spacing="2">
-                    <TextBlock x:Name="DurationHint" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
-                               Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
-                    <TextBlock x:Name="PhasePlanText" Classes="caption" FontFamily="{StaticResource FontMono}"
-                               Foreground="{StaticResource TextMuted}" LineHeight="14" />
-                    <TextBlock x:Name="DurationHintSub" IsVisible="False" />
-                  </StackPanel>
-                </Border>
 
 
               </StackPanel>

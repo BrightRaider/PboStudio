@@ -1367,6 +1367,7 @@ public partial class MainWindow : Window
         RightTabAdvancedPanel.IsVisible = RightTabAdvancedBtn.IsChecked == true;
         UpdateStartButtonState();
         RefreshAutoTab();
+        UpdateDurationHint();
     }
 
     private void OnBottomTabChanged(object? sender, RoutedEventArgs e)
@@ -2978,13 +2979,91 @@ public partial class MainWindow : Window
         UpdateDurationHint();
     }
 
+    /// <summary>
+    /// What the campaign still has to do, from what the cores currently hold — which is what
+    /// was read out of the processor at start-up, so it reflects the BIOS settings in force.
+    /// It replaces "a night to a weekend, depending on the processor", which covered both an
+    /// evening and three days without distinguishing them.
+    /// </summary>
+    private void ShowCampaignDuration()
+    {
+        bool isDe = LocalizationService.IsGerman;
+        var cpu = CpuModelService.Detect(_smu.CpuName);
+
+        if (!cpu.SupportsCurveOptimizer || _campaign.Finished)
+        {
+            DurationHintBorder.IsVisible = false;
+            return;
+        }
+
+        DurationHintBorder.IsVisible = true;
+        DurationHintBorder.Classes.Set("auto", false);
+        DurationHintBorder.Classes.Set("success", true);
+        DurationHint.Foreground = SolidColorBrush.Parse("#34D399");
+
+        var decision = DecideCampaign();
+        int from = decision.PhaseNumber > 0 ? decision.PhaseNumber : 1;
+
+        var estimate = CampaignEstimator.Estimate(
+            _profiles, _cores,
+            _rows.ToDictionary(r => r.Index, r => (int)r.Margin),
+            _knowledge,
+            AutoTunerService.GetMaxNegativeMargin(_smu.CpuName),
+            CurrentGuardband,
+            from);
+
+        string total = Humanise(estimate.Total, isDe);
+
+        DurationHint.Text = from > 1
+            ? (isDe ? $"\u23f1\ufe0f Noch etwa {total} (ab Phase {from} von 3)"
+                    : $"\u23f1\ufe0f About {total} left (from phase {from} of 3)")
+            : (isDe ? $"\u23f1\ufe0f Insgesamt etwa {total} f\u00fcr alle 3 Phasen"
+                    : $"\u23f1\ufe0f About {total} in total, for all 3 phases");
+
+        PhasePlanText.IsVisible = true;
+        PhasePlanText.Text = LocalizationService.Pick("Phasen:  ", "Phases:  ")
+            + string.Join("   ", estimate.PerPhase.Select(p =>
+                $"{p.Phase} · {Humanise(p.Span, isDe)}"));
+
+        ToolTip.SetTip(DurationHintBorder, isDe
+            ? "Gerechnet aus dem, was die Kerne gerade halten, und aus dem, was \u00fcber sie bekannt ist. "
+              + "Kerne, die schon am Ziel stehen, kosten in der Suchphase nichts. "
+              + "Es ist eine Obergrenze: der Auto-Tuner h\u00f6rt fr\u00fcher auf, wenn ein Wert h\u00e4lt."
+            : "Worked out from what the cores currently hold and what is known about them. "
+              + "Cores already at their target cost nothing in the search phase. "
+              + "It is an upper bound: the search stops early once a value holds.");
+    }
+
+    /// <summary>"2:24 Std." below a day, "1 Tag 4 Std." above it — a campaign can run past 24.</summary>
+    private static string Humanise(TimeSpan span, bool isDe)
+    {
+        if (span <= TimeSpan.Zero) return isDe ? "0 Std." : "0 hrs";
+
+        if (span.TotalHours < 24)
+            return isDe ? $"{span:h\\:mm} Std." : $"{span:h\\:mm} hrs";
+
+        int days = (int)span.TotalDays;
+        int hours = span.Hours;
+
+        return isDe
+            ? $"{days} {(days == 1 ? "Tag" : "Tage")} {hours} Std."
+            : $"{days} {(days == 1 ? "day" : "days")} {hours} hrs";
+    }
+
     /// <summary>Total runtime, taking core locks, current margins and the auto-tuner into account.</summary>
     private void UpdateDurationHint()
     {
         if (DurationHint is null || DurationHintBorder is null || DurationHintSub is null) return;
 
+        // The Auto tab starts a campaign, not a run, so the line above the button has to cost
+        // the campaign. Same control, because three copies of one number is how the Tests tab
+        // ended up showing two that disagreed.
+        if (RightTabAutoBtn?.IsChecked == true) { ShowCampaignDuration(); return; }
+
         // DurationHintSub is not rendered any more. Its sentence says what the run is for
         // rather than what it will do, so it is set below as the panel's tooltip instead.
+
+        DurationHintBorder.IsVisible = true;
 
         bool isDe = LocalizationService.IsGerman;
         int selectedCores = _rows.Count(r => r.Selected);

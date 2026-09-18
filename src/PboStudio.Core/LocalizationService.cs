@@ -380,9 +380,12 @@ public static class LocalizationService
             "CampaignPhase3" => isDe
                 ? "Ergebnis unter allen Lastarten beweisen"
                 : "Prove the result under every load type",
+            // The number itself now sits above the start button, worked out from what the cores
+            // actually hold. This line used to guess it in prose, which covered an evening and
+            // three days with the same words.
             "CampaignEstimate" => isDe
-                ? "Dauert eine Nacht bis ein Wochenende. Stoppen und später weitermachen geht jederzeit."
-                : "Takes a night to a weekend. You can stop any time and carry on later.",
+                ? "Stoppen und später weitermachen geht jederzeit — es läuft an derselben Stelle weiter."
+                : "You can stop any time and carry on later — it resumes from the same place.",
             "CampaignStart" => isDe ? "🚀 Starten" : "🚀 Start",
             "CampaignContinue" => isDe ? "🚀 Fortsetzen" : "🚀 Continue",
             "CampaignFootnote" => isDe
