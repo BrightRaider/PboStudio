@@ -19,6 +19,11 @@
     <AssemblyName>PboStudio</AssemblyName>
     <RootNamespace>PboStudio.App</RootNamespace>
     <ApplicationIcon>icon.ico</ApplicationIcon>
+
+    <!-- Halves the single-file download, 94 MB to 45. Not trimming: the XAML still binds by
+         reflection, so a trimmer would remove types the bindings look up at runtime. That is
+         what compiled bindings are a prerequisite for, above. -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
