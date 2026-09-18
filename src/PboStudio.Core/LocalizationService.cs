@@ -351,7 +351,10 @@ public static class LocalizationService
                 : "Not needed for an ordinary run: the recommendation on the first screen sets everything up. In here are the profile list, the auto-tuner and every individual knob, for when you want to override something.",
             "TabEngine" => isDe ? "⚡ Test" : "⚡ Test",
             "TabSystem" => isDe ? "🛡️ System" : "🛡️ System",
-            "EngineKnobs" => isDe ? "EINZELNE REGLER" : "INDIVIDUAL KNOBS",
+            "ShowEngineKnobs" => isDe
+                ? "▸ Einzelne Regler (übersteuert das Profil)"
+                : "▸ Individual knobs (these override the profile)",
+            "HideEngineKnobs" => isDe ? "▾ Einzelne Regler schließen" : "▾ Close the individual knobs",
             "CopyLog" => isDe ? "Kopieren" : "Copy",
             "ClearLog" => isDe ? "Leeren" : "Clear",
             "OpenLogFolder" => isDe ? "Ordner" : "Folder",

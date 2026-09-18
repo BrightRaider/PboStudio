@@ -539,6 +539,7 @@ public partial class MainWindow : Window
         // After ApplyLocalization, because LoadProfiles resets the profile selection and
         // OnProfileChanged overwrites the engine controls from the preset.
         ApplySettingsToControls();
+        RefreshAutoTunerDetail();
 
         AutostartBox.IsChecked = TaskSchedulerService.IsAutostartEnabled();
 
@@ -581,13 +582,12 @@ public partial class MainWindow : Window
     {
         var s = _settings;
 
-        // Restored by identity. The stored index still works for settings written before the
-        // list was cut down to five, which is what the fallback is for.
+        // Restored by identity. Settings written before this carry only an index into the old
+        // fourteen-entry list, which is not a profile any more — those start on the
+        // recommendation instead, rather than on whatever used to sit at that position.
         AllProfilesBox.IsChecked = s.ShowAllProfiles;
         if (Enum.TryParse<ProfileId>(s.ProfileId, out var savedProfile))
             SelectProfile(savedProfile);
-        else if (s.ProfileIndex > 0 && s.ProfileIndex < _profiles.Count)
-            SelectProfile(_profiles[s.ProfileIndex].Id);
 
         MinutesBox.Value = s.MinutesPerCore;
         IterationsBox.Value = s.Iterations;
@@ -1211,14 +1211,16 @@ public partial class MainWindow : Window
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
         OpenAdvancedLink.Content = LocalizationService.Get("OpenAdvanced");
         AllProfilesBox.Content = LocalizationService.Get("ShowAllProfiles");
-        EngineKnobsTitle.Text = LocalizationService.Get("EngineKnobs");
+        EngineKnobsButton.Content = LocalizationService.Get(
+            EngineKnobsButton.IsChecked == true ? "HideEngineKnobs" : "ShowEngineKnobs");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
         AutoTunerOpt1.Content = LocalizationService.Get("AutoTunerCoarse");
         AutoTunerOpt2.Content = LocalizationService.Get("AutoTunerFine");
         GuardbandLabel.Text = LocalizationService.Get("Guardband");
-        GuardbandHint.Text = LocalizationService.Get("GuardbandHint");
+        Tip(GuardbandLabel, "GuardbandHint");
+        Tip(GuardbandBox, "GuardbandHint");
         Tip(GuardbandBox, "GuardbandTooltip");
         ResetKnowledgeButton.Content = LocalizationService.Get("KnowledgeReset");
         Tip(ResetKnowledgeButton, "KnowledgeResetTooltip");
@@ -1489,6 +1491,7 @@ public partial class MainWindow : Window
     private void OnAutoTunerModeChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (StartButton is null || AutoTunerModeBox is null) return;
+        RefreshAutoTunerDetail();
         UpdateStartButtonState();
         UpdateDurationHint();
     }
@@ -1664,6 +1667,25 @@ public partial class MainWindow : Window
     /// <summary>The one way off the first screen, for anyone who wants the knobs.</summary>
     private void OnOpenAdvanced(object? sender, RoutedEventArgs e) =>
         RightTabEngineBtn.IsChecked = true;
+
+    private void OnToggleEngineKnobs(object? sender, RoutedEventArgs e)
+    {
+        if (EngineKnobsPanel is null || EngineKnobsButton is null) return;
+
+        bool open = EngineKnobsButton.IsChecked == true;
+        EngineKnobsPanel.IsVisible = open;
+        EngineKnobsButton.Content = LocalizationService.Get(open ? "HideEngineKnobs" : "ShowEngineKnobs");
+    }
+
+    /// <summary>
+    /// The headroom spinner, the tuner's memory and its reset only mean something once the
+    /// tuner is actually driving the run. Off, they were four rows of furniture.
+    /// </summary>
+    private void RefreshAutoTunerDetail()
+    {
+        if (AutoTunerDetailPanel is not null)
+            AutoTunerDetailPanel.IsVisible = AutoTunerModeBox?.SelectedIndex > 0;
+    }
 
     private async void OnCopyBiosValues(object? sender, RoutedEventArgs e)
     {
@@ -2657,9 +2679,13 @@ public partial class MainWindow : Window
             : [.. _profiles.Where(p => p.Essential)];
 
         // Something selected from the long list keeps the long list open. Narrowing it under a
-        // selection that is no longer in it would quietly swap the profile out.
+        // selection that is no longer in it would quietly swap the profile out — and the
+        // checkbox has to follow, or it claims five entries above a list of fourteen.
         if (keep is { } id && shown.All(p => p.Id != id) && _profiles.Any(p => p.Id == id))
+        {
             shown = [.. _profiles];
+            if (AllProfilesBox is not null) AllProfilesBox.IsChecked = true;
+        }
 
         ProfileBox.ItemsSource = shown;
         int index = keep is { } want ? shown.FindIndex(p => p.Id == want) : -1;
@@ -2674,7 +2700,7 @@ public partial class MainWindow : Window
     {
         if (ProfileBox.SelectedItem is not TestProfile p) return;
 
-        ProfileHelp.Text = p.Explanation;
+        ToolTip.SetTip(ProfileBox, p.Explanation);
         ProfileEngineText.Text = p.EngineSummary;
         PauseIntervalBox.Value = p.SuspendEverySeconds;
         PauseDurationBox.Value = p.SuspendForSeconds;
@@ -2702,6 +2728,9 @@ public partial class MainWindow : Window
     private void UpdateDurationHint()
     {
         if (DurationHint is null || DurationHintBorder is null || DurationHintSub is null) return;
+
+        // DurationHintSub is not rendered any more. Its sentence says what the run is for
+        // rather than what it will do, so it is set below as the panel's tooltip instead.
 
         bool isDe = LocalizationService.IsGerman;
         int selectedCores = _rows.Count(r => r.Selected);
@@ -2780,6 +2809,8 @@ public partial class MainWindow : Window
         {
             PhasePlanText.Text = LocalizationService.Pick("Ablauf: ", "Plan: ") + PhaseSummary();
         }
+
+        ToolTip.SetTip(DurationHintBorder, DurationHintSub.Text);
 
         UpdateAutoTunerProgress();
     }

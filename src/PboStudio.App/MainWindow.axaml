@@ -534,26 +534,25 @@
                     </ComboBox.ItemTemplate>
                   </ComboBox>
                   <CheckBox x:Name="AllProfilesBox" IsCheckedChanged="OnToggleAllProfiles" />
-                  <Border Background="{StaticResource SurfaceInset}" BorderBrush="{StaticResource AccentPrimary}"
-                          BorderThickness="2,0,0,0" CornerRadius="4" Padding="8,6">
-                    <StackPanel Spacing="5">
-                      <TextBlock x:Name="ProfileEngineText" FontFamily="{StaticResource FontMono}"
-                                 FontSize="{StaticResource FontMicro}" TextWrapping="Wrap" LineHeight="14"
-                                 Foreground="{StaticResource StateInfo}" />
-                      <TextBlock x:Name="ProfileHelp" Classes="caption" Foreground="{StaticResource TextMuted}"
-                                 FontSize="{StaticResource FontCaption}" LineHeight="16" />
-                    </StackPanel>
-                  </Border>
+
+                  <!-- What this profile runs, as one line. The paragraph that used to sit under
+                       it in a bordered box is the tooltip on the picker now: it explains a
+                       choice already made, which is what a tooltip is for. -->
+                  <TextBlock x:Name="ProfileEngineText" FontFamily="{StaticResource FontMono}"
+                             FontSize="{StaticResource FontMicro}" TextWrapping="Wrap" LineHeight="14"
+                             Margin="2,1,0,0" Foreground="{StaticResource StateInfo}" />
                 </StackPanel>
 
-                <Border x:Name="DurationHintBorder" Classes="panel success">
-                  <StackPanel Spacing="3">
+                <!-- Two facts: how long, and what will really run after the knobs below have
+                     had their say. The sentence explaining what a static test is moved into the
+                     tooltip; it was the middle line of a box whose first line is the point. -->
+                <Border x:Name="DurationHintBorder" Classes="panel success" Padding="9,7">
+                  <StackPanel Spacing="2">
                     <TextBlock x:Name="DurationHint" FontSize="{StaticResource FontCaption}" FontWeight="SemiBold"
                                Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
-                    <TextBlock x:Name="DurationHintSub" Classes="caption" Foreground="#6EE7B7" LineHeight="14" />
-                    <!-- What will really run, since the Engine tab overrides a profile's first phase. -->
                     <TextBlock x:Name="PhasePlanText" Classes="caption" FontFamily="{StaticResource FontMono}"
                                Foreground="{StaticResource TextMuted}" LineHeight="14" />
+                    <TextBlock x:Name="DurationHintSub" IsVisible="False" />
                   </StackPanel>
                 </Border>
 
@@ -571,32 +570,45 @@
                       <ComboBoxItem x:Name="AutoTunerOpt2" />
                     </ComboBox>
 
-                    <!-- Headroom between the measured boundary and the value that gets locked.
-                         Without it the user is handed the exact edge the stress test found. -->
-                    <Grid ColumnDefinitions="*,Auto" x:Name="GuardbandRow">
-                      <TextBlock Grid.Column="0" x:Name="GuardbandLabel" Classes="label"
-                                 VerticalAlignment="Center" TextWrapping="Wrap" />
-                      <NumericUpDown Grid.Column="1" x:Name="GuardbandBox" Value="3" Minimum="0" Maximum="15"
-                                     Increment="1" FormatString="+0;-0;0" Width="92" Margin="8,0,0,0" />
-                    </Grid>
-                    <TextBlock x:Name="GuardbandHint" Classes="caption" />
+                    <!-- Nothing below here means anything while the tuner is switched off, and
+                         it was four rows of it: a headroom spinner, a paragraph explaining the
+                         spinner, a memory summary and a reset. -->
+                    <StackPanel x:Name="AutoTunerDetailPanel" Spacing="6" IsVisible="False">
 
-                    <!-- What the tuner remembers, and the way to make it forget. Its floor comes
-                         from here, so the reader has to be able to see and clear it. -->
-                    <Border Height="1" Background="{StaticResource BorderSubtle}" />
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Grid.Column="0" x:Name="KnowledgeSummaryText" Classes="caption"
-                                 VerticalAlignment="Center" TextWrapping="Wrap" />
-                      <Button Grid.Column="1" x:Name="ResetKnowledgeButton" Classes="ghost"
-                              Click="OnResetKnowledge" VerticalAlignment="Center" Margin="8,0,0,0" />
-                    </Grid>
+                      <!-- Headroom between the measured boundary and the value that gets locked.
+                           Without it the user is handed the exact edge the stress test found.
+                           The paragraph that explained this is the label's tooltip. -->
+                      <Grid ColumnDefinitions="*,Auto" x:Name="GuardbandRow">
+                        <TextBlock Grid.Column="0" x:Name="GuardbandLabel" Classes="label"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <NumericUpDown Grid.Column="1" x:Name="GuardbandBox" Value="3" Minimum="0" Maximum="15"
+                                       Increment="1" FormatString="+0;-0;0" Width="92" Margin="8,0,0,0" />
+                      </Grid>
 
+                      <!-- What the tuner remembers, and the way to make it forget. Its floor
+                           comes from here, so the reader has to be able to see and clear it. -->
+                      <Border Height="1" Background="{StaticResource BorderSubtle}" />
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" x:Name="KnowledgeSummaryText" Classes="caption"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                        <Button Grid.Column="1" x:Name="ResetKnowledgeButton" Classes="ghost"
+                                Click="OnResetKnowledge" VerticalAlignment="Center" Margin="8,0,0,0" />
+                      </Grid>
+                    </StackPanel>
+
+                    <TextBlock x:Name="GuardbandHint" IsVisible="False" />
                   </StackPanel>
                 </Border>
 
                 <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,2,0,2" />
-                <TextBlock x:Name="EngineKnobsTitle" Classes="sectionTitle" />
 
+                <!-- Sixteen controls that each override one thing the profile already set.
+                     Folded shut: choosing a profile is the decision, and these are for undoing
+                     parts of it, which is rarer than the space they took suggested. -->
+                <ToggleButton x:Name="EngineKnobsButton" Classes="ghost" HorizontalAlignment="Left"
+                              IsCheckedChanged="OnToggleEngineKnobs" />
+
+                <StackPanel x:Name="EngineKnobsPanel" Spacing="8" IsVisible="False">
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock x:Name="MinutesLabel" Classes="label" />
@@ -774,6 +786,7 @@
                   <TextBlock x:Name="CoreDelayLabel" Classes="label" />
                   <NumericUpDown x:Name="CoreDelayBox" Value="2" Minimum="0" Maximum="120"
                                  Increment="1" FormatString="0" />
+                </StackPanel>
                 </StackPanel>
               </StackPanel>
 

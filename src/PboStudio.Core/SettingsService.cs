@@ -19,9 +19,6 @@ public sealed class AppSettings
     /// </summary>
     public string ProfileId { get; set; } = "";
 
-    /// <summary>Superseded by <see cref="ProfileId"/>; read once so old settings still restore.</summary>
-    public int ProfileIndex { get; set; }
-
     /// <summary>Whether the profile list shows all fourteen rather than the five on the path.</summary>
     public bool ShowAllProfiles { get; set; }
 
