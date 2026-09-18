@@ -421,7 +421,13 @@ public static class LocalizationService
             "AutoSetupText" => isDe
                 ? "Ohne den Treiber lassen sich keine CO-Werte setzen, und ohne ein Testprogramm gibt es keine Last. Der Assistent erledigt beides."
                 : "Without the driver no CO value can be set, and without an engine there is no load. The assistant handles both.",
-            "AdvancedRunTitle" => isDe ? "LAUF" : "THE RUN",
+            "AdvancedIntro" => isDe
+                ? "Alles hier übersteuert das Profil, das unter „Tests“ gewählt ist. Für einen normalen Lauf wird nichts davon gebraucht."
+                : "Everything here overrides the profile chosen under \"Tests\". None of it is needed for an ordinary run.",
+            "AdvancedRuntimeTitle" => isDe ? "LAUFZEIT" : "RUNTIME",
+            "AdvancedLoadTitle" => isDe ? "LAST" : "THE LOAD",
+            "AdvancedSequenceTitle" => isDe ? "REIHENFOLGE" : "SEQUENCE",
+            "AdvancedFailureTitle" => isDe ? "WAS ALS FEHLER ZÄHLT" : "WHAT COUNTS AS A FAILURE",
             "AdvancedSafetyTitle" => isDe ? "SICHERHEIT & SYSTEM" : "SAFETY & SYSTEM",
             "CopyLog" => isDe ? "Kopieren" : "Copy",
             "ClearLog" => isDe ? "Leeren" : "Clear",

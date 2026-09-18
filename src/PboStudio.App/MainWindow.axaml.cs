@@ -1213,7 +1213,11 @@ public partial class MainWindow : Window
 
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
         AllProfilesBox.Content = LocalizationService.Get("ShowAllProfiles");
-        AdvancedRunTitle.Text = LocalizationService.Get("AdvancedRunTitle");
+        AdvancedIntro.Text = LocalizationService.Get("AdvancedIntro");
+        AdvancedRuntimeTitle.Text = LocalizationService.Get("AdvancedRuntimeTitle");
+        AdvancedLoadTitle.Text = LocalizationService.Get("AdvancedLoadTitle");
+        AdvancedSequenceTitle.Text = LocalizationService.Get("AdvancedSequenceTitle");
+        AdvancedFailureTitle.Text = LocalizationService.Get("AdvancedFailureTitle");
         AdvancedSafetyTitle.Text = LocalizationService.Get("AdvancedSafetyTitle");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");

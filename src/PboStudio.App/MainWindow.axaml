@@ -597,8 +597,17 @@
               <StackPanel x:Name="RightTabAdvancedPanel" Spacing="10" IsVisible="False" Margin="0,0,4,0">
 
                 <!-- Every knob, in one place. These override whatever the chosen profile set,
-                     which is the only reason to come here. -->
-                <TextBlock x:Name="AdvancedRunTitle" Classes="sectionTitle" />
+                     which is the only reason to come here - and they are grouped, because a
+                     single list of ninety-odd controls in the order they happened to be written
+                     is a dump, not a settings page. Six headings, in the order somebody works
+                     through them: how it searches, how long, what load, in what order, what
+                     counts as a failure, and what keeps the machine safe. -->
+                <!-- One line, once, at the top: everything below overrides the profile. Without
+                     it "Instruction set: SSE" reads as the setting rather than as an override of
+                     whatever the chosen profile already asked for. -->
+                <TextBlock x:Name="AdvancedIntro" Classes="caption" TextWrapping="Wrap"
+                           LineHeight="15" Foreground="{StaticResource TextMuted}" />
+
 
                 <!-- The step search. It lived on the Tests tab and was called the auto-tuner,
                      one tab away from a tab called Auto, which are two different things: Auto
@@ -626,12 +635,14 @@
                       <!-- Headroom between the measured boundary and the value that gets locked.
                            Without it the user is handed the exact edge the stress test found.
                            The paragraph that explained this is the label's tooltip. -->
-                      <Grid ColumnDefinitions="*,Auto" x:Name="GuardbandRow">
-                        <TextBlock Grid.Column="0" x:Name="GuardbandLabel" Classes="label"
-                                   VerticalAlignment="Center" TextWrapping="Wrap" />
-                        <NumericUpDown Grid.Column="1" x:Name="GuardbandBox" Value="3" Minimum="0" Maximum="15"
-                                       Increment="1" FormatString="+0;-0;0" Width="92" Margin="8,0,0,0" />
-                      </Grid>
+                      <!-- Label above, field across the width, like Min/core and Passes. Beside
+                           the label in 92 pixels, the two spinner buttons left so little room
+                           that "+3" rendered as "+". -->
+                      <StackPanel x:Name="GuardbandRow" Spacing="3">
+                        <TextBlock x:Name="GuardbandLabel" Classes="label" TextWrapping="Wrap" />
+                        <NumericUpDown x:Name="GuardbandBox" Value="3" Minimum="0" Maximum="15"
+                                       Increment="1" FormatString="+0;-0;0" HorizontalAlignment="Stretch" />
+                      </StackPanel>
 
                       <!-- What the tuner remembers, and the way to make it forget. Its floor
                            comes from here, so the reader has to be able to see and clear it. -->
@@ -647,6 +658,10 @@
                     <TextBlock x:Name="GuardbandHint" IsVisible="False" />
                   </StackPanel>
                 </Border>
+
+
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,6,0,0" />
+                <TextBlock x:Name="AdvancedRuntimeTitle" Classes="sectionTitle" />
 
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
@@ -672,6 +687,10 @@
                                  Increment="5" FormatString="0" ValueChanged="OnRuntimeChanged" />
                   <TextBlock x:Name="AutoRuntimeCapHint" Classes="caption" />
                 </StackPanel>
+
+
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,6,0,0" />
+                <TextBlock x:Name="AdvancedLoadTitle" Classes="sectionTitle" />
 
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
@@ -786,6 +805,10 @@
                   </StackPanel>
                 </StackPanel>
 
+
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,6,0,0" />
+                <TextBlock x:Name="AdvancedSequenceTitle" Classes="sectionTitle" />
+
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock x:Name="PauseIntervalLabel" Classes="label" />
@@ -818,6 +841,10 @@
                   </StackPanel>
                 </StackPanel>
 
+
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,6,0,0" />
+                <TextBlock x:Name="AdvancedFailureTitle" Classes="sectionTitle" />
+
                 <CheckBox x:Name="StopOnErrorBox" />
                 <CheckBox x:Name="SkipCoreOnErrorBox" IsChecked="True" />
 
@@ -827,7 +854,7 @@
                                  Increment="1" FormatString="0" />
                 </StackPanel>
 
-                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,4,0,4" />
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,6,0,0" />
                 <TextBlock x:Name="AdvancedSafetyTitle" Classes="sectionTitle" />
                 <StackPanel Spacing="3">
                   <TextBlock x:Name="MaxTempLabel" Classes="label" />
