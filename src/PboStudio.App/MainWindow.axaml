@@ -759,6 +759,16 @@
                       </StackPanel>
                     </Grid>
                   </StackPanel>
+
+                  <!-- Prime95's TortureMem. Zero keeps the work in cache, which is what exposes
+                       an undervolted core; above it the memory controller joins in and the test
+                       measures something else. It was written into the config as a constant. -->
+                  <StackPanel Spacing="3">
+                    <TextBlock x:Name="PrimeMemoryLabel" Classes="label" />
+                    <NumericUpDown x:Name="PrimeMemoryBox" Value="0" Minimum="0" Maximum="65536"
+                                   Increment="64" FormatString="0" HorizontalAlignment="Stretch" />
+                    <TextBlock x:Name="PrimeMemoryHint" Classes="caption" TextWrapping="Wrap" />
+                  </StackPanel>
                 </StackPanel>
 
                 <StackPanel x:Name="YcAlgoPanel" Spacing="8" IsVisible="False">
@@ -850,6 +860,23 @@
 
                 <CheckBox x:Name="StopOnErrorBox" />
                 <CheckBox x:Name="SkipCoreOnErrorBox" IsChecked="True" />
+
+                <!-- A worker can vanish because an antivirus took it or Windows killed it under
+                     memory pressure, neither of which says anything about the Curve Optimizer.
+                     CoreCycler calls this treatThreadErrorsAsRealErrors. -->
+                <CheckBox x:Name="WorkerFaultsAreErrorsBox" IsChecked="True" />
+
+                <CheckBox x:Name="FlashOnErrorBox" IsChecked="True" />
+
+                <StackPanel Spacing="3">
+                  <TextBlock x:Name="PriorityLabel" Classes="label" />
+                  <ComboBox x:Name="PriorityBox" SelectedIndex="1" HorizontalAlignment="Stretch">
+                    <ComboBoxItem x:Name="PriorityOpt0" />
+                    <ComboBoxItem x:Name="PriorityOpt1" />
+                    <ComboBoxItem x:Name="PriorityOpt2" />
+                  </ComboBox>
+                  <TextBlock x:Name="PriorityHint" Classes="caption" TextWrapping="Wrap" />
+                </StackPanel>
 
                 <StackPanel Spacing="3">
                   <TextBlock x:Name="CoreDelayLabel" Classes="label" />

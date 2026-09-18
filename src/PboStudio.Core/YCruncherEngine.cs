@@ -10,7 +10,8 @@ public sealed record YCruncherOptions(
     IReadOnlyList<string> Algorithms,
     int SecondsPerTest = 60,
     string Memory = "64M",
-    bool SpreadAcrossSmt = false)
+    bool SpreadAcrossSmt = false,
+    System.Diagnostics.ProcessPriorityClass Priority = System.Diagnostics.ProcessPriorityClass.Normal)
 {
     /// <summary>
     /// Every algorithm tag y-cruncher 0.8.x accepts, in the order its own menu lists them.
@@ -156,7 +157,7 @@ public sealed class YCruncherEngine : IStressEngine
         // already read the machine's full processor count and sized itself for it.
         var jail = new CoreJail(mask);
         var process = PinnedProcess.Start(
-            _exePath, arguments, Path.GetDirectoryName(_exePath)!, mask, jail);
+            _exePath, arguments, Path.GetDirectoryName(_exePath)!, mask, jail, _options.Priority);
 
         return new YCruncherSession(process, logPath, jail);
     }

@@ -141,3 +141,42 @@ public class TestPlanBehaviourTests
         public void Dispose() { }
     }
 }
+
+/// <summary>
+/// CoreCycler's treatThreadErrorsAsRealErrors, and the reason it exists: a worker can vanish
+/// for reasons that say nothing about the Curve Optimizer, and counting those means backing a
+/// good core off for nothing.
+/// </summary>
+public class WorkerFaultTests
+{
+    private static readonly DateTime When = new(2026, 9, 18, 20, 0, 0);
+
+    private static Failure Calc() => new(FailureKind.CalculationError, "FATAL ERROR: Rounding was 0.5", When);
+    private static Failure Whea() => new(FailureKind.MachineCheck, "WHEA 18", When);
+    private static Failure Gone() => new(FailureKind.ProcessGone, "worker exited", When);
+    private static Failure Idle() => new(FailureKind.WentIdle, "core stopped drawing load", When);
+
+    [Fact]
+    public void AProcessThatVanishedAndACoreThatWentQuietAreWorkerFaults()
+    {
+        Assert.True(TestPlan.IsWorkerFault(Gone()));
+        Assert.True(TestPlan.IsWorkerFault(Idle()));
+    }
+
+    /// <summary>
+    /// The two that are evidence about the processor are never filtered, whatever the setting
+    /// says. Turning the option off must not be a way to make a failing core look fine.
+    /// </summary>
+    [Fact]
+    public void AWrongCalculationAndAMachineCheckAreNeverWorkerFaults()
+    {
+        Assert.False(TestPlan.IsWorkerFault(Calc()));
+        Assert.False(TestPlan.IsWorkerFault(Whea()));
+    }
+
+    [Fact]
+    public void TheDefaultCountsThem()
+    {
+        Assert.True(new TestPlan().TreatWorkerFaultsAsErrors);
+    }
+}

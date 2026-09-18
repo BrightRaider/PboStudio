@@ -428,6 +428,29 @@ public static class LocalizationService
                 ? "Alles hier übersteuert das Profil, das unter „Tests“ gewählt ist. Für einen normalen Lauf wird nichts davon gebraucht."
                 : "Everything here overrides the profile chosen under \"Tests\". None of it is needed for an ordinary run.",
             "AdvancedRuntimeTitle" => isDe ? "LAUFZEIT" : "RUNTIME",
+            "PrimeMemory" => isDe ? "Prime95-Speicher (MB)" : "Prime95 memory (MB)",
+            "PrimeMemoryHint" => isDe
+                ? "0 hält alles im Cache — das deckt einen zu weit abgesenkten Kern am schnellsten auf. Höhere Werte belasten zusätzlich den Speichercontroller und testen damit etwas anderes."
+                : "0 keeps everything in cache, which exposes an over-undervolted core fastest. Higher values pull in the memory controller as well and test something else.",
+            "WorkerFaultsAreErrors" => isDe
+                ? "Abgestürzten oder eingeschlafenen Worker als Fehler werten"
+                : "Count a worker that died or went quiet as an error",
+            "WorkerFaultsAreErrorsTooltip" => isDe
+                ? "Ein Worker kann auch verschwinden, weil ein Virenscanner ihn geholt hat oder Windows ihn bei Speicherdruck beendet hat — beides sagt nichts über den Curve Optimizer. Aus bedeutet: nur ein falsches Rechenergebnis oder ein Machine Check lassen einen Kern durchfallen. Gemeldet wird beides so oder so."
+                : "A worker can also vanish because an antivirus took it or Windows killed it under memory pressure, neither of which says anything about the Curve Optimizer. Off means only a wrong calculation or a machine check fails a core. Both are reported either way.",
+            "FlashOnError" => isDe
+                ? "Bei einem Fehler in der Taskleiste blinken"
+                : "Flash the taskbar entry on an error",
+            "FlashOnErrorTooltip" => isDe
+                ? "Ein Lauf dauert Stunden und niemand sitzt daneben. Der Ton geht unter, wenn du Kopfhörer aufhast oder im anderen Raum bist."
+                : "A run lasts hours and nobody sits and watches it. The beep is missed by anyone wearing headphones or sitting in another room.",
+            "Priority" => isDe ? "Priorität des Testprogramms" : "Stress program priority",
+            "PriorityLow" => isDe ? "Niedrig" : "Low",
+            "PriorityNormal" => isDe ? "Normal" : "Normal",
+            "PriorityHigh" => isDe ? "Hoch" : "High",
+            "PriorityHint" => isDe
+                ? "Niedrig lässt den Rechner nebenher benutzbar, misst dafür weniger streng. Hoch hält alles andere vom getesteten Kern fern."
+                : "Low leaves the machine usable alongside the run, at the cost of a less strict measurement. High keeps everything else off the core under test.",
             "AdvancedLoadTitle" => isDe ? "LAST" : "THE LOAD",
             "AdvancedSequenceTitle" => isDe ? "REIHENFOLGE" : "SEQUENCE",
             "AdvancedFailureTitle" => isDe ? "WAS ALS FEHLER ZÄHLT" : "WHAT COUNTS AS A FAILURE",

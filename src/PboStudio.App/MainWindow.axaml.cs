@@ -609,6 +609,10 @@ public partial class MainWindow : Window
         CustomOrderBox.Text = s.CustomOrder;
         StopOnErrorBox.IsChecked = s.StopOnError;
         SkipCoreOnErrorBox.IsChecked = s.SkipCoreOnError;
+        WorkerFaultsAreErrorsBox.IsChecked = s.WorkerFaultsAreErrors;
+        FlashOnErrorBox.IsChecked = s.FlashOnError;
+        PriorityBox.SelectedIndex = Math.Clamp(s.StressPriority, 0, 2);
+        PrimeMemoryBox.Value = s.PrimeMemoryMb;
         CoreDelayBox.Value = s.DelayBetweenCores;
 
         AutoRuntimeBox.IsChecked = s.AutoRuntime;
@@ -672,6 +676,10 @@ public partial class MainWindow : Window
         s.CustomOrder = CustomOrderBox.Text ?? "";
         s.StopOnError = StopOnErrorBox.IsChecked == true;
         s.SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true;
+        s.WorkerFaultsAreErrors = WorkerFaultsAreErrorsBox.IsChecked == true;
+        s.FlashOnError = FlashOnErrorBox.IsChecked == true;
+        s.StressPriority = PriorityBox.SelectedIndex;
+        s.PrimeMemoryMb = (int)(PrimeMemoryBox.Value ?? 0);
         s.DelayBetweenCores = (int)(CoreDelayBox.Value ?? 2);
 
         s.AutoRuntime = AutoRuntimeBox.IsChecked == true;
@@ -1219,6 +1227,21 @@ public partial class MainWindow : Window
         AdvancedSequenceTitle.Text = LocalizationService.Get("AdvancedSequenceTitle");
         AdvancedFailureTitle.Text = LocalizationService.Get("AdvancedFailureTitle");
         AdvancedSafetyTitle.Text = LocalizationService.Get("AdvancedSafetyTitle");
+
+        PrimeMemoryLabel.Text = LocalizationService.Get("PrimeMemory");
+        PrimeMemoryHint.Text = LocalizationService.Get("PrimeMemoryHint");
+
+        WorkerFaultsAreErrorsBox.Content = LocalizationService.Get("WorkerFaultsAreErrors");
+        Tip(WorkerFaultsAreErrorsBox, "WorkerFaultsAreErrorsTooltip");
+
+        FlashOnErrorBox.Content = LocalizationService.Get("FlashOnError");
+        Tip(FlashOnErrorBox, "FlashOnErrorTooltip");
+
+        PriorityLabel.Text = LocalizationService.Get("Priority");
+        PriorityHint.Text = LocalizationService.Get("PriorityHint");
+        PriorityOpt0.Content = LocalizationService.Get("PriorityLow");
+        PriorityOpt1.Content = LocalizationService.Get("PriorityNormal");
+        PriorityOpt2.Content = LocalizationService.Get("PriorityHigh");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
@@ -1962,6 +1985,14 @@ public partial class MainWindow : Window
         ResultPanel.IsVisible = true;
     }
 
+    /// <summary>What the stress process runs at. Normal unless the reader says otherwise.</summary>
+    private ProcessPriorityClass SelectedStressPriority => PriorityBox?.SelectedIndex switch
+    {
+        0 => ProcessPriorityClass.BelowNormal,
+        2 => ProcessPriorityClass.AboveNormal,
+        _ => ProcessPriorityClass.Normal,
+    };
+
     private void PlayNotificationSound(bool isError)
     {
         try
@@ -1972,6 +2003,18 @@ public partial class MainWindow : Window
                 else Console.Beep(1000, 250);
             }
         }
+        catch { }
+
+        if (isError && FlashOnErrorBox?.IsChecked == true) FlashWindow();
+    }
+
+    /// <summary>
+    /// Flashes the taskbar button until the window is brought forward. A run lasts hours and
+    /// nobody sits and watches it; a beep is missed by anyone in another room.
+    /// </summary>
+    private void FlashWindow()
+    {
+        try { WindowAlert.FlashTaskbar(TryGetPlatformHandle()?.Handle ?? nint.Zero); }
         catch { }
     }
 
@@ -2436,6 +2479,7 @@ public partial class MainWindow : Window
             CustomOrder = customOrder,
             StopOnError = StopOnErrorBox.IsChecked == true,
             SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true,
+            TreatWorkerFaultsAsErrors = WorkerFaultsAreErrorsBox.IsChecked == true,
             TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true,
             DelayBetweenCores = TimeSpan.FromSeconds((double)(CoreDelayBox.Value ?? 2)),
             AutoTuner = autoTunerMode,
@@ -2538,7 +2582,8 @@ public partial class MainWindow : Window
                             return;
                         }
                     }
-                    engine = new YCruncherEngine(ycBinary, runsDir, phase.YcOptions ?? ycOpts);
+                    engine = new YCruncherEngine(ycBinary, runsDir,
+                        (phase.YcOptions ?? ycOpts) with { Priority = SelectedStressPriority });
                 }
                 else
                 {
@@ -2551,7 +2596,9 @@ public partial class MainWindow : Window
                     var (fftMin, fftMax) = CustomFftRange();
                     engine = new Prime95Engine(prime95, runsDir,
                         new Prime95Options(phase.Mode, phase.Fft, fftMin, fftMax,
-                            SpreadAcrossSmt: plan.SpreadSingleThreadAcrossSmt));
+                            MemoryMb: (int)(PrimeMemoryBox.Value ?? 0),
+                            SpreadAcrossSmt: plan.SpreadSingleThreadAcrossSmt,
+                            Priority: SelectedStressPriority));
                 }
 
                 var runner = new TestRunner(engine, _cores, plan);
@@ -2846,6 +2893,9 @@ public partial class MainWindow : Window
                 break;
 
             case TestEvent.CoreFailed s:
+                // Flashed as it happens, not only in the summary: by the time a run ends the
+                // interesting failure may be six hours old.
+                if (FlashOnErrorBox?.IsChecked == true) FlashWindow();
                 RememberOutcome(s.Core, passed: false);
                 Row(s.Core).State = CoreState.Failed;
                 Log($"{Row(s.Core).CoreName}: {s.Failure}", LogLevel.Error);

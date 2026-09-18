@@ -20,8 +20,14 @@ public sealed record Prime95Options(
     FftPreset Fft = FftPreset.Smallest,
     int CustomMinFft = 4,
     int CustomMaxFft = 32,
+    /// <summary>
+    /// Prime95's <c>TortureMem</c>, in MB. Zero keeps the whole test in cache, which is what
+    /// exposes an undervolted core; anything above it pulls the memory controller in as well
+    /// and tests a different thing.
+    /// </summary>
     int MemoryMb = 0,
-    bool SpreadAcrossSmt = false)
+    bool SpreadAcrossSmt = false,
+    ProcessPriorityClass Priority = ProcessPriorityClass.Normal)
 {
     public (int Min, int Max) FftRange => Fft switch
     {
@@ -106,7 +112,7 @@ public sealed class Prime95Engine : IStressEngine
         // to their assigned affinity mask from the very first instruction.
         var jail = new CoreJail(mask);
         string arguments = $"-W\"{workDir}\" -t";
-        var process = PinnedProcess.Start(_exePath, arguments, workDir, mask, jail);
+        var process = PinnedProcess.Start(_exePath, arguments, workDir, mask, jail, _options.Priority);
 
         return new Prime95Session(process, resultsPath, jail);
     }

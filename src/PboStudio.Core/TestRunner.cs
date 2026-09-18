@@ -45,6 +45,28 @@ public sealed record TestPlan
     public CoreOrder Order { get; init; } = CoreOrder.Sequential;
     public IReadOnlyList<int> CustomOrder { get; init; } = [];
     public IReadOnlySet<int> CoresToIgnore { get; init; } = new HashSet<int>();
+    /// <summary>
+    /// Whether a worker that died or went quiet fails the core, or only a wrong calculation and
+    /// a machine check do.
+    /// <para>
+    /// CoreCycler calls this <c>treatThreadErrorsAsRealErrors</c>. The distinction is real: a
+    /// worker can vanish because an antivirus took it, because Windows killed it under memory
+    /// pressure, or because the core genuinely stopped executing. The first two are not evidence
+    /// about the Curve Optimizer, and counting them means backing a good core off for nothing.
+    /// On by default, because the third is the most common cause by far.
+    /// </para>
+    /// </summary>
+    public bool TreatWorkerFaultsAsErrors { get; init; } = true;
+
+    /// <summary>
+    /// A failure that says something went wrong with the worker rather than with the arithmetic.
+    /// A wrong calculation and a machine check are evidence about the processor and are never
+    /// filtered, whatever <see cref="TreatWorkerFaultsAsErrors"/> says - the setting must not be
+    /// a way to make a failing core look fine.
+    /// </summary>
+    public static bool IsWorkerFault(Failure f) =>
+        f.Kind is FailureKind.ProcessGone or FailureKind.WentIdle;
+
     public bool StopOnError { get; init; }
     public bool SkipCoreOnError { get; init; } = true;
     public bool TreatWheaWarningAsError { get; init; } = true;
@@ -230,6 +252,17 @@ public sealed class TestRunner
                 ApplyPlannedMargin(coreIndex, currentMargins);
 
                 var found = await TestCoreAsync(_cores[coreIndex], iteration, wheaHits, ct);
+
+                // A worker that died or went quiet is reported either way; whether it condemns
+                // the core is the reader's call.
+                if (!_plan.TreatWorkerFaultsAsErrors)
+                {
+                    foreach (var ignored in found.Where(TestPlan.IsWorkerFault))
+                        Emit(new TestEvent.Info(
+                            $"Core {coreIndex}: {ignored.Kind} ignored - worker faults are not counted as errors."));
+
+                    found = [.. found.Where(f => !TestPlan.IsWorkerFault(f))];
+                }
 
                 if (found.Count > 0)
                 {

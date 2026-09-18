@@ -40,6 +40,18 @@ public sealed class AppSettings
     public string CustomOrder { get; set; } = "";
     public bool StopOnError { get; set; }
     public bool SkipCoreOnError { get; set; } = true;
+
+    /// <summary>CoreCycler's treatThreadErrorsAsRealErrors.</summary>
+    public bool WorkerFaultsAreErrors { get; set; } = true;
+
+    /// <summary>CoreCycler's flashOnError.</summary>
+    public bool FlashOnError { get; set; } = true;
+
+    /// <summary>CoreCycler's stressTestProgramPriority. 0 low, 1 normal, 2 high.</summary>
+    public int StressPriority { get; set; } = 1;
+
+    /// <summary>Prime95's TortureMem in MB. 0 keeps the whole test in cache.</summary>
+    public int PrimeMemoryMb { get; set; }
     public int DelayBetweenCores { get; set; } = 2;
 
     // System tab

@@ -19,8 +19,15 @@ internal static class PinnedProcess
     private const uint CREATE_SUSPENDED = 0x00000004;
     private const uint CREATE_NO_WINDOW = 0x08000000;
 
+    /// <param name="priority">
+    /// What the stress process runs at. CoreCycler exposes this as
+    /// <c>stressTestProgramPriority</c>; the reason to lower it is that a test pinned to one
+    /// core at normal priority still competes with whatever the machine is doing on that core,
+    /// and the reason to raise it is to stop anything else interfering with the measurement.
+    /// </param>
     public static Process Start(
-        string exePath, string arguments, string workingDirectory, nuint affinityMask, CoreJail? jail = null)
+        string exePath, string arguments, string workingDirectory, nuint affinityMask,
+        CoreJail? jail = null, ProcessPriorityClass priority = ProcessPriorityClass.Normal)
     {
         var startupInfo = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>() };
 
@@ -53,6 +60,13 @@ internal static class PinnedProcess
 
             // Assigned while still suspended, so the limit is in force from the first instruction.
             jail?.Add(process);
+
+            // Set before the first instruction runs, like the affinity above it. A refused
+            // priority is not worth aborting a run over.
+            if (priority != ProcessPriorityClass.Normal)
+            {
+                try { process.PriorityClass = priority; } catch { }
+            }
 
             if (ResumeThread(info.hThread) == unchecked((uint)-1))
                 throw new InvalidOperationException(
