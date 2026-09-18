@@ -73,12 +73,17 @@ public static class CampaignEstimator
         foreach (var core in cores)
         {
             int held = margins.TryGetValue(core.Index, out int m) ? m : 0;
-            int floor = knowledge.TryGetValue(core.Index, out var k) ? k.FloorFor(chipLimit) : chipLimit;
+            knowledge.TryGetValue(core.Index, out var k);
+            int floor = k?.FloorFor(chipLimit) ?? chipLimit;
             int target = AutoTunerService.ApplyGuardband(floor, guardband);
 
             if (held <= target) continue;
 
-            slots += AutoTunerService.WorstCaseSlots(held, floor, AutoTunerMode.Fein, int.MaxValue);
+            // A core with a value on record that held cannot be walked back up from scratch: the
+            // search returns to that value and locks there. Most cores a campaign is resumed on
+            // are in exactly that state.
+            slots += AutoTunerService.WorstCaseSlots(
+                held, floor, AutoTunerMode.Fein, int.MaxValue, canClimb: k?.BestPassed is null);
         }
 
         return TimeSpan.FromMinutes(slots * profile.MinutesPerCore * legs);

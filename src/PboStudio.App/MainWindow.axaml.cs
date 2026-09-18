@@ -2806,7 +2806,12 @@ public partial class MainWindow : Window
         {
             int totalSlots = _rows
                 .Where(r => r.Selected && !r.IsLocked)
-                .Sum(r => AutoTunerService.WorstCaseSlots((int)r.Margin, maxNegativeLimit, mode.Value, maxPasses));
+                .Sum(r => AutoTunerService.WorstCaseSlots(
+                    (int)r.Margin,
+                    _knowledge.TryGetValue(r.Index, out var k) ? k.FloorFor(maxNegativeLimit) : maxNegativeLimit,
+                    mode.Value,
+                    maxPasses,
+                    canClimb: !_knowledge.TryGetValue(r.Index, out var kg) || kg.BestPassed is null));
 
             return TimeSpan.FromMinutes(totalSlots * minutesPerCore * phaseCount);
         }

@@ -157,3 +157,74 @@ public class CampaignEstimatorTests
         Assert.True(four.Total < eight.Total);
     }
 }
+
+/// <summary>
+/// The estimate against this machine's actual state, because "18 hours" was the first number
+/// the tool ever showed and it was wrong in a way arithmetic can settle.
+/// </summary>
+public class RealMachineEstimateTests
+{
+    private const int ChipLimit = -30;
+    private const int Guardband = 3;
+    private const string Cpu = "AMD Ryzen 7 5800X3D 8-Core Processor";
+
+    private static IReadOnlyList<PhysicalCore> Cores() =>
+        [.. Enumerable.Range(0, 8).Select(i => new PhysicalCore(i, (nuint)1 << i, [i]))];
+
+    // What the processor holds, and what is on record about it.
+    private static readonly Dictionary<int, int> Margins = new()
+    {
+        [0] = -16, [1] = -25, [2] = -30, [3] = -30,
+        [4] = -26, [5] = -30, [6] = -30, [7] = -30,
+    };
+
+    private static readonly Dictionary<int, CoreKnowledge> Knowledge = new()
+    {
+        [0] = new(BestPassed: -20, WorstFailed: -20),
+        [1] = new(BestPassed: -25, WorstFailed: -30),
+        [2] = new(BestPassed: -30),
+        [3] = new(BestPassed: -30),
+        [4] = new(WorstFailed: -28),
+        [5] = new(BestPassed: -30),
+        [6] = new(BestPassed: -30),
+        [7] = new(BestPassed: -30),
+    };
+
+    private static CampaignEstimate Estimate() => CampaignEstimator.Estimate(
+        TestProfiles.For(Cpu, isGerman: false), Cores(), Margins, Knowledge,
+        ChipLimit, Guardband, fromPhase: 2);
+
+    /// <summary>
+    /// Seven of the eight cores are already parked where the search would leave them. Only core
+    /// 1 has room, it holds -25 with -25 on record as passing, and its floor is -29 — four steps
+    /// to try and then it is finished.
+    ///
+    /// This was costed at twenty-six slots, because the estimate assumed the search might have
+    /// to walk the core from -25 all the way back to 0. It cannot: a failure returns to the
+    /// value already on record and locks there. Half an hour was quoted as two and a half.
+    /// </summary>
+    [Fact]
+    public void TheSearchPhaseCostsTheDescentOnlyWhenTheCoreHasAValueOnRecord()
+    {
+        var search = Estimate().PerPhase.Single(p => p.Phase == 2).Span;
+
+        Assert.Equal(TimeSpan.FromMinutes(30), search);
+    }
+
+    /// <summary>
+    /// And the rest of the estimate is not a mistake: the confirmation run really is sixteen
+    /// hours. Eight cores, ten minutes each, three passes, across four load types. Shortening it
+    /// is a decision about how much proof is wanted, not a bug to fix.
+    /// </summary>
+    [Fact]
+    public void TheConfirmationPhaseIsWhatTheProfileActuallyCosts()
+    {
+        Assert.Equal(TimeSpan.FromHours(16), Estimate().PerPhase.Single(p => p.Phase == 3).Span);
+    }
+
+    [Fact]
+    public void WhichPutsTheWholeThingAtUnderSeventeenHours()
+    {
+        Assert.InRange(Estimate().Total, TimeSpan.FromHours(16), TimeSpan.FromHours(17));
+    }
+}

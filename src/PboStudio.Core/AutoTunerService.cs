@@ -205,7 +205,19 @@ public static class AutoTunerService
     /// start only if its very first test fails. So the worst case is whichever leg is longer.
     /// </para>
     /// </summary>
-    public static int WorstCaseSlots(int currentMargin, int maxLimit, AutoTunerMode mode, int maxPasses)
+    /// <param name="canClimb">
+    /// Whether the search might have to walk this core back up from scratch. False once the core
+    /// has a value on record that held: a failure then returns straight to that value and locks
+    /// there, without retesting it, so the climb cannot happen.
+    /// <para>
+    /// Leaving this out overstated the estimate badly for exactly the cores a campaign is
+    /// usually left with. A core sitting at -25 with -25 on record as passing has four steps to
+    /// try and then it is done — five slots. Costed as though it might climb from -25 back to 0,
+    /// it came out at twenty-six, and a half-hour phase was quoted at two and a half hours.
+    /// </para>
+    /// </param>
+    public static int WorstCaseSlots(
+        int currentMargin, int maxLimit, AutoTunerMode mode, int maxPasses, bool canClimb = true)
     {
         int step = StepSize(mode);
 
@@ -213,7 +225,9 @@ public static class AutoTunerService
             ? (int)Math.Ceiling((double)(currentMargin - maxLimit) / step) + 1
             : 1;
 
-        int ascentSlots = (int)Math.Ceiling((double)Math.Max(0, -currentMargin) / step) + 1;
+        int ascentSlots = canClimb
+            ? (int)Math.Ceiling((double)Math.Max(0, -currentMargin) / step) + 1
+            : 0;
 
         return Math.Max(1, Math.Min(maxPasses, Math.Max(descentSlots, ascentSlots)));
     }
