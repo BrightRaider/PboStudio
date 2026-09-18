@@ -617,6 +617,20 @@
                   </StackPanel>
                 </Border>
 
+
+              </StackPanel>
+
+              <!-- Tab 3: Advanced - every knob plus every safety limit -->
+              <StackPanel x:Name="RightTabAdvancedPanel" Spacing="10" IsVisible="False" Margin="0,0,4,0">
+
+                <!-- Every knob, in one place. These override whatever the chosen profile set,
+                     which is the only reason to come here. -->
+                <TextBlock x:Name="AdvancedRunTitle" Classes="sectionTitle" />
+
+                <!-- The step search. It lived on the Tests tab and was called the auto-tuner,
+                     one tab away from a tab called Auto, which are two different things: Auto
+                     runs all three phases and drives this by itself, this is the search inside
+                     phase two. Nobody needs to set it to let Auto work. -->
                 <Border Classes="panel auto">
                   <StackPanel Spacing="6">
                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -660,15 +674,6 @@
                     <TextBlock x:Name="GuardbandHint" IsVisible="False" />
                   </StackPanel>
                 </Border>
-
-              </StackPanel>
-
-              <!-- Tab 3: Advanced - every knob plus every safety limit -->
-              <StackPanel x:Name="RightTabAdvancedPanel" Spacing="10" IsVisible="False" Margin="0,0,4,0">
-
-                <!-- Every knob, in one place. These override whatever the chosen profile set,
-                     which is the only reason to come here. -->
-                <TextBlock x:Name="AdvancedRunTitle" Classes="sectionTitle" />
 
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">

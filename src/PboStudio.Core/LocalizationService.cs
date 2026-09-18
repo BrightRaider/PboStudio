@@ -88,7 +88,7 @@ public static class LocalizationService
             // left a second green button below the card to find and press.
             "NextStepApply" => isDe ? "🚀 Diesen Test jetzt starten" : "🚀 Start this test now",
             "NextStepOpenSetup" => isDe ? "⚙️ Assistent öffnen" : "⚙️ Open the assistant",
-            "NextStepApplyTuner" => isDe ? "🚀 Auto-Tuner jetzt starten" : "🚀 Start the auto-tuner now",
+            "NextStepApplyTuner" => isDe ? "🚀 Suche jetzt starten" : "🚀 Start the search now",
             "NextStepApplied" => isDe
                 ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt unter „Test“ änderbar."
                 : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable under \"Test\".",
@@ -138,13 +138,15 @@ public static class LocalizationService
             // ---- Test controls ----
             "TestControls" => isDe ? "TEST-STEUERUNG" : "TEST CONTROLS",
             "TestProfile" => isDe ? "Test-Profil" : "Test profile",
-            "AutoTunerTitle" => isDe ? "AUTO-TUNER (vollautomatisch)" : "AUTO-TUNER (automated)",
+            // Called "auto-tuner" until there was a tab called Auto. They are not the same
+            // thing: Auto runs all three phases, this is the search that phase two does.
+            "AutoTunerTitle" => isDe ? "SCHRITTWEISE SUCHE" : "STEP SEARCH",
             "AutoTunerTooltip" => isDe
                 ? "Der Auto-Tuner senkt jeden Kern schrittweise ab, testet nach jedem Schritt und fixiert den Kern (🔒) beim ersten Fehler auf dem letzten stabilen Wert. Grob springt in -3er-Schritten und ist schnell, Fein geht in -1er-Schritten und findet das echte Maximum."
                 : "The auto-tuner lowers each core step by step, tests after every step, and locks the core (🔒) at the last stable value on the first error. Coarse moves in -3 steps and is fast, Fine moves in -1 steps and finds the true maximum.",
-            "AutoTunerDisabled" => isDe ? "Deaktiviert (manuell)" : "Disabled (manual)",
-            "AutoTunerCoarse" => isDe ? "Grob (-3 Schritte — Schnellsuche)" : "Coarse (-3 steps — fast search)",
-            "AutoTunerFine" => isDe ? "Fein (-1 Schritt — Feinabstimmung)" : "Fine (-1 step — precision tuning)",
+            "AutoTunerDisabled" => isDe ? "Aus — Werte bleiben, wie sie sind" : "Off — values stay as they are",
+            "AutoTunerCoarse" => isDe ? "Grob (-3 Schritte — schnell)" : "Coarse (-3 steps — fast)",
+            "AutoTunerFine" => isDe ? "Fein (-1 Schritt — genau)" : "Fine (-1 step — precise)",
             "AutoTunerProgress" => isDe ? "Absenk-Fortschritt" : "Step-down progress",
             "AutoTunerNeedsSmu" => isDe
                 ? "Der Auto-Tuner kann ohne PawnIO keine Curve-Optimizer-Werte setzen und würde nur die BIOS-Werte messen. Bitte zuerst den PawnIO-Treiber installieren."
@@ -154,7 +156,7 @@ public static class LocalizationService
                 : "Note: {0} core(s) hold different values in the table than the CPU does. Without PawnIO they cannot be applied — the run tests the BIOS values currently in effect.",
 
             "StartTest" => isDe ? "🚀 Test starten" : "🚀 Start test",
-            "StartAutoTuner" => isDe ? "🤖 Auto-Tuner starten" : "🤖 Start auto-tuner",
+            "StartAutoTuner" => isDe ? "🔍 Suche starten" : "🔍 Start the search",
             "StopTest" => isDe ? "⏹ Test abbrechen" : "⏹ Cancel test",
             "StartTooltip" => isDe ? "Startet oder stoppt den Testlauf · F5" : "Starts or stops the test run · F5",
             "SetupRequired" => isDe ? "⚠️ Setup erforderlich" : "⚠️ Setup required",
