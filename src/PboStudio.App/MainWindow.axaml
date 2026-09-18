@@ -897,14 +897,15 @@
       </Border>
     </Grid>
 
-    <GridSplitter Grid.Row="3" ResizeDirection="Rows" />
+    <GridSplitter Grid.Row="3" x:Name="DockSplitter" ResizeDirection="Rows" />
 
     <!-- ═══════════════════════════════════════════════════════════
          BOTTOM: telemetry / log
          ═══════════════════════════════════════════════════════════ -->
     <Border Grid.Row="4" Classes="card" Padding="10,8">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,0,0,6">
+        <Grid DockPanel.Dock="Top" x:Name="DockStrip"
+              ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,0,0,6">
           <ToggleButton Grid.Column="0" x:Name="DockCollapseButton" Classes="ghost"
                         IsChecked="True" Content="⌄" FontSize="13" Padding="7,2" Margin="0,0,6,0"
                         VerticalAlignment="Center" IsCheckedChanged="OnToggleBottomDock" />

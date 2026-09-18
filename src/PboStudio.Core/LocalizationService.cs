@@ -369,28 +369,31 @@ public static class LocalizationService
                 ? "Phase {0} von {1} läuft"
                 : "Phase {0} of {1} running",
             "CampaignIdleIntro" => isDe
-                ? "Ein Knopf. PboStudio misst, sucht und prüft selbständig und zeigt am Ende die fertigen Curve-Optimizer-Werte fürs BIOS. Du musst nichts einstellen und zwischendurch nichts entscheiden."
-                : "One button. PboStudio measures, searches and proves on its own, and ends with the finished Curve Optimizer values for your BIOS. Nothing to configure, nothing to decide along the way.",
+                ? "Ein Knopf. Am Ende stehen die fertigen Werte fürs BIOS."
+                : "One button. It ends with the finished values for your BIOS.",
             "CampaignResumeIntro" => isDe
-                ? "Der Durchlauf wurde unterbrochen — gestoppt oder vom Neustart erwischt, den Phase 2 provoziert. Nichts ist verloren: es geht an derselben Stelle weiter."
-                : "The campaign was interrupted — stopped, or caught by the restart phase 2 is designed to provoke. Nothing is lost: it carries on from the same place.",
+                ? "Unterbrochen — nichts ist verloren, es geht an derselben Stelle weiter."
+                : "Interrupted — nothing is lost, it carries on from the same place.",
             "CampaignPhase1" => isDe
-                ? "Prüfen, was die aktuellen Werte aushalten — beide Testprogramme im Wechsel."
-                : "Check what the current values hold up to — both engines, alternating.",
+                ? "Prüfen, was die jetzigen Werte aushalten"
+                : "Check what the current values hold",
             "CampaignPhase2" => isDe
-                ? "Jeden Kern absenken, bis er kippt, und einen Sicherheitsabstand darüber fixieren."
-                : "Lower each core until it gives, then lock it a safety margin above that.",
+                ? "Jeden Kern absenken, bis er kippt"
+                : "Lower each core until it gives",
             "CampaignPhase3" => isDe
-                ? "Das Ergebnis über alle Lastarten absichern, die die Suche nie benutzt hat."
-                : "Prove the result across every load type the search never used.",
+                ? "Ergebnis unter allen Lastarten beweisen"
+                : "Prove the result under every load type",
             "CampaignEstimate" => isDe
-                ? "Dauert insgesamt lange — je nach Prozessor eine Nacht bis ein Wochenende. Du kannst jederzeit stoppen; beim nächsten Start geht es an derselben Stelle weiter."
-                : "This takes a long time — a night to a weekend, depending on the processor. You can stop whenever you like; it carries on from the same place next time.",
+                ? "Dauert eine Nacht bis ein Wochenende. Stoppen und später weitermachen geht jederzeit."
+                : "Takes a night to a weekend. You can stop any time and carry on later.",
             "CampaignStart" => isDe ? "🚀 Starten" : "🚀 Start",
             "CampaignContinue" => isDe ? "🚀 Fortsetzen" : "🚀 Continue",
             "CampaignFootnote" => isDe
-                ? "Während der Suche kann der Rechner neu starten. Das ist beabsichtigt: genau der Wert, der ihn umwirft, ist der, den wir finden wollen."
-                : "The machine may restart during the search. That is intended: the value that takes it down is exactly the one we are looking for.",
+                ? "Der Rechner kann dabei neu starten — das ist beabsichtigt."
+                : "The machine may restart along the way — that is intended.",
+            "CampaignFootnoteTooltip" => isDe
+                ? "Phase 2 sucht den Wert, bei dem ein Kern kippt. Genau dieser Wert wirft den Rechner unter Umständen um — anders lässt er sich nicht finden. PboStudio merkt sich jeden Absturz, nimmt den Kern danach zurück und fasst den Wert nie wieder an."
+                : "Phase 2 looks for the value at which a core gives. That value may well take the machine down — there is no other way to find it. PboStudio records every crash, backs the core off afterwards and never touches that value again.",
             "CampaignStalledHint" => isDe
                 ? "Der letzte Lauf hat nichts verändert — abgebrochen, oder die Durchgänge waren zu wenige. Schau ins Protokoll, bevor du weitermachst."
                 : "The last run changed nothing — cancelled, or too few passes. Check the log before continuing.",
@@ -411,8 +414,8 @@ public static class LocalizationService
                 : "🏁 Done. Every core sits at a value that passed every load type.",
             "CampaignResultTitle" => isDe ? "🏁 Fertig – deine Werte" : "🏁 Done – your values",
             "CampaignResultText" => isDe
-                ? "Jeder Kern hat beide Testprogramme über alle Lastarten bestanden. Diese Werte gelten gerade live, verschwinden aber beim Neustart — trag sie ins BIOS ein, damit sie bleiben."
-                : "Every core passed both engines across every load type. These values are live right now but vanish on reboot — enter them in the BIOS to keep them.",
+                ? "Jeder Kern hat alle Lastarten bestanden. Die Werte gelten jetzt live und verschwinden beim Neustart — ins BIOS eintragen, damit sie bleiben."
+                : "Every core passed every load type. These values are live now and vanish on reboot — enter them in the BIOS to keep them.",
             "CampaignAgain" => isDe ? "Von vorn beginnen" : "Start over",
             "NoCurveOptimizerTitle" => isDe
                 ? "Dieser Prozessor hat keinen Curve Optimizer"

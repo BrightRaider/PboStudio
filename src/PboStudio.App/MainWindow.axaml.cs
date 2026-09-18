@@ -1870,6 +1870,7 @@ public partial class MainWindow : Window
 
         AutoFootnote.Text = LocalizationService.Get(
             decision.Verdict == CampaignVerdict.Stalled ? "CampaignStalledHint" : "CampaignFootnote");
+        Tip(AutoFootnote, "CampaignFootnoteTooltip");
     }
 
     /// <summary>The stage of the run currently in flight, as recorded when it was started.</summary>
@@ -3607,6 +3608,12 @@ public partial class MainWindow : Window
         _running = running;
         ProgressPanel.IsVisible = running;
 
+        // PPT, TDC, EDC and the scalar are power-limit readouts: at idle they are four chips of
+        // jargon reporting that nothing is happening. Temperature and clock stay, because those
+        // are the two numbers that mean something whether or not a run is going.
+        foreach (var chip in new[] { PptChip, TdcChip, EdcChip, ScalarChip })
+            if (chip is not null) chip.IsVisible = running;
+
         // The footer button is hidden on the Auto tab while idle, because the campaign owns the
         // action there. It has to come back the moment there is a run to stop.
         UpdateStartButtonState();
@@ -3736,9 +3743,6 @@ public partial class MainWindow : Window
     /// <summary>Expanded height of the bottom dock, in device-independent pixels.</summary>
     private const double DockHeightOpen = 150;
 
-    /// <summary>Collapsed height: enough for the tab strip and the card's own padding.</summary>
-    private const double DockHeightCollapsed = 46;
-
     private void OnToggleBottomDock(object? sender, RoutedEventArgs e)
     {
         if (BottomContent is null || DockCollapseButton is null || RootGrid is null) return;
@@ -3746,10 +3750,17 @@ public partial class MainWindow : Window
         bool open = DockCollapseButton.IsChecked == true;
         BottomContent.IsVisible = open;
 
-        // The row itself has to shrink, not just its content: it is a pixel row so the
-        // splitter above keeps something concrete to resize against.
-        RootGrid.RowDefinitions[4].Height =
-            new GridLength(open ? DockHeightOpen : DockHeightCollapsed, GridUnitType.Pixel);
+        // Open, the row is a pixel row so the splitter has something concrete to resize
+        // against. Collapsed, it sizes to the tab strip: the fixed 46 was a couple of pixels
+        // short of the strip plus the card's padding, so the tab labels were cut off along the
+        // bottom edge of the window. A measured row cannot be short of its own content.
+        RootGrid.RowDefinitions[4].Height = open
+            ? new GridLength(DockHeightOpen, GridUnitType.Pixel)
+            : GridLength.Auto;
+
+        // Nothing to resize against while it is shut.
+        if (DockSplitter is not null) DockSplitter.IsVisible = open;
+        if (DockStrip is not null) DockStrip.Margin = new Avalonia.Thickness(0, 0, 0, open ? 6 : 0);
 
         DockCollapseButton.Content = open ? "⌄" : "⌃";
     }
