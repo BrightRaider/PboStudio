@@ -540,40 +540,13 @@
                            Foreground="{StaticResource TextFaint}" />
               </StackPanel>
 
-              <!-- Tab 2: Test - everything about what runs, in the order you would decide it:
-                   which profile, how long that takes, whether the tuner drives it, then the
-                   individual knobs that override the profile. -->
+              <!-- Tab 2: Tests - pick one run and start it. Three things and the button at the
+                   bottom: which profile, what it runs, how long that takes. The recommendation
+                   card that used to sit on top of this was a second answer to the same question
+                   the picker below it was already answering, with its own start button and its
+                   own copy of the runtime, refreshed on different events and so eventually
+                   disagreeing by a factor of eight. Auto is where advice belongs. -->
               <StackPanel x:Name="RightTabTestsPanel" Spacing="8" IsVisible="False" Margin="0,0,4,0">
-
-                <!-- What to run, if you would rather choose than let Auto do it. Same advice
-                     the Auto tab acts on, as a single run you start yourself. -->
-                <Border x:Name="NextStepCard" Classes="panel success" Padding="12,10">
-                  <StackPanel Spacing="7">
-                    <StackPanel Orientation="Horizontal" Spacing="7">
-                      <TextBlock Text="👉" FontSize="14" VerticalAlignment="Center" />
-                      <TextBlock x:Name="NextStepHeadline" FontSize="{StaticResource FontTitle}"
-                                 FontWeight="Bold" Foreground="{StaticResource AccentPrimaryHi}"
-                                 TextWrapping="Wrap" VerticalAlignment="Center" />
-                    </StackPanel>
-
-                    <Border x:Name="NextStepProfileBox" Background="{StaticResource SurfaceInset}"
-                            CornerRadius="4" Padding="9,7">
-                      <StackPanel Spacing="3">
-                        <TextBlock x:Name="NextStepProfileName" FontSize="{StaticResource FontBody}"
-                                   FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock x:Name="NextStepDetail" Classes="caption"
-                                   FontFamily="{StaticResource FontMono}" LineHeight="14" />
-                      </StackPanel>
-                    </Border>
-
-                    <TextBlock x:Name="NextStepReason" Classes="body"
-                               FontSize="{StaticResource FontCaption}" LineHeight="16" />
-
-                    <Button x:Name="ApplyNextStepButton" Classes="primary" HorizontalAlignment="Stretch"
-                            MinHeight="34" Click="OnApplyNextStep" />
-                  </StackPanel>
-                </Border>
 
                 <StackPanel x:Name="ProfilePickerPanel" Spacing="4">
                   <TextBlock x:Name="TestProfileLabel" Classes="label" />

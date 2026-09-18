@@ -811,7 +811,6 @@ public partial class MainWindow : Window
         }
 
         UpdateStartButtonState();
-        UpdateNextStep();
     }
 
     private void UpdateStartButtonState()
@@ -1120,7 +1119,6 @@ public partial class MainWindow : Window
         CoreKnowledgeService.Save(SettingsRoot, _knowledge, CurrentBiosVersion);
         PushKnowledgeToRows();
         UpdateKnowledgeSummary();
-        UpdateNextStep();
 
         Log(string.Format(LocalizationService.Get("CrashRecorded"), _pendingCrashes.Count), LogLevel.Success);
         DismissCrashes();
@@ -1524,18 +1522,11 @@ public partial class MainWindow : Window
 
         ResetWheaButton.IsVisible = _rows.Any(r => r.WheaCount > 0);
 
-        UpdateNextStep();
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // The one recommendation
-    // ══════════════════════════════════════════════════════════════
-
-    private NextStep? _nextStep;
-
-    /// <summary>"about 1:40 hrs", or "up to" when the auto-tuner decides when to stop.</summary>
+    /// <summary>"about 1:40 hrs", or "up to" when the search decides when to stop.</summary>
     private string DurationLabel(TimeSpan span) =>
-        _nextStep?.UseAutoTuner == true || AutoRuntimeBox?.IsChecked == true
+        AutoTunerModeBox?.SelectedIndex > 0 || AutoRuntimeBox?.IsChecked == true
             ? LocalizationService.Pick($"höchstens {span:h\\:mm} Std.", $"up to {span:h\\:mm} hrs")
             : LocalizationService.Pick($"ca. {span:h\\:mm} Std.", $"about {span:h\\:mm} hrs");
 
@@ -1552,62 +1543,6 @@ public partial class MainWindow : Window
         }
 
         RefreshProfileList(id);
-    }
-
-    private void UpdateNextStep()
-    {
-        if (NextStepCard is null || _profiles.Count == 0) return;
-
-        var currentMargins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
-        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
-
-        _nextStep = NextStepService.Recommend(
-            _smu.CpuName, _cores, currentMargins, _knowledge, chipLimit, LocalizationService.IsGerman,
-            driverReady: _dependencies?.PawnIoAvailable ?? _smu.IsAvailable,
-            engineReady: _dependencies is null
-                || _dependencies.Prime95Available
-                || _dependencies.YCruncherAvailable,
-            guardband: CurrentGuardband);
-
-        NextStepHeadline.Text = _nextStep.Headline;
-        NextStepReason.Text = _nextStep.Reason;
-
-        // The mechanics live in the tooltip now; the card carries one sentence.
-        ToolTip.SetTip(NextStepCard, _nextStep.Detail);
-
-        // On the setup stages there is no profile to name yet, and showing one would suggest
-        // something is ready to run.
-        NextStepProfileBox.IsVisible = _nextStep.ShowProfile;
-        if (_nextStep.ShowProfile
-            && _profiles.FirstOrDefault(p => p.Id == _nextStep.Profile) is { } profile)
-        {
-            NextStepProfileName.Text = profile.Name;
-
-            // How long this will take is the number a person weighs before pressing start.
-            // It used to live below the fold in a panel of its own.
-            var estimate = EstimateTotalRuntime(
-                _nextStep.UseAutoTuner ? AutoTunerMode.Fein : null,
-                chipLimit,
-                profile.Phases.Count);
-
-            NextStepDetail.Text = estimate > TimeSpan.Zero
-                ? profile.EngineSummary + "\n"
-                  + LocalizationService.Pick("Dauer: ", "Takes: ") + DurationLabel(estimate)
-                : profile.EngineSummary;
-        }
-
-        // Setup stages get the warning tint: they are a blocker, not a suggestion.
-        bool setup = _nextStep.Action == NextStepAction.OpenSetup;
-        NextStepCard.Classes.Set("success", !setup);
-        NextStepCard.Classes.Set("warning", setup);
-        NextStepHeadline.Foreground = SolidColorBrush.Parse(setup ? "#FBBF24" : "#34D399");
-
-        ApplyNextStepButton.Content = LocalizationService.Get(
-            setup ? "NextStepOpenSetup"
-            : _nextStep.UseAutoTuner ? "NextStepApplyTuner"
-            : "NextStepApply");
-
-        UpdateStartButtonState();
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1922,28 +1857,6 @@ public partial class MainWindow : Window
 
         AutoResultValues.Text = string.Join("\n", lines);
         AutoFootnote.Text = "";
-    }
-
-    /// <summary>
-    /// The whole run in one click: the profile, whether the auto-tuner drives it, which cores
-    /// take part — and then the run itself. It used to stop after configuring, leaving a second
-    /// green button below it to find, which is one button too many for "press this to begin".
-    /// Everything it sets stays editable on the Test tab afterwards.
-    /// </summary>
-    private void OnApplyNextStep(object? sender, RoutedEventArgs e)
-    {
-        if (_nextStep is null || _running) return;
-
-        if (_nextStep.Action == NextStepAction.OpenSetup)
-        {
-            OnOpenSetupWizard(sender, e);
-            return;
-        }
-
-        ApplyStepToControls(_nextStep);
-
-        Log(string.Format(LocalizationService.Get("NextStepApplied"), _nextStep.Headline), LogLevel.Success);
-        OnStartStop(sender, e);
     }
 
     /// <summary>
@@ -2780,6 +2693,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>One line naming every phase in order, e.g. "1. SSE / Huge  ·  2. y-cruncher".</summary>
+    /// <summary>
+    /// Whether what will run matches what the profile asked for, ignoring the numbering the
+    /// summary adds when there is more than one leg.
+    /// </summary>
+    private static bool PlansMatch(string profilePlan, string actual)
+    {
+        static string Strip(string s) =>
+            string.Concat(s.Where(c => !char.IsWhiteSpace(c)))
+                  .Replace("1.", "").Replace("2.", "").Replace("3.", "").Replace("4.", "");
+
+        return string.Equals(Strip(profilePlan), Strip(actual), StringComparison.OrdinalIgnoreCase);
+    }
+
     private string PhaseSummary()
     {
         var phases = BuildPhases();
@@ -3092,8 +3018,8 @@ public partial class MainWindow : Window
             {
                 string lockedNote = lockedCount > 0 ? (isDe ? $", {lockedCount} 🔒 fixiert" : $", {lockedCount} 🔒 locked") : "";
                 DurationHint.Text = isDe
-                    ? $"🤖 Auto-Tuner ({modeDesc}): max. {total:h\\:mm} Std. ({activeRows.Count} aktive Kerne{lockedNote})"
-                    : $"🤖 Auto-tuner ({modeDesc}): up to {total:h\\:mm} hrs ({activeRows.Count} active cores{lockedNote})";
+                    ? $"🔍 Suche ({modeDesc}): max. {total:h\\:mm} Std. ({activeRows.Count} aktive Kerne{lockedNote})"
+                    : $"🔍 Search ({modeDesc}): up to {total:h\\:mm} hrs ({activeRows.Count} active cores{lockedNote})";
 
                 DurationHintSub.Text = isDe
                     ? $"Senkt jeden Kern schrittweise bis zum Chip-Limit ({maxNegativeLimit}) ab. Fällt er durch, geht es wieder aufwärts und wird erneut getestet, bis ein Wert hält — erst dieser wird fixiert (🔒). Höchstens {maxPasses} Durchgänge à {MinutesBox.Value} Min; reichen sie nicht, bleibt der Kern offen."
@@ -3131,7 +3057,18 @@ public partial class MainWindow : Window
 
         if (PhasePlanText is not null)
         {
-            PhasePlanText.Text = LocalizationService.Pick("Ablauf: ", "Plan: ") + PhaseSummary();
+            // The line above already says what the profile runs. This one exists because the
+            // Advanced knobs can override it, so it is worth reading only when the two differ.
+            var profilePlan = ProfileBox?.SelectedItem is TestProfile sel
+                ? string.Join("  ·  ", sel.Phases.Select(ph => ph.Label))
+                : "";
+            string actual = PhaseSummary();
+            bool overridden = profilePlan.Length > 0 && !PlansMatch(profilePlan, actual);
+
+            PhasePlanText.IsVisible = overridden;
+            PhasePlanText.Text = overridden
+                ? LocalizationService.Pick("Stattdessen: ", "Instead: ") + actual
+                : "";
         }
 
         ToolTip.SetTip(DurationHintBorder, DurationHintSub.Text);
@@ -3633,7 +3570,6 @@ public partial class MainWindow : Window
         // The footer button is hidden on the Auto tab while idle, because the campaign owns the
         // action there. It has to come back the moment there is a run to stop.
         UpdateStartButtonState();
-        ApplyNextStepButton.IsEnabled = !running;
         RefreshAutoTab();
 
         if (!running)

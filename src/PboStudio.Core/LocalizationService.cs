@@ -86,12 +86,7 @@ public static class LocalizationService
             // ---- The one recommendation ----
             // The button configures the run and starts it. It used to only configure, which
             // left a second green button below the card to find and press.
-            "NextStepApply" => isDe ? "🚀 Diesen Test jetzt starten" : "🚀 Start this test now",
             "NextStepOpenSetup" => isDe ? "⚙️ Assistent öffnen" : "⚙️ Open the assistant",
-            "NextStepApplyTuner" => isDe ? "🚀 Suche jetzt starten" : "🚀 Start the search now",
-            "NextStepApplied" => isDe
-                ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt unter „Test“ änderbar."
-                : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable under \"Test\".",
             "ShowAllProfiles" => isDe
                 ? "Alle 14 Profile zeigen (statt der 5 auf dem Weg)"
                 : "Show all 14 profiles (instead of the 5 on the path)",
