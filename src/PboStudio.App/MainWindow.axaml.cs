@@ -581,8 +581,13 @@ public partial class MainWindow : Window
     {
         var s = _settings;
 
-        if (ProfileBox.ItemCount > 0)
-            ProfileBox.SelectedIndex = Math.Clamp(s.ProfileIndex, 0, ProfileBox.ItemCount - 1);
+        // Restored by identity. The stored index still works for settings written before the
+        // list was cut down to five, which is what the fallback is for.
+        AllProfilesBox.IsChecked = s.ShowAllProfiles;
+        if (Enum.TryParse<ProfileId>(s.ProfileId, out var savedProfile))
+            SelectProfile(savedProfile);
+        else if (s.ProfileIndex > 0 && s.ProfileIndex < _profiles.Count)
+            SelectProfile(_profiles[s.ProfileIndex].Id);
 
         MinutesBox.Value = s.MinutesPerCore;
         IterationsBox.Value = s.Iterations;
@@ -643,7 +648,8 @@ public partial class MainWindow : Window
         var s = _settings;
         s.UiLanguage = LocalizationService.IsGerman ? nameof(Language.German) : nameof(Language.English);
 
-        s.ProfileIndex = ProfileBox.SelectedIndex;
+        s.ProfileId = (ProfileBox.SelectedItem as TestProfile)?.Id.ToString() ?? "";
+        s.ShowAllProfiles = AllProfilesBox.IsChecked == true;
         s.AutoTunerMode = AutoTunerModeBox.SelectedIndex;
 
         s.MinutesPerCore = (int)(MinutesBox.Value ?? 6);
@@ -805,6 +811,14 @@ public partial class MainWindow : Window
 
     private void UpdateStartButtonState()
     {
+        // On the first screen the card carries the button. Showing a second green button below
+        // it, labelled differently for the same run, is how the panel got to be a wall.
+        if (StartButton is null || StartDivider is null) return;
+
+        bool ownedByCard = RightTabSetupBtn?.IsChecked == true && !_running;
+        StartButton.IsVisible = !ownedByCard;
+        StartDivider.IsVisible = !ownedByCard;
+
         if (_running) return;
 
         bool canTest = _dependencies is null || _dependencies.Prime95Available || _dependencies.YCruncherAvailable;
@@ -1185,7 +1199,6 @@ public partial class MainWindow : Window
         }
 
         // Right panel
-        TestControlsTitle.Text = LocalizationService.Get("TestControls");
         RightTabSetupBtn.Content = LocalizationService.Get("TabSetup");
         AdvancedTabsLabel.Text = LocalizationService.Get("AdvancedTabs");
         Tip(AdvancedTabsLabel, "AdvancedTabsTooltip");
@@ -1196,9 +1209,9 @@ public partial class MainWindow : Window
         TestRunningText.Text = LocalizationService.Get("TestRunning");
 
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
-        NextStepDetailHint.Text = LocalizationService.Get("NextStepDetailHint");
-        ShowAllProfilesButton.Content = LocalizationService.Get(
-            ShowAllProfilesButton.IsChecked == true ? "HideAllProfiles" : "ShowAllProfiles");
+        OpenAdvancedLink.Content = LocalizationService.Get("OpenAdvanced");
+        AllProfilesBox.Content = LocalizationService.Get("ShowAllProfiles");
+        EngineKnobsTitle.Text = LocalizationService.Get("EngineKnobs");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
@@ -1344,6 +1357,7 @@ public partial class MainWindow : Window
         RightTabSetupPanel.IsVisible = RightTabSetupBtn.IsChecked == true;
         RightTabEnginePanel.IsVisible = RightTabEngineBtn.IsChecked == true;
         RightTabSystemPanel.IsVisible = RightTabSystemBtn.IsChecked == true;
+        UpdateStartButtonState();
     }
 
     private void OnBottomTabChanged(object? sender, RoutedEventArgs e)
@@ -1517,15 +1531,24 @@ public partial class MainWindow : Window
             ? LocalizationService.Pick($"höchstens {span:h\\:mm} Std.", $"up to {span:h\\:mm} hrs")
             : LocalizationService.Pick($"ca. {span:h\\:mm} Std.", $"about {span:h\\:mm} hrs");
 
-    /// <summary>Index of a profile by identity. Nothing is matched by display name any more.</summary>
-    private int IndexOfProfile(ProfileId id) =>
-        ProfileBox.ItemsSource is IEnumerable<TestProfile> p
-            ? p.ToList().FindIndex(x => x.Id == id)
-            : -1;
+    /// <summary>
+    /// Selects a profile by identity, widening the picker if the profile is one of the nine
+    /// that the short list leaves out. Nothing is matched by display name any more.
+    /// </summary>
+    private void SelectProfile(ProfileId id)
+    {
+        if (ProfileBox.ItemsSource is IEnumerable<TestProfile> shown)
+        {
+            int i = shown.ToList().FindIndex(x => x.Id == id);
+            if (i >= 0) { ProfileBox.SelectedIndex = i; return; }
+        }
+
+        RefreshProfileList(id);
+    }
 
     private void UpdateNextStep()
     {
-        if (NextStepCard is null || ProfileBox.ItemsSource is not IEnumerable<TestProfile> profiles) return;
+        if (NextStepCard is null || _profiles.Count == 0) return;
 
         var currentMargins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
         int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
@@ -1541,14 +1564,13 @@ public partial class MainWindow : Window
         NextStepReason.Text = _nextStep.Reason;
 
         // The mechanics live in the tooltip now; the card carries one sentence.
-        NextStepDetailHint.IsVisible = _nextStep.Detail.Length > 0;
         ToolTip.SetTip(NextStepCard, _nextStep.Detail);
 
         // On the setup stages there is no profile to name yet, and showing one would suggest
         // something is ready to run.
         NextStepProfileBox.IsVisible = _nextStep.ShowProfile;
         if (_nextStep.ShowProfile
-            && profiles.FirstOrDefault(p => p.Id == _nextStep.Profile) is { } profile)
+            && _profiles.FirstOrDefault(p => p.Id == _nextStep.Profile) is { } profile)
         {
             NextStepProfileName.Text = profile.Name;
 
@@ -1576,14 +1598,16 @@ public partial class MainWindow : Window
             : _nextStep.UseAutoTuner ? "NextStepApplyTuner"
             : "NextStepApply");
 
-        // The list of thirteen is noise while nothing can run at all.
-        ShowAllProfilesButton.IsVisible = !setup;
+        // Settings are beside the point while the driver is still missing.
+        OpenAdvancedLink.IsVisible = !setup;
+        UpdateStartButtonState();
     }
 
     /// <summary>
-    /// Sets up the whole run in one click: the profile, whether the auto-tuner drives it, and
-    /// which cores take part. Everything it touches stays editable afterwards — this is a
-    /// starting point, not a mode.
+    /// The whole run in one click: the profile, whether the auto-tuner drives it, which cores
+    /// take part — and then the run itself. It used to stop after configuring, leaving a second
+    /// green button below it to find, which is one button too many for "press this to begin".
+    /// Everything it sets stays editable on the Test tab afterwards.
     /// </summary>
     private void OnApplyNextStep(object? sender, RoutedEventArgs e)
     {
@@ -1595,8 +1619,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        int index = IndexOfProfile(_nextStep.Profile);
-        if (index >= 0) ProfileBox.SelectedIndex = index;
+        SelectProfile(_nextStep.Profile);
 
         // Fine steps: the recommendation only reaches for the tuner once the search space is
         // narrow, and at that point -1 costs nothing extra over -3.
@@ -1635,17 +1658,12 @@ public partial class MainWindow : Window
         UpdateStartButtonState();
 
         Log(string.Format(LocalizationService.Get("NextStepApplied"), _nextStep.Headline), LogLevel.Success);
+        OnStartStop(sender, e);
     }
 
-    private void OnToggleProfileList(object? sender, RoutedEventArgs e)
-    {
-        if (ProfilePickerPanel is null || ShowAllProfilesButton is null) return;
-
-        bool open = ShowAllProfilesButton.IsChecked == true;
-        ProfilePickerPanel.IsVisible = open;
-        NextStepDetailHint.Text = LocalizationService.Get("NextStepDetailHint");
-        ShowAllProfilesButton.Content = LocalizationService.Get(open ? "HideAllProfiles" : "ShowAllProfiles");
-    }
+    /// <summary>The one way off the first screen, for anyone who wants the knobs.</summary>
+    private void OnOpenAdvanced(object? sender, RoutedEventArgs e) =>
+        RightTabEngineBtn.IsChecked = true;
 
     private async void OnCopyBiosValues(object? sender, RoutedEventArgs e)
     {
@@ -2615,16 +2633,41 @@ public partial class MainWindow : Window
         return ZenGeneration.Zen4;
     }
 
+    /// <summary>Every profile for this processor. The picker shows a subset of it.</summary>
+    private IReadOnlyList<TestProfile> _profiles = [];
+
     private void LoadProfiles()
     {
-        int prevIdx = ProfileBox?.SelectedIndex ?? 0;
-        var profiles = TestProfiles.For(_smu.CpuName, isGerman: LocalizationService.IsGerman);
-        if (ProfileBox is not null)
-        {
-            ProfileBox.ItemsSource = profiles;
-            ProfileBox.SelectedIndex = Math.Clamp(prevIdx, 0, profiles.Count - 1);
-        }
+        var keep = (ProfileBox?.SelectedItem as TestProfile)?.Id;
+        _profiles = TestProfiles.For(_smu.CpuName, isGerman: LocalizationService.IsGerman);
+        RefreshProfileList(keep);
     }
+
+    /// <summary>
+    /// Fills the picker with either the five profiles on the path or all fourteen, keeping the
+    /// same profile selected across the switch: the checkbox widens the list, it does not
+    /// change what is about to run.
+    /// </summary>
+    private void RefreshProfileList(ProfileId? keep)
+    {
+        if (ProfileBox is null || _profiles.Count == 0) return;
+
+        List<TestProfile> shown = AllProfilesBox?.IsChecked == true
+            ? [.. _profiles]
+            : [.. _profiles.Where(p => p.Essential)];
+
+        // Something selected from the long list keeps the long list open. Narrowing it under a
+        // selection that is no longer in it would quietly swap the profile out.
+        if (keep is { } id && shown.All(p => p.Id != id) && _profiles.Any(p => p.Id == id))
+            shown = [.. _profiles];
+
+        ProfileBox.ItemsSource = shown;
+        int index = keep is { } want ? shown.FindIndex(p => p.Id == want) : -1;
+        ProfileBox.SelectedIndex = index >= 0 ? index : 0;
+    }
+
+    private void OnToggleAllProfiles(object? sender, RoutedEventArgs e) =>
+        RefreshProfileList((ProfileBox?.SelectedItem as TestProfile)?.Id);
 
     /// <summary>A profile is just a preset: it fills the controls, it does not lock them.</summary>
     private void OnProfileChanged(object? sender, SelectionChangedEventArgs e)
@@ -3216,6 +3259,11 @@ public partial class MainWindow : Window
     {
         _running = running;
         ProgressPanel.IsVisible = running;
+
+        // The footer button is hidden on the first screen while idle, because the card owns the
+        // action there. It has to come back the moment there is a run to stop.
+        UpdateStartButtonState();
+        ApplyNextStepButton.IsEnabled = !running;
 
         if (!running)
         {

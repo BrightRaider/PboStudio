@@ -84,15 +84,18 @@ public static class LocalizationService
             "RecommendedProfile" => isDe ? "Empfohlenes Profil" : "Recommended profile",
 
             // ---- The one recommendation ----
-            "NextStepDetailHint" => isDe ? "Details im Tooltip" : "Details in the tooltip",
-            "NextStepApply" => isDe ? "✓ Diesen Lauf einrichten" : "✓ Set this run up",
+            // The button configures the run and starts it. It used to only configure, which
+            // left a second green button below the card to find and press.
+            "NextStepApply" => isDe ? "🚀 Diesen Test jetzt starten" : "🚀 Start this test now",
             "NextStepOpenSetup" => isDe ? "⚙️ Assistent öffnen" : "⚙️ Open the assistant",
-            "NextStepApplyTuner" => isDe ? "✓ Auto-Tuner so einrichten" : "✓ Set the auto-tuner up like this",
+            "NextStepApplyTuner" => isDe ? "🚀 Auto-Tuner jetzt starten" : "🚀 Start the auto-tuner now",
             "NextStepApplied" => isDe
-                ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt änderbar."
-                : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable.",
-            "ShowAllProfiles" => isDe ? "▸ Anderes Profil wählen (13)" : "▸ Choose a different profile (13)",
-            "HideAllProfiles" => isDe ? "▾ Profilliste schließen" : "▾ Close the profile list",
+                ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt unter „Test“ änderbar."
+                : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable under \"Test\".",
+            "OpenAdvanced" => isDe ? "⚙️ Einstellungen & alle Profile" : "⚙️ Settings & all profiles",
+            "ShowAllProfiles" => isDe
+                ? "Alle 14 Profile zeigen (statt der 5 auf dem Weg)"
+                : "Show all 14 profiles (instead of the 5 on the path)",
             "UseProfile" => isDe ? "Profil laden" : "Load profile",
 
             // ---- Core table ----
@@ -341,13 +344,14 @@ public static class LocalizationService
             // ---- Workspace tabs ----
             "TabGraph" => isDe ? "📊 Live-Telemetrie" : "📊 Live telemetry",
             "TabLog" => isDe ? "📜 Protokoll" : "📜 Log",
-            "TabSetup" => isDe ? "🎯 Profil & Start" : "🎯 Profile & start",
+            "TabSetup" => isDe ? "🎯 Start" : "🎯 Start",
             "AdvancedTabs" => isDe ? "Erweitert" : "Advanced",
             "AdvancedTabsTooltip" => isDe
-                ? "Wird für einen normalen Lauf nicht gebraucht: das gewählte Profil bringt Testprogramm, Lastart, Laufzeit und Kern-Reihenfolge bereits mit. Hier drin wird das übersteuert."
-                : "Not needed for an ordinary run: the selected profile already carries the engine, workload, runtime and core order. What is in here overrides that.",
-            "TabEngine" => isDe ? "⚡ Engine" : "⚡ Engine",
+                ? "Für einen normalen Lauf nicht nötig: die Empfehlung auf dem ersten Bildschirm richtet alles ein. Hier stehen die Profilliste, der Auto-Tuner und jeder einzelne Regler, falls du etwas übersteuern willst."
+                : "Not needed for an ordinary run: the recommendation on the first screen sets everything up. In here are the profile list, the auto-tuner and every individual knob, for when you want to override something.",
+            "TabEngine" => isDe ? "⚡ Test" : "⚡ Test",
             "TabSystem" => isDe ? "🛡️ System" : "🛡️ System",
+            "EngineKnobs" => isDe ? "EINZELNE REGLER" : "INDIVIDUAL KNOBS",
             "CopyLog" => isDe ? "Kopieren" : "Copy",
             "ClearLog" => isDe ? "Leeren" : "Clear",
             "OpenLogFolder" => isDe ? "Ordner" : "Folder",

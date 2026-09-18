@@ -65,6 +65,16 @@ public sealed record TestProfile(
     public ProfileId Id { get; init; } = ProfileId.HeavyFfts;
 
     /// <summary>
+    /// Whether this profile appears in the short list.
+    ///
+    /// Fourteen entries is not a choice, it is a quiz: nine of them are variations on the five
+    /// that actually get somebody from an untested processor to values worth putting in the
+    /// BIOS. The five are the path — first run, narrowing, a short look, the case a stress test
+    /// cannot produce, and the final proof. The rest stay one checkbox away.
+    /// </summary>
+    public bool Essential { get; init; }
+
+    /// <summary>
     /// How this profile interrupts the load. Micro-bursting pulses far below the one-second
     /// granularity <see cref="SuspendEverySeconds"/> can express, so it needs its own flag.
     /// </summary>
@@ -268,8 +278,24 @@ public static class TestProfiles
             catLong, catLong,
             catLimit,
         ];
+        // The five that make up the path the program itself recommends, in the order it walks
+        // them. Everything else is a variation somebody may want, not a step anybody needs.
+        HashSet<ProfileId> essential =
+        [
+            ProfileId.RecommendedCombo,   // first run: both engines
+            ProfileId.HeavyFfts,          // narrowing: one engine, so locked cores are not wasted
+            ProfileId.QuickCheck,         // half an hour, for the obvious outliers
+            ProfileId.MicroBurst,         // the game-style failure continuous load never produces
+            ProfileId.Overnight,          // the proof, before the values go into the BIOS
+        ];
+
         for (int i = 0; i < list.Count && i < categories.Length; i++)
-            list[i] = list[i] with { Category = categories[i], Id = ids[i] };
+            list[i] = list[i] with
+            {
+                Category = categories[i],
+                Id = ids[i],
+                Essential = essential.Contains(ids[i]),
+            };
 
         if (isX3d)
         {

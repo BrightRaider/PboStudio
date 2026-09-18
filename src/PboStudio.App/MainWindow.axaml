@@ -186,6 +186,13 @@
             </StackPanel>
           </StackPanel>
         </Border>
+        <!-- A BIOS update invalidates what the tuner remembers. It used to sit inside the
+             tuner's settings block; it belongs with the other things that want reading before
+             anything is started. -->
+        <Border x:Name="BiosChangedPanel" Classes="panel warning" IsVisible="False" Padding="10,7">
+          <TextBlock x:Name="BiosChangedText" Classes="caption"
+                     Foreground="{StaticResource StateWarning}" TextWrapping="Wrap" />
+        </Border>
       </StackPanel>
     </Border>
 
@@ -403,10 +410,10 @@
       <Border Grid.Column="1" Classes="card" Padding="12">
         <DockPanel>
 
-          <TextBlock DockPanel.Dock="Top" x:Name="TestControlsTitle" Classes="sectionTitle" Margin="0,0,0,8" />
-
-          <!-- Setup leads on its own row; the two expert surfaces sit below it under a label
-               that says what they are. A profile carries the whole configuration, so for most
+          <!-- No "TEST CONTROLS" heading: the tab right below it already says what this is,
+               and a column this narrow cannot afford a row that carries no information. -->
+          <!-- Start leads on its own row; the two expert surfaces sit below it under a label
+               that says what they are. The recommendation sets up the whole run, so for most
                runs the row below is never touched — and it should not look like a step. -->
           <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,10">
             <RadioButton x:Name="RightTabSetupBtn" Classes="segment lead"
@@ -436,12 +443,22 @@
               <ProgressBar x:Name="RunProgress" Minimum="0" Maximum="100" Value="0" Height="5" />
               <TextBlock x:Name="RemainingText" Classes="caption" Foreground="{StaticResource TextMuted}" />
               <TextBlock x:Name="PhaseText" Classes="caption" Foreground="{StaticResource TextSecondary}" />
+
+              <!-- The tuner's own progress used to live inside its settings block. That block is
+                   on the Test tab now, and progress that is only visible on a tab nobody has
+                   open is not progress. -->
+              <StackPanel x:Name="AutoTunerProgressPanel" Spacing="3" IsVisible="False">
+                <TextBlock x:Name="AutoTunerProgressText" Classes="caption"
+                           Foreground="{StaticResource AccentAutoHi}" />
+                <ProgressBar x:Name="AutoTunerProgressBar" Minimum="0" Maximum="1" Value="0"
+                             Height="4" Foreground="{StaticResource AccentAuto}" />
+              </StackPanel>
             </StackPanel>
           </Border>
 
           <!-- Sticky footer: one call to action, nothing competing with it -->
           <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
-            <Border Height="1" Background="{StaticResource BorderSubtle}" />
+            <Border x:Name="StartDivider" Height="1" Background="{StaticResource BorderSubtle}" />
             <Button x:Name="StartButton" Classes="primary hero" Click="OnStartStop" />
           </StackPanel>
 
@@ -480,24 +497,31 @@
                     <TextBlock x:Name="NextStepReason" Classes="body"
                                FontSize="{StaticResource FontCaption}" LineHeight="16" />
 
-                    <TextBlock x:Name="NextStepDetailHint" Classes="caption" IsVisible="False" />
-
                     <Button x:Name="ApplyNextStepButton" Classes="primary" HorizontalAlignment="Stretch"
                             MinHeight="34" Click="OnApplyNextStep" />
                   </StackPanel>
                 </Border>
 
-                <!-- The full list stays available, one click away rather than in the way. -->
-                <ToggleButton x:Name="ShowAllProfilesButton" Classes="ghost" HorizontalAlignment="Left"
-                              IsCheckedChanged="OnToggleProfileList" />
+                <!-- Everything that used to sit under the card - the profile list, the runtime
+                     box, the auto-tuner knobs - moved to the Test tab. The first screen answers
+                     one question and offers one action; the rest is a click away for anyone who
+                     wants it. -->
+                <Button x:Name="OpenAdvancedLink" Classes="ghost" HorizontalAlignment="Left"
+                        Click="OnOpenAdvanced" />
+              </StackPanel>
 
-                <StackPanel x:Name="ProfilePickerPanel" Spacing="4" IsVisible="False">
+              <!-- Tab 2: Test - everything about what runs, in the order you would decide it:
+                   which profile, how long that takes, whether the tuner drives it, then the
+                   individual knobs that override the profile. -->
+              <StackPanel x:Name="RightTabEnginePanel" Spacing="8" IsVisible="False" Margin="0,0,4,0">
+                <StackPanel x:Name="ProfilePickerPanel" Spacing="4">
                   <TextBlock x:Name="TestProfileLabel" Classes="label" />
                   <ComboBox x:Name="ProfileBox" SelectedIndex="0" HorizontalAlignment="Stretch"
                             SelectionChanged="OnProfileChanged">
-                    <!-- The category eyebrow puts the five shelves the profiles were always
-                         sorted into in front of the reader, instead of leaving thirteen
-                         equally-weighted names to be told apart by their wording. -->
+                    <!-- Five entries by default: the ones that actually get somebody from an
+                         untested processor to values worth putting in the BIOS. The other nine
+                         are variations on those, and fourteen equally-weighted names is not a
+                         choice, it is a quiz. -->
                     <ComboBox.ItemTemplate>
                       <DataTemplate>
                         <StackPanel Spacing="1">
@@ -509,6 +533,7 @@
                       </DataTemplate>
                     </ComboBox.ItemTemplate>
                   </ComboBox>
+                  <CheckBox x:Name="AllProfilesBox" IsCheckedChanged="OnToggleAllProfiles" />
                   <Border Background="{StaticResource SurfaceInset}" BorderBrush="{StaticResource AccentPrimary}"
                           BorderThickness="2,0,0,0" CornerRadius="4" Padding="8,6">
                     <StackPanel Spacing="5">
@@ -556,13 +581,6 @@
                     </Grid>
                     <TextBlock x:Name="GuardbandHint" Classes="caption" />
 
-                    <StackPanel x:Name="AutoTunerProgressPanel" Spacing="3" IsVisible="False">
-                      <TextBlock x:Name="AutoTunerProgressText" Classes="caption"
-                                 Foreground="{StaticResource AccentAutoHi}" />
-                      <ProgressBar x:Name="AutoTunerProgressBar" Minimum="0" Maximum="1" Value="0"
-                                   Height="4" Foreground="{StaticResource AccentAuto}" />
-                    </StackPanel>
-
                     <!-- What the tuner remembers, and the way to make it forget. Its floor comes
                          from here, so the reader has to be able to see and clear it. -->
                     <Border Height="1" Background="{StaticResource BorderSubtle}" />
@@ -573,16 +591,12 @@
                               Click="OnResetKnowledge" VerticalAlignment="Center" Margin="8,0,0,0" />
                     </Grid>
 
-                    <Border x:Name="BiosChangedPanel" Classes="panel warning" IsVisible="False" Padding="8,6">
-                      <TextBlock x:Name="BiosChangedText" Classes="caption"
-                                 Foreground="{StaticResource StateWarning}" TextWrapping="Wrap" />
-                    </Border>
                   </StackPanel>
                 </Border>
-              </StackPanel>
 
-              <!-- Tab 2: Engine -->
-              <StackPanel x:Name="RightTabEnginePanel" Spacing="8" IsVisible="False" Margin="0,0,4,0">
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,2,0,2" />
+                <TextBlock x:Name="EngineKnobsTitle" Classes="sectionTitle" />
+
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock x:Name="MinutesLabel" Classes="label" />

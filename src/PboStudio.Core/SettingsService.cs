@@ -11,8 +11,20 @@ public sealed class AppSettings
     /// <summary>Not called "Language": that would shadow the enum of the same name.</summary>
     public string UiLanguage { get; set; } = nameof(PboStudio.Core.Language.English);
 
-    // Setup tab
+    // Test tab
+    /// <summary>
+    /// Which profile, by identity. The old <c>ProfileIndex</c> pointed into the profile list,
+    /// which is now filtered down to five entries by default — an index into it no longer means
+    /// the same profile from one session to the next.
+    /// </summary>
+    public string ProfileId { get; set; } = "";
+
+    /// <summary>Superseded by <see cref="ProfileId"/>; read once so old settings still restore.</summary>
     public int ProfileIndex { get; set; }
+
+    /// <summary>Whether the profile list shows all fourteen rather than the five on the path.</summary>
+    public bool ShowAllProfiles { get; set; }
+
     public int AutoTunerMode { get; set; }
 
     // Engine tab
