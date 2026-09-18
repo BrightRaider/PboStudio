@@ -136,7 +136,6 @@ public static class LocalizationService
             "DeltaTooltip" => isDe ? "Abweichung vom BIOS-Ausgangswert" : "Difference from the BIOS starting value",
 
             // ---- Test controls ----
-            "TestControls" => isDe ? "TEST-STEUERUNG" : "TEST CONTROLS",
             "TestProfile" => isDe ? "Test-Profil" : "Test profile",
             // Called "auto-tuner" until there was a tab called Auto. They are not the same
             // thing: Auto runs all three phases, this is the search that phase two does.
@@ -365,6 +364,9 @@ public static class LocalizationService
             "CampaignResumeHeadline" => isDe
                 ? "Durchlauf läuft noch"
                 : "Campaign still in progress",
+            "CampaignSingleRunHeadline" => isDe
+                ? "Einzelner Testlauf läuft"
+                : "A single run is in progress",
             "CampaignRunningHeadline" => isDe
                 ? "Phase {0} von {1} läuft"
                 : "Phase {0} of {1} running",

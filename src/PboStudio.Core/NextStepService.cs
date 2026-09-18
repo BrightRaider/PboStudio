@@ -81,7 +81,8 @@ public static class NextStepService
         int chipLimit,
         bool isGerman,
         bool driverReady = true,
-        bool engineReady = true)
+        bool engineReady = true,
+        int guardband = 0)
     {
         bool isX3d = cpuName.Contains("X3D", StringComparison.OrdinalIgnoreCase);
 
@@ -91,9 +92,15 @@ public static class NextStepService
         if (!driverReady) return InstallDriver(isGerman);
         if (!engineReady) return InstallEngine(isGerman);
 
-        // A core has room left when it holds a value milder than the floor it is still allowed
-        // to try. The floor comes from what this core has already been observed to do, so a
-        // core that crashed at -30 counts as finished at -29 rather than being chased further.
+        // A core has room left when it holds a value milder than the most aggressive one it is
+        // allowed to end up at. The floor comes from what this core has already been observed to
+        // do, so a core that crashed at -30 counts as finished at -29 rather than being chased
+        // further.
+        //
+        // The guardband is part of that target, and leaving it out was a loop: the search locks
+        // a core at floor + guardband, which is by definition milder than the floor, so every
+        // core the search had just finished still counted as open. A campaign would have run the
+        // search over and over and never reached the confirmation phase.
         var open = new List<int>();
         foreach (var core in cores)
         {
@@ -102,7 +109,7 @@ public static class NextStepService
                 ? k.FloorFor(chipLimit)
                 : chipLimit;
 
-            if (held > floor) open.Add(core.Index);
+            if (held > AutoTunerService.ApplyGuardband(floor, guardband)) open.Add(core.Index);
         }
 
         bool nothingKnown = knowledge.Count == 0

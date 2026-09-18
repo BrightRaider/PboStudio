@@ -257,6 +257,51 @@ public class NextStepServiceTests
         Assert.DoesNotContain(4, step.Cores);
     }
 
+    /// <summary>
+    /// The loop that would have stopped a campaign ever finishing.
+    ///
+    /// The search locks a core at its floor plus the guardband, which is by definition milder
+    /// than the floor. Asking "does this core hold something milder than its floor" therefore
+    /// answered yes for every core the search had just finished, so the campaign ran the search
+    /// again, and again, and never reached the confirmation phase.
+    /// </summary>
+    [Fact]
+    public void ACoreParkedAtItsFloorPlusTheGuardbandIsFinished()
+    {
+        const int guardband = 3;
+
+        // Searched, settled at the chip limit, then locked three points above it.
+        var margins = AllAt(-30 + guardband);
+        var knowledge = Enumerable.Range(0, 8)
+            .ToDictionary(i => i, _ => new CoreKnowledge(BestPassed: -30));
+
+        var step = NextStepService.Recommend(
+            Plain, Cores(8), margins, knowledge, ChipLimit, isGerman: false,
+            guardband: guardband);
+
+        Assert.Equal(TuningStage.Confirm, step.Stage);
+        Assert.Empty(step.Cores);
+    }
+
+    /// <summary>One point milder than that is still worth a look.</summary>
+    [Fact]
+    public void ACoreAboveTheGuardbandTargetIsStillOpen()
+    {
+        const int guardband = 3;
+
+        var margins = AllAt(-27);
+        margins[5] = -26;
+        var knowledge = Enumerable.Range(0, 8)
+            .ToDictionary(i => i, _ => new CoreKnowledge(BestPassed: -30));
+
+        var step = NextStepService.Recommend(
+            Plain, Cores(8), margins, knowledge, ChipLimit, isGerman: false,
+            guardband: guardband);
+
+        Assert.Equal(TuningStage.Narrow, step.Stage);
+        Assert.Equal([5], step.Cores);
+    }
+
     // ── confirming ───────────────────────────────────────────────
 
     [Fact]

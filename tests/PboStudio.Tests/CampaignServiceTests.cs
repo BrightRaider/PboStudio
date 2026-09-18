@@ -263,3 +263,144 @@ public class CampaignServiceTests
         Assert.False(new CampaignState { Active = true, Finished = true }.InProgress);
     }
 }
+
+/// <summary>
+/// The campaign as a whole, driven the way the window drives it: decide, run, record what the
+/// run learned, decide again. The one thing that cannot be checked by looking at the screen is
+/// whether this terminates.
+/// </summary>
+public class CampaignSimulationTests
+{
+    private const int ChipLimit = -30;
+    private const int Guardband = 3;
+    private const string Cpu = "AMD Ryzen 7 5800X3D 8-Core Processor";
+
+    private static IReadOnlyList<PhysicalCore> Cores(int n) =>
+        [.. Enumerable.Range(0, n).Select(i => new PhysicalCore(i, (nuint)1 << i, [i]))];
+
+    /// <summary>
+    /// A machine where every core is honest: it holds anything above its own true limit and
+    /// fails at anything below it. The search should find each limit and stop.
+    /// </summary>
+    private sealed class FakeMachine(int cores, Dictionary<int, int> trueLimits)
+    {
+        public Dictionary<int, int> Margins { get; } =
+            Enumerable.Range(0, cores).ToDictionary(i => i, _ => 0);
+
+        public Dictionary<int, CoreKnowledge> Knowledge { get; } = [];
+
+        /// <summary>Runs one phase. Returns the cores that failed.</summary>
+        public List<int> Run(NextStep step, bool tuning)
+        {
+            var tested = step.Cores.Count > 0 ? step.Cores : [.. Margins.Keys];
+            var failed = new List<int>();
+
+            foreach (int core in tested)
+            {
+                if (tuning)
+                {
+                    // The search walks down until the core gives. If there is room below this
+                    // core's true limit it goes one step past it, fails there, and that failure
+                    // is what raises the floor - exactly what the real search records.
+                    int floor = Knowledge.GetValueOrDefault(core, new CoreKnowledge()).FloorFor(ChipLimit);
+
+                    if (floor < trueLimits[core])
+                    {
+                        CoreKnowledgeService.RecordFailure(Knowledge, core, trueLimits[core] - 1);
+                        failed.Add(core);
+                    }
+
+                    CoreKnowledgeService.RecordPass(Knowledge, core, trueLimits[core]);
+                    Margins[core] = AutoTunerService.ApplyGuardband(trueLimits[core], Guardband);
+                }
+                else if (Margins[core] < trueLimits[core])
+                {
+                    CoreKnowledgeService.RecordFailure(Knowledge, core, Margins[core]);
+                    failed.Add(core);
+                }
+                else
+                {
+                    CoreKnowledgeService.RecordPass(Knowledge, core, Margins[core]);
+                }
+            }
+
+            // What the window does after every run: put whatever failed back above its floor.
+            // For a core the search already settled this lands on the value it settled at.
+            foreach (int core in failed)
+                Margins[core] = CampaignService.BackOffTo(Knowledge[core], ChipLimit, Guardband);
+
+            return failed;
+        }
+    }
+
+    [Theory]
+    [InlineData(-30, -30, -30, -30, -30, -30, -30, -30)]   // a golden chip
+    [InlineData(-12, -18, -25, -30, -20, -15, -28, -22)]   // a normal spread
+    [InlineData(0, 0, 0, 0, 0, 0, 0, 0)]                   // a chip with no headroom at all
+    public void ACampaignReachesDoneRatherThanLooping(params int[] limits)
+    {
+        var machine = new FakeMachine(limits.Length, limits.Select((v, i) => (v, i))
+            .ToDictionary(x => x.i, x => x.v));
+
+        var state = new CampaignState { Active = true, Started = DateTime.Now };
+        var cores = Cores(limits.Length);
+
+        for (int guard = 0; guard < 40; guard++)
+        {
+            var step = NextStepService.Recommend(
+                Cpu, cores, machine.Margins, machine.Knowledge, ChipLimit, isGerman: false,
+                guardband: Guardband);
+
+            var decision = CampaignService.Decide(state, step, machine.Margins, state.LastRunClean);
+
+            if (decision.Verdict == CampaignVerdict.Done)
+            {
+                // Every core ended at or above its true limit: nothing was left in a state the
+                // machine had already failed at.
+                foreach (var (core, held) in machine.Margins)
+                    Assert.True(held >= limits[core],
+                        $"core {core} ended at {held}, below its limit of {limits[core]}");
+                return;
+            }
+
+            Assert.Equal(CampaignVerdict.Run, decision.Verdict);
+
+            state = state with
+            {
+                LastStage = decision.Step!.Stage.ToString(),
+                LastSignature = CampaignService.Signature(decision.Step, machine.Margins),
+            };
+
+            var failed = machine.Run(decision.Step, decision.Step.UseAutoTuner);
+
+            state = state with { RunsDone = state.RunsDone + 1, LastRunClean = failed.Count == 0 };
+        }
+
+        Assert.Fail("the campaign never reached Done within 40 runs");
+    }
+
+    /// <summary>
+    /// A run that teaches the machine nothing — cancelled, or out of passes — must not send the
+    /// campaign round again forever.
+    /// </summary>
+    [Fact]
+    public void ACampaignWhoseRunsDoNothingStopsInsteadOfSpinning()
+    {
+        var machine = new FakeMachine(8, Enumerable.Range(0, 8).ToDictionary(i => i, _ => -30));
+        machine.Knowledge[0] = new CoreKnowledge(BestPassed: -10);
+        machine.Margins[0] = -10;
+
+        var cores = Cores(8);
+        var state = new CampaignState { Active = true, RunsDone = 1, LastRunClean = true };
+
+        // Two decisions in a row with nothing changing in between.
+        var step = NextStepService.Recommend(
+            Cpu, cores, machine.Margins, machine.Knowledge, ChipLimit, isGerman: false,
+            guardband: Guardband);
+
+        state = state with { LastSignature = CampaignService.Signature(step, machine.Margins) };
+
+        Assert.Equal(CampaignVerdict.Stalled,
+            CampaignService.Decide(state, step, machine.Margins, true).Verdict);
+    }
+}

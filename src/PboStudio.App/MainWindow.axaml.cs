@@ -816,13 +816,12 @@ public partial class MainWindow : Window
 
     private void UpdateStartButtonState()
     {
-        // On the first screen the card carries the button. Showing a second green button below
-        // it, labelled differently for the same run, is how the panel got to be a wall.
         if (StartButton is null || StartDivider is null) return;
 
-        // The Auto tab has its own button and starts a campaign, not a run. Showing the
-        // single-run button underneath it would offer two different things called Start.
-        bool ownedByCard = RightTabAutoBtn?.IsChecked == true && !_running;
+        // The Auto tab has its own button, for starting and for stopping. The footer button is
+        // hidden there in both states: qualifying this with "&& !_running" put two Cancel
+        // buttons on the same panel the moment a run began.
+        bool ownedByCard = RightTabAutoBtn?.IsChecked == true;
         StartButton.IsVisible = !ownedByCard;
         StartDivider.IsVisible = !ownedByCard;
 
@@ -1567,7 +1566,8 @@ public partial class MainWindow : Window
             driverReady: _dependencies?.PawnIoAvailable ?? _smu.IsAvailable,
             engineReady: _dependencies is null
                 || _dependencies.Prime95Available
-                || _dependencies.YCruncherAvailable);
+                || _dependencies.YCruncherAvailable,
+            guardband: CurrentGuardband);
 
         NextStepHeadline.Text = _nextStep.Headline;
         NextStepReason.Text = _nextStep.Reason;
@@ -1617,6 +1617,13 @@ public partial class MainWindow : Window
     private CampaignState _campaign = new();
 
     /// <summary>
+    /// The headroom the search leaves between the boundary it measured and the value it locks.
+    /// It is part of where a core is aiming, so whether a core still has room to give depends
+    /// on it.
+    /// </summary>
+    private int CurrentGuardband => (int)(GuardbandBox?.Value ?? AutoTunerService.DefaultGuardband);
+
+    /// <summary>
     /// Set while a campaign-driven run is in flight, so a run the reader started from the Tests
     /// tab never advances the campaign, and a cancelled run never counts as a completed phase.
     /// </summary>
@@ -1639,7 +1646,8 @@ public partial class MainWindow : Window
             driverReady: _dependencies?.PawnIoAvailable ?? _smu.IsAvailable,
             engineReady: _dependencies is null
                 || _dependencies.Prime95Available
-                || _dependencies.YCruncherAvailable);
+                || _dependencies.YCruncherAvailable,
+            guardband: CurrentGuardband);
 
         return CampaignService.Decide(_campaign, step, margins, _campaign.LastRunClean);
     }
@@ -1754,7 +1762,7 @@ public partial class MainWindow : Window
     private void BackOffFailedCores(IEnumerable<int> cores)
     {
         int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
-        int guardband = (int)(GuardbandBox?.Value ?? AutoTunerService.DefaultGuardband);
+        int guardband = CurrentGuardband;
 
         foreach (int core in cores)
         {
@@ -1785,6 +1793,10 @@ public partial class MainWindow : Window
         Log(LocalizationService.Get("CampaignDone"), LogLevel.Success);
         PlayNotificationSound(isError: false);
         RefreshAutoTab();
+
+        // Suppressed after each phase, because it would have ended the campaign. This is the
+        // point somebody who asked to be shut down when it finished actually meant.
+        PerformPostTestAction();
     }
 
     /// <summary>
@@ -1799,63 +1811,66 @@ public partial class MainWindow : Window
         // curve at all, and a three-phase search would spend a weekend measuring a setting that
         // does not exist.
         var cpu = CpuModelService.Detect(_smu.CpuName);
-        if (!cpu.SupportsCurveOptimizer)
+        var decision = cpu.SupportsCurveOptimizer
+            ? DecideCampaign()
+            : new CampaignDecision(CampaignVerdict.NeedsSetup);
+
+        // Which parts are on screen is decided in one place, and tested there. It used to be a
+        // chain of conditions in this method, and the chain hid a second Cancel button.
+        var panel = AutoPanel.Describe(
+            cpu.SupportsCurveOptimizer,
+            decision.Verdict,
+            decision.PhaseNumber,
+            _campaign.Finished,
+            _campaign.InProgress,
+            _running,
+            _campaignRunActive);
+
+        AutoSetupCard.IsVisible = panel.ShowSetupCard;
+        AutoPlanPanel.IsVisible = panel.ShowPlan;
+        AutoResultCard.IsVisible = panel.ShowResult;
+        AutoStartButton.IsVisible = panel.ShowAutoButton;
+        AutoSetupButton.IsVisible = panel.ShowSetupButton;
+        AutoIntro.IsVisible = panel.ShowIntro;
+        AutoEstimate.IsVisible = panel.ShowEstimate;
+
+        if (panel.ShowSetupCard)
         {
-            AutoSetupCard.IsVisible = true;
-            AutoPlanPanel.IsVisible = false;
-            AutoResultCard.IsVisible = false;
-            AutoStartButton.IsVisible = false;
-            AutoSetupButton.IsVisible = false;
+            bool noFeature = !cpu.SupportsCurveOptimizer;
 
-            AutoSetupTitle.Text = LocalizationService.Get("NoCurveOptimizerTitle");
-            AutoSetupText.Text = CpuModelService.Describe(cpu, LocalizationService.IsGerman);
-            AutoFootnote.Text = "";
-            return;
-        }
-
-        AutoSetupButton.IsVisible = true;
-
-        var decision = DecideCampaign();
-        bool setup = decision.Verdict == CampaignVerdict.NeedsSetup;
-        bool finished = _campaign.Finished;
-
-        AutoSetupCard.IsVisible = setup;
-        AutoPlanPanel.IsVisible = !setup && !finished;
-        AutoResultCard.IsVisible = finished;
-        AutoStartButton.IsVisible = !finished;
-
-        if (setup)
-        {
-            AutoSetupTitle.Text = LocalizationService.Get("AutoSetupTitle");
-            AutoSetupText.Text = LocalizationService.Get("AutoSetupText");
+            AutoSetupTitle.Text = LocalizationService.Get(
+                noFeature ? "NoCurveOptimizerTitle" : "AutoSetupTitle");
+            AutoSetupText.Text = noFeature
+                ? CpuModelService.Describe(cpu, LocalizationService.IsGerman)
+                : LocalizationService.Get("AutoSetupText");
             AutoSetupButton.Content = LocalizationService.Get("NextStepOpenSetup");
-            AutoStartButton.IsVisible = false;
             AutoFootnote.Text = "";
             return;
         }
 
-        if (finished)
+        if (panel.ShowResult)
         {
             ShowCampaignResult();
             return;
         }
 
-        int phase = _running && _campaignRunActive
-            ? CampaignService.PhaseNumberOf(CurrentCampaignStage())
-            : decision.PhaseNumber;
+        bool campaignRunning = _running && _campaignRunActive;
 
-        AutoHeadline.Text = _running && _campaignRunActive
-            ? string.Format(LocalizationService.Get("CampaignRunningHeadline"), phase, CampaignService.TotalPhases)
-            : _campaign.InProgress
-                ? LocalizationService.Get("CampaignResumeHeadline")
-                : LocalizationService.Get("CampaignIdleHeadline");
+        AutoHeadline.Text = campaignRunning
+            ? string.Format(LocalizationService.Get("CampaignRunningHeadline"),
+                panel.Phase, CampaignService.TotalPhases)
+            : _running
+                ? LocalizationService.Get("CampaignSingleRunHeadline")
+                : _campaign.InProgress
+                    ? LocalizationService.Get("CampaignResumeHeadline")
+                    : LocalizationService.Get("CampaignIdleHeadline");
 
         AutoIntro.Text = LocalizationService.Get(
             _campaign.InProgress ? "CampaignResumeIntro" : "CampaignIdleIntro");
 
-        SetPhaseRow(AutoPhase1Glyph, AutoPhase1Text, 1, phase, "CampaignPhase1");
-        SetPhaseRow(AutoPhase2Glyph, AutoPhase2Text, 2, phase, "CampaignPhase2");
-        SetPhaseRow(AutoPhase3Glyph, AutoPhase3Text, 3, phase, "CampaignPhase3");
+        SetPhaseRow(AutoPhase1Glyph, AutoPhase1Text, 1, panel.Phase, "CampaignPhase1");
+        SetPhaseRow(AutoPhase2Glyph, AutoPhase2Text, 2, panel.Phase, "CampaignPhase2");
+        SetPhaseRow(AutoPhase3Glyph, AutoPhase3Text, 3, panel.Phase, "CampaignPhase3");
 
         AutoEstimate.Text = LocalizationService.Get("CampaignEstimate");
 
@@ -1869,8 +1884,9 @@ public partial class MainWindow : Window
         AutoStartButton.Classes.Set("primary", !_running);
 
         AutoFootnote.Text = LocalizationService.Get(
-            decision.Verdict == CampaignVerdict.Stalled ? "CampaignStalledHint" : "CampaignFootnote");
-        Tip(AutoFootnote, "CampaignFootnoteTooltip");
+            panel.ShowStallWarning ? "CampaignStalledHint" : "CampaignFootnote");
+        AutoFootnote.Foreground = SolidColorBrush.Parse(panel.ShowStallWarning ? "#FBBF24" : "#8494A8");
+        Tip(AutoFootnote, panel.ShowStallWarning ? "CampaignStalledHint" : "CampaignFootnoteTooltip");
     }
 
     /// <summary>The stage of the run currently in flight, as recorded when it was started.</summary>
@@ -3658,6 +3674,14 @@ public partial class MainWindow : Window
                      StopOnErrorBox, SelectAllBox, AutostartBox,
                      FftMinBox, FftMaxBox, CustomOrderBox,
                      SkipCoreOnErrorBox, CoreDelayBox, TreatWheaAsErrorBox,
+
+                     // The plan captured these when the run started, so changing one now either
+                     // does nothing or, in the case of the tuner's memory, moves the floor out
+                     // from under a search that is using it. MaxTempBox stays live on purpose:
+                     // raising a safety limit must never require stopping first.
+                     GuardbandBox, AllProfilesBox, ResetKnowledgeButton, AutoRuntimeBox,
+                     AutoRuntimeCapBox, SpreadSmtBox, IsolateCoreBox, RestorePointBox,
+                     YcSecondsBox, YcMemoryBox, YcBinaryBox,
                  })
         {
             c.IsEnabled = !running;
