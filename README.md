@@ -4,9 +4,15 @@
 per-core stress testing with direct SMU Curve Optimizer read/write in a single native GUI
 (.NET 9 / Avalonia UI), so you can test a value and apply it without rebooting into the BIOS.
 
-> **Status: 1.0.0.** 84 tests, and the tuning loop verified end to end on an AMD Ryzen 7 5800X3D:
+> **Status: 1.1.0.** 271 tests, and the tuning loop verified end to end on an AMD Ryzen 7 5800X3D:
 > values written to the SMU before each measurement, Prime95 pinned to a single core, a full
 > stress slot, pass detection, step-down and locking at the chip limit.
+>
+> **Auto** runs the three phases that tuning actually takes — check what the current values
+> hold, search every core that still has room, prove the result under load types the search
+> never used — without asking you to come back between them, and ends with the finished values
+> ready for the BIOS. It survives being stopped, and being crashed by the phase whose job is to
+> find the value that crashes the machine.
 
 ---
 

@@ -1,5 +1,141 @@
 # Changelog
 
+## 1.1.0 — 2026-09-18
+
+One button that runs the whole thing, a window cut down to three tabs, and a Curve Optimizer
+range that was wrong on every AM5 processor. 271 unit tests.
+
+### Added
+
+- **Auto.** Tuning a Curve Optimizer is three runs — establish what the current values do,
+  search every core that still has room, then prove the result under load types the search
+  never used — and the program used to ask the reader to come back between them, read a card
+  and press a button again. That is not a tool that tunes a processor; it is a tool that tells
+  you what to do next. Auto chains all three and ends with the finished values, formatted for a
+  BIOS.
+
+  What makes it safe to leave alone: the decision of what to run next is the one
+  `NextStepService` already made and already had tests for. On top of that sits when to stop
+  (a confirmation run that passes is the end, not another prompt), how to notice that nothing
+  is moving (every failure raises a core's floor and every pass lowers what it holds, so two
+  identical signatures in a row mean the run learned nothing and would learn nothing next
+  time), and automatic back-off — a core that failed still holds the value it failed at, which
+  would send the campaign back into the same run forever.
+
+  The campaign is on disk. Phase two exists to find the value that reboots the machine, so it
+  has to survive that, and stopping it deliberately works the same way: it resumes at the same
+  phase.
+
+- **A runtime estimate above the start button, on every tab.** Worked out from what each core
+  currently holds — read from the processor at start-up, so it reflects the BIOS settings in
+  force — and from what is on record about it. Cores already parked where the search would
+  leave them cost nothing in the search phase, which is the difference between an evening and
+  three days. Past a day it reads "1 day 4 hrs" rather than 28:00.
+
+- **The four CoreCycler settings that were missing.** `flashOnError` (the taskbar flashes on
+  each failure as it happens, not only in the summary — by the time a run ends the interesting
+  failure may be six hours old), `stressTestProgramPriority`, Prime95's `TortureMem` (it was
+  written into the config as a constant zero, which is right for Curve Optimizer work but is
+  also the setting that turns this into a memory controller test), and
+  `treatThreadErrorsAsRealErrors` as "count a worker that died or went quiet as an error". A
+  worker can vanish because an antivirus took it or Windows killed it under memory pressure,
+  and counting that means backing a good core off for nothing. A wrong calculation and a
+  machine check are never filtered by it.
+
+### Fixed
+
+- **The Curve Optimizer range was wrong on every AM5 part.** The limit table let a Ryzen 9000
+  be walked down to -50, on the reading that Zen 5 has an extended range. It does not: Curve
+  Optimizer is -30 to +30 on every AMD desktop part that has it, and what Zen 5 added is Curve
+  Shaper — a second, separate set of offsets across temperature and frequency bands, which this
+  program does not write. A search allowed to run to -50 ends by reporting values that cannot be
+  typed into a BIOS, which is the whole deliverable.
+
+- **A campaign could never reach phase three.** A core counted as still having room when it
+  held a value milder than its floor, but the search deliberately locks each core at floor plus
+  the guardband, which is milder than the floor by construction. Every core the search had just
+  finished still looked open. A simulation of the whole campaign against a fake machine found
+  it in three scenarios out of three.
+
+- **Half the search estimate was a climb that cannot happen.** A core with a value on record
+  that held cannot be walked back up from scratch — a failure returns to that value and locks
+  there without retesting it. Costing it as though it might climb turned a half-hour phase into
+  two and a half hours. It hit exactly the cores a campaign is usually resumed on.
+
+- **Two Cancel buttons.** The footer's single-run button was hidden on the Auto tab only while
+  idle, so starting a campaign put two of them on the same panel.
+
+- **The collapsed telemetry dock clipped its own tab strip.** A fixed 46 pixels is a couple
+  short of the strip plus the card's padding, so "Live telemetry" and "Log" were cut off along
+  the bottom edge of the window. The row measures itself now.
+
+- **The headroom field rendered as "+" with no number**, because it sat beside its label in 92
+  pixels and the two spinner buttons left nothing for the text.
+
+- **"Which Zen is this" had three answers that disagreed** — a detector for the y-cruncher
+  binary, the limit table, and a third list in a recommendation service. They read one model
+  now, covering every AM4 and AM5 line including the APUs, which break the "leading digit is
+  the generation" rule in both directions. It also knows that Curve Optimizer arrived with Zen
+  3: on Zen 1, Zen+ and Zen 2 the Auto tab says so instead of spending a weekend measuring a
+  setting that does not exist, and that the Zen 3 X3D parts take an undervolt only.
+
+### Changed — the window
+
+- **Three tabs: Auto, Tests, Advanced.** The previous arrangement put one Start tab above two
+  expert tabs, which made the expert tabs look like steps two and three of something.
+
+- **Tests is four things and a button**: which profile, whether to show all fourteen, what that
+  profile runs, how long it takes. It carried a recommendation card that answered the same
+  question as the picker below it, with a second start button and a second copy of the runtime
+  — refreshed on different events, so the two drifted apart and at least one was always wrong.
+  They had reached a factor of eight.
+
+- **The profile list shows five entries, not fourteen.** The five are the path: first run,
+  narrowing, a short look, the game-style failure continuous load never produces, and the final
+  proof. The other nine are variations, one checkbox away. Profiles are stored by identity now,
+  because an index into a list that can be filtered does not mean the same profile twice.
+
+- **Advanced is grouped.** Ninety-odd controls in the order they happened to be written is not
+  a settings page. Five headings, in the order somebody works through them, and one line at the
+  top saying the thing that makes the rest make sense: everything here overrides the profile
+  chosen under Tests.
+
+- **The auto-tuner is the step search**, and lives on Advanced. It sat on the Tests tab one tab
+  away from a tab called Auto, which is two different things sharing a word.
+
+- **Prose that explains a choice already made moved into tooltips.** What is left on screen are
+  the facts: what runs, how long, what the plan is.
+
+- **PPT, TDC, EDC and the scalar only appear while something is running.** At idle they are four
+  chips of jargon reporting that nothing is happening.
+
+- **Controls the plan captured at start are disabled during a run.** Changing one did nothing,
+  except the tuner's memory reset, which moved the floor out from under a search that was using
+  it. The maximum temperature stays live on purpose: raising a safety limit must never require
+  stopping first.
+
+### Removed
+
+- The old recommendation service. Nothing referenced it, and it still named profiles by display
+  string — the drift that ids were introduced to stop — pointing an X3D at AVX2, the hottest
+  load in the set on the design least able to take the heat.
+
+### Testing
+
+271 unit tests, up from 164. The ones worth naming are the ones that replace looking at the
+window: a simulation that runs a whole campaign against a fake machine and has to reach the
+end, a record of which parts of the Auto tab are visible in which state, and a set that reads
+the markup for controls named twice, handlers without methods, translation keys without
+entries, and anything that drifted back into the wrong tab. Every one of them corresponds to
+something that shipped broken during this release.
+
+### Known gaps
+
+- Aida64 and Linpack are still unsupported as engines. Neither is a Curve Optimizer engine and
+  Aida64 is paid.
+- The estimate is an upper bound. The search stops early once a value holds, so a run usually
+  finishes short of it.
+
 ## 1.0.2 — 2026-08-25
 
 A UI/UX audit and a feature-by-feature comparison against CoreCycler v0.11.0.3, with the
