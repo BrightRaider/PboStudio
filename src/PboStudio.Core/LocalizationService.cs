@@ -92,7 +92,6 @@ public static class LocalizationService
             "NextStepApplied" => isDe
                 ? "✓ Eingerichtet: {0}. Profil, Kernauswahl und Durchgänge sind gesetzt — alles bleibt unter „Test“ änderbar."
                 : "✓ Set up: {0}. Profile, core selection and passes are in place — all still editable under \"Test\".",
-            "OpenAdvanced" => isDe ? "⚙️ Einstellungen & alle Profile" : "⚙️ Settings & all profiles",
             "ShowAllProfiles" => isDe
                 ? "Alle 14 Profile zeigen (statt der 5 auf dem Weg)"
                 : "Show all 14 profiles (instead of the 5 on the path)",
@@ -344,17 +343,84 @@ public static class LocalizationService
             // ---- Workspace tabs ----
             "TabGraph" => isDe ? "📊 Live-Telemetrie" : "📊 Live telemetry",
             "TabLog" => isDe ? "📜 Protokoll" : "📜 Log",
-            "TabSetup" => isDe ? "🎯 Start" : "🎯 Start",
-            "AdvancedTabs" => isDe ? "Erweitert" : "Advanced",
-            "AdvancedTabsTooltip" => isDe
-                ? "Für einen normalen Lauf nicht nötig: die Empfehlung auf dem ersten Bildschirm richtet alles ein. Hier stehen die Profilliste, der Auto-Tuner und jeder einzelne Regler, falls du etwas übersteuern willst."
-                : "Not needed for an ordinary run: the recommendation on the first screen sets everything up. In here are the profile list, the auto-tuner and every individual knob, for when you want to override something.",
-            "TabEngine" => isDe ? "⚡ Test" : "⚡ Test",
-            "TabSystem" => isDe ? "🛡️ System" : "🛡️ System",
-            "ShowEngineKnobs" => isDe
-                ? "▸ Einzelne Regler (übersteuert das Profil)"
-                : "▸ Individual knobs (these override the profile)",
-            "HideEngineKnobs" => isDe ? "▾ Einzelne Regler schließen" : "▾ Close the individual knobs",
+            "TabAuto" => isDe ? "🤖 Auto" : "🤖 Auto",
+            "TabTests" => isDe ? "🎯 Tests" : "🎯 Tests",
+            "TabAdvanced" => isDe ? "⚙️ Erweitert" : "⚙️ Advanced",
+            "TabAutoTooltip" => isDe
+                ? "Macht alles allein: prüfen, suchen, absichern. Am Ende stehen die fertigen Werte fürs BIOS."
+                : "Does the whole thing by itself: check, search, confirm. It ends with the finished values for your BIOS.",
+            "TabTestsTooltip" => isDe
+                ? "Einen einzelnen Lauf selbst auswählen und starten."
+                : "Pick and start a single run yourself.",
+            "TabAdvancedTooltip" => isDe
+                ? "Jeder Regler und jede Sicherheitsgrenze. Übersteuert, was das gewählte Profil gesetzt hat."
+                : "Every knob and every safety limit. Overrides whatever the chosen profile set.",
+
+            // ---- The campaign ----
+            "CampaignIdleHeadline" => isDe
+                ? "Alles automatisch – in drei Phasen"
+                : "The whole thing, automatically – in three phases",
+            "CampaignResumeHeadline" => isDe
+                ? "Durchlauf läuft noch"
+                : "Campaign still in progress",
+            "CampaignRunningHeadline" => isDe
+                ? "Phase {0} von {1} läuft"
+                : "Phase {0} of {1} running",
+            "CampaignIdleIntro" => isDe
+                ? "Ein Knopf. PboStudio misst, sucht und prüft selbständig und zeigt am Ende die fertigen Curve-Optimizer-Werte fürs BIOS. Du musst nichts einstellen und zwischendurch nichts entscheiden."
+                : "One button. PboStudio measures, searches and proves on its own, and ends with the finished Curve Optimizer values for your BIOS. Nothing to configure, nothing to decide along the way.",
+            "CampaignResumeIntro" => isDe
+                ? "Der Durchlauf wurde unterbrochen — gestoppt oder vom Neustart erwischt, den Phase 2 provoziert. Nichts ist verloren: es geht an derselben Stelle weiter."
+                : "The campaign was interrupted — stopped, or caught by the restart phase 2 is designed to provoke. Nothing is lost: it carries on from the same place.",
+            "CampaignPhase1" => isDe
+                ? "Prüfen, was die aktuellen Werte aushalten — beide Testprogramme im Wechsel."
+                : "Check what the current values hold up to — both engines, alternating.",
+            "CampaignPhase2" => isDe
+                ? "Jeden Kern absenken, bis er kippt, und einen Sicherheitsabstand darüber fixieren."
+                : "Lower each core until it gives, then lock it a safety margin above that.",
+            "CampaignPhase3" => isDe
+                ? "Das Ergebnis über alle Lastarten absichern, die die Suche nie benutzt hat."
+                : "Prove the result across every load type the search never used.",
+            "CampaignEstimate" => isDe
+                ? "Dauert insgesamt lange — je nach Prozessor eine Nacht bis ein Wochenende. Du kannst jederzeit stoppen; beim nächsten Start geht es an derselben Stelle weiter."
+                : "This takes a long time — a night to a weekend, depending on the processor. You can stop whenever you like; it carries on from the same place next time.",
+            "CampaignStart" => isDe ? "🚀 Starten" : "🚀 Start",
+            "CampaignContinue" => isDe ? "🚀 Fortsetzen" : "🚀 Continue",
+            "CampaignFootnote" => isDe
+                ? "Während der Suche kann der Rechner neu starten. Das ist beabsichtigt: genau der Wert, der ihn umwirft, ist der, den wir finden wollen."
+                : "The machine may restart during the search. That is intended: the value that takes it down is exactly the one we are looking for.",
+            "CampaignStalledHint" => isDe
+                ? "Der letzte Lauf hat nichts verändert — abgebrochen, oder die Durchgänge waren zu wenige. Schau ins Protokoll, bevor du weitermachst."
+                : "The last run changed nothing — cancelled, or too few passes. Check the log before continuing.",
+            "CampaignStarted" => isDe
+                ? "🤖 Automatischer Durchlauf gestartet. Er läuft ohne weitere Eingaben durch."
+                : "🤖 Automatic campaign started. It runs through without further input.",
+            "CampaignPhase" => isDe
+                ? "🤖 Phase {0}/{1}: {2}"
+                : "🤖 Phase {0}/{1}: {2}",
+            "CampaignBackOff" => isDe
+                ? "↩ {0} ist durchgefallen — zurück von {1} auf {2}, wird erneut gesucht."
+                : "↩ {0} failed — backed off from {1} to {2}, it goes back into the search.",
+            "CampaignStalled" => isDe
+                ? "⏸ Der Durchlauf kommt nicht weiter: der letzte Lauf hat nichts verändert."
+                : "⏸ The campaign is not progressing: the last run changed nothing.",
+            "CampaignDone" => isDe
+                ? "🏁 Fertig. Jeder Kern steht auf einem Wert, der alle Lastarten bestanden hat."
+                : "🏁 Done. Every core sits at a value that passed every load type.",
+            "CampaignResultTitle" => isDe ? "🏁 Fertig – deine Werte" : "🏁 Done – your values",
+            "CampaignResultText" => isDe
+                ? "Jeder Kern hat beide Testprogramme über alle Lastarten bestanden. Diese Werte gelten gerade live, verschwinden aber beim Neustart — trag sie ins BIOS ein, damit sie bleiben."
+                : "Every core passed both engines across every load type. These values are live right now but vanish on reboot — enter them in the BIOS to keep them.",
+            "CampaignAgain" => isDe ? "Von vorn beginnen" : "Start over",
+            "NoCurveOptimizerTitle" => isDe
+                ? "Dieser Prozessor hat keinen Curve Optimizer"
+                : "This processor has no Curve Optimizer",
+            "AutoSetupTitle" => isDe ? "Erst Treiber und Testprogramm" : "Driver and engine first",
+            "AutoSetupText" => isDe
+                ? "Ohne den Treiber lassen sich keine CO-Werte setzen, und ohne ein Testprogramm gibt es keine Last. Der Assistent erledigt beides."
+                : "Without the driver no CO value can be set, and without an engine there is no load. The assistant handles both.",
+            "AdvancedRunTitle" => isDe ? "LAUF" : "THE RUN",
+            "AdvancedSafetyTitle" => isDe ? "SICHERHEIT & SYSTEM" : "SAFETY & SYSTEM",
             "CopyLog" => isDe ? "Kopieren" : "Copy",
             "ClearLog" => isDe ? "Leeren" : "Clear",
             "OpenLogFolder" => isDe ? "Ordner" : "Folder",

@@ -162,10 +162,20 @@ public class AutoTunerServiceTests
         Assert.Equal(expected, slots);
     }
 
-    [Fact]
-    public void GetMaxNegativeMargin_KnowsTheZen5ExtendedRange()
+    /// <summary>
+    /// This asserted -50 for Zen 5, on the reading that the generation has an extended range.
+    /// It does not. Curve Optimizer is -30 to +30 on every AMD desktop part that has it; what
+    /// Zen 5 added is Curve Shaper, a second and separate set of offsets across temperature and
+    /// frequency bands, which this program does not write. A search allowed to run to -50 ends
+    /// by reporting values that cannot be entered in a BIOS, which is the whole deliverable.
+    /// </summary>
+    [Theory]
+    [InlineData("AMD Ryzen 9 9950X 16-Core Processor")]
+    [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor")]
+    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor")]
+    [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor")]
+    public void GetMaxNegativeMargin_IsMinusThirtyOnEveryPartThatHasTheFeature(string cpu)
     {
-        Assert.Equal(-50, AutoTunerService.GetMaxNegativeMargin("AMD Ryzen 9 9950X 16-Core Processor"));
-        Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin("AMD Ryzen 7 5800X3D 8-Core Processor"));
+        Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin(cpu));
     }
 }

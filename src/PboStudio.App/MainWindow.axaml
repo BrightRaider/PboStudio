@@ -412,22 +412,18 @@
 
           <!-- No "TEST CONTROLS" heading: the tab right below it already says what this is,
                and a column this narrow cannot afford a row that carries no information. -->
-          <!-- Start leads on its own row; the two expert surfaces sit below it under a label
-               that says what they are. The recommendation sets up the whole run, so for most
-               runs the row below is never touched — and it should not look like a step. -->
-          <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,10">
-            <RadioButton x:Name="RightTabSetupBtn" Classes="segment lead"
+          <!-- Three tabs, in the order somebody needs them. Auto runs the whole thing and
+               needs nothing from the reader; Tests is for picking one run yourself; Advanced
+               is every knob. The previous arrangement had one "Start" tab above two expert
+               tabs, which made the expert tabs look like steps two and three. -->
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,4,*,4,*" Margin="0,0,0,10">
+            <RadioButton Grid.Column="0" x:Name="RightTabAutoBtn" Classes="segment"
                          GroupName="RightTabs" IsChecked="True" IsCheckedChanged="OnRightTabChanged" />
-
-            <Grid ColumnDefinitions="Auto,*,4,*">
-              <TextBlock Grid.Column="0" x:Name="AdvancedTabsLabel" Classes="caption"
-                         VerticalAlignment="Center" Margin="2,0,8,0" TextWrapping="NoWrap" />
-              <RadioButton Grid.Column="1" x:Name="RightTabEngineBtn" Classes="segment sub"
-                           GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
-              <RadioButton Grid.Column="3" x:Name="RightTabSystemBtn" Classes="segment sub"
-                           GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
-            </Grid>
-          </StackPanel>
+            <RadioButton Grid.Column="2" x:Name="RightTabTestsBtn" Classes="segment"
+                         GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
+            <RadioButton Grid.Column="4" x:Name="RightTabAdvancedBtn" Classes="segment"
+                         GroupName="RightTabs" IsCheckedChanged="OnRightTabChanged" />
+          </Grid>
 
           <!-- Progress lives outside the tabs: it must stay visible whichever tab is open -->
           <Border DockPanel.Dock="Top" x:Name="ProgressPanel" Classes="panel info"
@@ -466,14 +462,91 @@
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <Panel>
 
-              <!-- Tab 1: Setup -->
-              <StackPanel x:Name="RightTabSetupPanel" Spacing="8" IsVisible="True" Margin="0,0,4,0">
+              <!-- Tab 1: Auto - the whole thing, start to finish, with nothing to decide.
+                   Three runs chained: check what the current values do, search every core that
+                   still has room, then prove the result under load types the search never used.
+                   It survives being stopped and being crashed by phase two, which is phase
+                   two's job. -->
+              <StackPanel x:Name="RightTabAutoPanel" Spacing="10" IsVisible="True" Margin="0,0,4,0">
 
-                <!-- ── The one answer, before the thirteen alternatives ──
-                     Thirteen profiles are thirteen answers to a question nobody asked. What is
-                     wanted is "what do I run now", and that has a single correct answer at any
-                     moment — derived from the processor and from what has already been
-                     established, both of which the program knows. -->
+                <!-- Nothing can run without a driver and an engine, and a plan next to a dead
+                     start button is worse than no plan. -->
+                <Border x:Name="AutoSetupCard" Classes="panel warning" IsVisible="False" Padding="12,10">
+                  <StackPanel Spacing="7">
+                    <TextBlock x:Name="AutoSetupTitle" FontSize="{StaticResource FontTitle}" FontWeight="Bold"
+                               Foreground="{StaticResource StateWarning}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="AutoSetupText" Classes="body"
+                               FontSize="{StaticResource FontCaption}" LineHeight="16" />
+                    <Button x:Name="AutoSetupButton" Classes="primary" HorizontalAlignment="Stretch"
+                            MinHeight="34" Click="OnOpenSetupWizard" />
+                  </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="AutoPlanPanel" Spacing="9">
+                  <TextBlock x:Name="AutoHeadline" FontSize="{StaticResource FontTitle}" FontWeight="Bold"
+                             Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
+                  <TextBlock x:Name="AutoIntro" Classes="body"
+                             FontSize="{StaticResource FontCaption}" LineHeight="16" />
+
+                  <!-- The three phases, with the one it is on marked. A run this long has to say
+                       where it is, or stopping it feels like losing the evening. -->
+                  <Border Background="{StaticResource SurfaceInset}" CornerRadius="4" Padding="10,9">
+                    <StackPanel Spacing="7">
+                      <Grid ColumnDefinitions="18,*">
+                        <TextBlock Grid.Column="0" x:Name="AutoPhase1Glyph" FontSize="12" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" x:Name="AutoPhase1Text" Classes="caption"
+                                   TextWrapping="Wrap" LineHeight="15" />
+                      </Grid>
+                      <Grid ColumnDefinitions="18,*">
+                        <TextBlock Grid.Column="0" x:Name="AutoPhase2Glyph" FontSize="12" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" x:Name="AutoPhase2Text" Classes="caption"
+                                   TextWrapping="Wrap" LineHeight="15" />
+                      </Grid>
+                      <Grid ColumnDefinitions="18,*">
+                        <TextBlock Grid.Column="0" x:Name="AutoPhase3Glyph" FontSize="12" VerticalAlignment="Top" />
+                        <TextBlock Grid.Column="1" x:Name="AutoPhase3Text" Classes="caption"
+                                   TextWrapping="Wrap" LineHeight="15" />
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+
+                  <TextBlock x:Name="AutoEstimate" Classes="caption" TextWrapping="Wrap" LineHeight="15"
+                             Foreground="{StaticResource TextMuted}" />
+                </StackPanel>
+
+                <!-- What the campaign is for: the values, at the end, ready to type into a BIOS. -->
+                <Border x:Name="AutoResultCard" Classes="panel success" IsVisible="False" Padding="12,10">
+                  <StackPanel Spacing="8">
+                    <TextBlock x:Name="AutoResultTitle" FontSize="{StaticResource FontTitle}" FontWeight="Bold"
+                               Foreground="{StaticResource AccentPrimaryHi}" TextWrapping="Wrap" />
+                    <TextBlock x:Name="AutoResultText" Classes="body"
+                               FontSize="{StaticResource FontCaption}" LineHeight="16" />
+                    <Border Background="{StaticResource SurfaceInset}" CornerRadius="4" Padding="9,7">
+                      <SelectableTextBlock x:Name="AutoResultValues" FontFamily="{StaticResource FontMono}"
+                                           FontSize="{StaticResource FontMicro}" LineHeight="15"
+                                           Foreground="{StaticResource TextPrimary}" />
+                    </Border>
+                    <Button x:Name="AutoCopyBiosButton" Classes="primary" HorizontalAlignment="Stretch"
+                            MinHeight="32" Click="OnCopyBiosValues" />
+                    <Button x:Name="AutoAgainButton" Classes="ghost" HorizontalAlignment="Left"
+                            Click="OnRestartCampaign" />
+                  </StackPanel>
+                </Border>
+
+                <Button x:Name="AutoStartButton" Classes="primary hero" HorizontalAlignment="Stretch"
+                        MinHeight="42" Click="OnAutoStartStop" />
+
+                <TextBlock x:Name="AutoFootnote" Classes="caption" TextWrapping="Wrap" LineHeight="15"
+                           Foreground="{StaticResource TextFaint}" />
+              </StackPanel>
+
+              <!-- Tab 2: Test - everything about what runs, in the order you would decide it:
+                   which profile, how long that takes, whether the tuner drives it, then the
+                   individual knobs that override the profile. -->
+              <StackPanel x:Name="RightTabTestsPanel" Spacing="8" IsVisible="False" Margin="0,0,4,0">
+
+                <!-- What to run, if you would rather choose than let Auto do it. Same advice
+                     the Auto tab acts on, as a single run you start yourself. -->
                 <Border x:Name="NextStepCard" Classes="panel success" Padding="12,10">
                   <StackPanel Spacing="7">
                     <StackPanel Orientation="Horizontal" Spacing="7">
@@ -502,18 +575,6 @@
                   </StackPanel>
                 </Border>
 
-                <!-- Everything that used to sit under the card - the profile list, the runtime
-                     box, the auto-tuner knobs - moved to the Test tab. The first screen answers
-                     one question and offers one action; the rest is a click away for anyone who
-                     wants it. -->
-                <Button x:Name="OpenAdvancedLink" Classes="ghost" HorizontalAlignment="Left"
-                        Click="OnOpenAdvanced" />
-              </StackPanel>
-
-              <!-- Tab 2: Test - everything about what runs, in the order you would decide it:
-                   which profile, how long that takes, whether the tuner drives it, then the
-                   individual knobs that override the profile. -->
-              <StackPanel x:Name="RightTabEnginePanel" Spacing="8" IsVisible="False" Margin="0,0,4,0">
                 <StackPanel x:Name="ProfilePickerPanel" Spacing="4">
                   <TextBlock x:Name="TestProfileLabel" Classes="label" />
                   <ComboBox x:Name="ProfileBox" SelectedIndex="0" HorizontalAlignment="Stretch"
@@ -600,15 +661,15 @@
                   </StackPanel>
                 </Border>
 
-                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,2,0,2" />
+              </StackPanel>
 
-                <!-- Sixteen controls that each override one thing the profile already set.
-                     Folded shut: choosing a profile is the decision, and these are for undoing
-                     parts of it, which is rarer than the space they took suggested. -->
-                <ToggleButton x:Name="EngineKnobsButton" Classes="ghost" HorizontalAlignment="Left"
-                              IsCheckedChanged="OnToggleEngineKnobs" />
+              <!-- Tab 3: Advanced - every knob plus every safety limit -->
+              <StackPanel x:Name="RightTabAdvancedPanel" Spacing="10" IsVisible="False" Margin="0,0,4,0">
 
-                <StackPanel x:Name="EngineKnobsPanel" Spacing="8" IsVisible="False">
+                <!-- Every knob, in one place. These override whatever the chosen profile set,
+                     which is the only reason to come here. -->
+                <TextBlock x:Name="AdvancedRunTitle" Classes="sectionTitle" />
+
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Grid.Column="0" Spacing="3">
                     <TextBlock x:Name="MinutesLabel" Classes="label" />
@@ -787,11 +848,9 @@
                   <NumericUpDown x:Name="CoreDelayBox" Value="2" Minimum="0" Maximum="120"
                                  Increment="1" FormatString="0" />
                 </StackPanel>
-                </StackPanel>
-              </StackPanel>
 
-              <!-- Tab 3: System -->
-              <StackPanel x:Name="RightTabSystemPanel" Spacing="10" IsVisible="False" Margin="0,0,4,0">
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,4,0,4" />
+                <TextBlock x:Name="AdvancedSafetyTitle" Classes="sectionTitle" />
                 <StackPanel Spacing="3">
                   <TextBlock x:Name="MaxTempLabel" Classes="label" />
                   <NumericUpDown x:Name="MaxTempBox" Value="90" Minimum="60" Maximum="105"

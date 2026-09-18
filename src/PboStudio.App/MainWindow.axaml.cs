@@ -541,6 +541,11 @@ public partial class MainWindow : Window
         ApplySettingsToControls();
         RefreshAutoTunerDetail();
 
+        // A campaign outlives the window: phase two exists to find the value that reboots the
+        // machine, and it has to be able to carry on afterwards.
+        _campaign = CampaignService.Load(SettingsRoot);
+        RefreshAutoTab();
+
         AutostartBox.IsChecked = TaskSchedulerService.IsAutostartEnabled();
 
         LiveTelemetryGraph.TempLimit = (double)(MaxTempBox.Value ?? 90m);
@@ -815,7 +820,9 @@ public partial class MainWindow : Window
         // it, labelled differently for the same run, is how the panel got to be a wall.
         if (StartButton is null || StartDivider is null) return;
 
-        bool ownedByCard = RightTabSetupBtn?.IsChecked == true && !_running;
+        // The Auto tab has its own button and starts a campaign, not a run. Showing the
+        // single-run button underneath it would offer two different things called Start.
+        bool ownedByCard = RightTabAutoBtn?.IsChecked == true && !_running;
         StartButton.IsVisible = !ownedByCard;
         StartDivider.IsVisible = !ownedByCard;
 
@@ -1199,20 +1206,18 @@ public partial class MainWindow : Window
         }
 
         // Right panel
-        RightTabSetupBtn.Content = LocalizationService.Get("TabSetup");
-        AdvancedTabsLabel.Text = LocalizationService.Get("AdvancedTabs");
-        Tip(AdvancedTabsLabel, "AdvancedTabsTooltip");
-        Tip(RightTabEngineBtn, "AdvancedTabsTooltip");
-        Tip(RightTabSystemBtn, "AdvancedTabsTooltip");
-        RightTabEngineBtn.Content = LocalizationService.Get("TabEngine");
-        RightTabSystemBtn.Content = LocalizationService.Get("TabSystem");
+        RightTabAutoBtn.Content = LocalizationService.Get("TabAuto");
+        RightTabTestsBtn.Content = LocalizationService.Get("TabTests");
+        RightTabAdvancedBtn.Content = LocalizationService.Get("TabAdvanced");
+        Tip(RightTabAutoBtn, "TabAutoTooltip");
+        Tip(RightTabTestsBtn, "TabTestsTooltip");
+        Tip(RightTabAdvancedBtn, "TabAdvancedTooltip");
         TestRunningText.Text = LocalizationService.Get("TestRunning");
 
         TestProfileLabel.Text = LocalizationService.Get("TestProfile");
-        OpenAdvancedLink.Content = LocalizationService.Get("OpenAdvanced");
         AllProfilesBox.Content = LocalizationService.Get("ShowAllProfiles");
-        EngineKnobsButton.Content = LocalizationService.Get(
-            EngineKnobsButton.IsChecked == true ? "HideEngineKnobs" : "ShowEngineKnobs");
+        AdvancedRunTitle.Text = LocalizationService.Get("AdvancedRunTitle");
+        AdvancedSafetyTitle.Text = LocalizationService.Get("AdvancedSafetyTitle");
         AutoTunerTitleText.Text = LocalizationService.Get("AutoTunerTitle");
         Tip(AutoTunerModeBox, "AutoTunerTooltip");
         AutoTunerOpt0.Content = LocalizationService.Get("AutoTunerDisabled");
@@ -1355,11 +1360,12 @@ public partial class MainWindow : Window
 
     private void OnRightTabChanged(object? sender, RoutedEventArgs e)
     {
-        if (RightTabSetupPanel is null || RightTabEnginePanel is null || RightTabSystemPanel is null) return;
-        RightTabSetupPanel.IsVisible = RightTabSetupBtn.IsChecked == true;
-        RightTabEnginePanel.IsVisible = RightTabEngineBtn.IsChecked == true;
-        RightTabSystemPanel.IsVisible = RightTabSystemBtn.IsChecked == true;
+        if (RightTabAutoPanel is null || RightTabTestsPanel is null || RightTabAdvancedPanel is null) return;
+        RightTabAutoPanel.IsVisible = RightTabAutoBtn.IsChecked == true;
+        RightTabTestsPanel.IsVisible = RightTabTestsBtn.IsChecked == true;
+        RightTabAdvancedPanel.IsVisible = RightTabAdvancedBtn.IsChecked == true;
         UpdateStartButtonState();
+        RefreshAutoTab();
     }
 
     private void OnBottomTabChanged(object? sender, RoutedEventArgs e)
@@ -1601,9 +1607,304 @@ public partial class MainWindow : Window
             : _nextStep.UseAutoTuner ? "NextStepApplyTuner"
             : "NextStepApply");
 
-        // Settings are beside the point while the driver is still missing.
-        OpenAdvancedLink.IsVisible = !setup;
         UpdateStartButtonState();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // The campaign: one button that runs all three phases
+    // ══════════════════════════════════════════════════════════════
+
+    private CampaignState _campaign = new();
+
+    /// <summary>
+    /// Set while a campaign-driven run is in flight, so a run the reader started from the Tests
+    /// tab never advances the campaign, and a cancelled run never counts as a completed phase.
+    /// </summary>
+    private bool _campaignRunActive;
+
+    /// <summary>Set for exactly as long as it takes the next OnStartStop to read it.</summary>
+    private bool _startingForCampaign;
+
+    /// <summary>
+    /// What the campaign would do next, given where the machine stands. The decision itself is
+    /// the same one the Tests tab shows; this only adds when to stop.
+    /// </summary>
+    private CampaignDecision DecideCampaign()
+    {
+        var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
+        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+
+        var step = NextStepService.Recommend(
+            _smu.CpuName, _cores, margins, _knowledge, chipLimit, LocalizationService.IsGerman,
+            driverReady: _dependencies?.PawnIoAvailable ?? _smu.IsAvailable,
+            engineReady: _dependencies is null
+                || _dependencies.Prime95Available
+                || _dependencies.YCruncherAvailable);
+
+        return CampaignService.Decide(_campaign, step, margins, _campaign.LastRunClean);
+    }
+
+    private void OnAutoStartStop(object? sender, RoutedEventArgs e)
+    {
+        if (_running)
+        {
+            // Stopping leaves the campaign standing. It picks up at the same phase later, which
+            // is what makes a run measured in days something a person can actually live with.
+            OnStartStop(sender, e);
+            return;
+        }
+
+        if (_campaign.Finished) { OnRestartCampaign(sender, e); return; }
+
+        if (!_campaign.Active)
+        {
+            _campaign = new CampaignState { Active = true, Started = DateTime.Now, LastRunClean = true };
+            CampaignService.Save(SettingsRoot, _campaign);
+            Log(LocalizationService.Get("CampaignStarted"), LogLevel.Success);
+        }
+
+        AdvanceCampaign();
+    }
+
+    private void OnRestartCampaign(object? sender, RoutedEventArgs e)
+    {
+        if (_running) return;
+
+        _campaign = new CampaignState();
+        CampaignService.Clear(SettingsRoot);
+        RefreshAutoTab();
+    }
+
+    /// <summary>
+    /// Works out the next phase and starts it. Called once when the reader presses the button
+    /// and again after every run the campaign itself started.
+    /// </summary>
+    private void AdvanceCampaign()
+    {
+        if (_running || !_campaign.InProgress) return;
+
+        var decision = DecideCampaign();
+
+        switch (decision.Verdict)
+        {
+            case CampaignVerdict.NeedsSetup:
+                OnOpenSetupWizard(this, new RoutedEventArgs());
+                return;
+
+            case CampaignVerdict.Done:
+                FinishCampaign();
+                return;
+
+            case CampaignVerdict.Stalled:
+                _campaign = _campaign with { Active = false };
+                CampaignService.Save(SettingsRoot, _campaign);
+                Log(LocalizationService.Get("CampaignStalled"), LogLevel.Warn);
+                RefreshAutoTab();
+                return;
+        }
+
+        var step = decision.Step!;
+        var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
+
+        _campaign = _campaign with
+        {
+            LastStage = step.Stage.ToString(),
+            LastSignature = CampaignService.Signature(step, margins),
+        };
+        CampaignService.Save(SettingsRoot, _campaign);
+
+        ApplyStepToControls(step);
+        RefreshAutoTab();
+
+        Log(string.Format(LocalizationService.Get("CampaignPhase"),
+            decision.PhaseNumber, CampaignService.TotalPhases, step.Headline), LogLevel.Success);
+
+        _startingForCampaign = true;
+        OnStartStop(this, new RoutedEventArgs());
+    }
+
+    /// <summary>
+    /// Bookkeeping after a campaign-driven run: count the phase, back off whatever failed, and
+    /// go round again. A core that failed still holds the value it failed at, and leaving it
+    /// there would send the campaign back to the same run forever.
+    /// </summary>
+    private void OnCampaignRunFinished(IReadOnlyDictionary<int, List<Failure>> failures)
+    {
+        _campaignRunActive = false;
+        if (!_campaign.InProgress) return;
+
+        _campaign = _campaign with
+        {
+            RunsDone = _campaign.RunsDone + 1,
+            LastRunClean = failures.Count == 0,
+        };
+        CampaignService.Save(SettingsRoot, _campaign);
+
+        BackOffFailedCores(failures.Keys);
+
+        // Off the current call stack: the run's own finally block has not finished yet.
+        Dispatcher.UIThread.Post(AdvanceCampaign);
+    }
+
+    /// <summary>
+    /// Puts every core that failed back above the value it failed at. Its floor already sits one
+    /// point safer than the worst failure on record; the guardband puts it further still,
+    /// because the load that broke it is not the hardest load it will ever meet.
+    /// </summary>
+    private void BackOffFailedCores(IEnumerable<int> cores)
+    {
+        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        int guardband = (int)(GuardbandBox?.Value ?? AutoTunerService.DefaultGuardband);
+
+        foreach (int core in cores)
+        {
+            var knowledge = _knowledge.GetValueOrDefault(core, new CoreKnowledge());
+            int target = CampaignService.BackOffTo(knowledge, chipLimit, guardband);
+            var row = Row(core);
+            if (row.Margin == target) continue;
+
+            int was = (int)row.Margin;
+            row.Margin = target;
+            if (_smu.IsAvailable) _smu.WriteCurveOptimizer(core, target);
+
+            Log(string.Format(LocalizationService.Get("CampaignBackOff"), row.CoreName, was, target),
+                LogLevel.Warn);
+        }
+    }
+
+    private void FinishCampaign()
+    {
+        _campaign = _campaign with
+        {
+            Finished = true,
+            FinishedAt = DateTime.Now,
+            FinalMargins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin),
+        };
+        CampaignService.Save(SettingsRoot, _campaign);
+
+        Log(LocalizationService.Get("CampaignDone"), LogLevel.Success);
+        PlayNotificationSound(isError: false);
+        RefreshAutoTab();
+    }
+
+    /// <summary>
+    /// Everything the Auto tab shows, derived from the campaign state and where the machine
+    /// stands. Nothing here is a setting; it is all read off what has already happened.
+    /// </summary>
+    private void RefreshAutoTab()
+    {
+        if (AutoStartButton is null || _rows.Count == 0) return;
+
+        // Curve Optimizer arrived with Zen 3. On Zen 1, Zen+ and Zen 2 there is no per-core
+        // curve at all, and a three-phase search would spend a weekend measuring a setting that
+        // does not exist.
+        var cpu = CpuModelService.Detect(_smu.CpuName);
+        if (!cpu.SupportsCurveOptimizer)
+        {
+            AutoSetupCard.IsVisible = true;
+            AutoPlanPanel.IsVisible = false;
+            AutoResultCard.IsVisible = false;
+            AutoStartButton.IsVisible = false;
+            AutoSetupButton.IsVisible = false;
+
+            AutoSetupTitle.Text = LocalizationService.Get("NoCurveOptimizerTitle");
+            AutoSetupText.Text = CpuModelService.Describe(cpu, LocalizationService.IsGerman);
+            AutoFootnote.Text = "";
+            return;
+        }
+
+        AutoSetupButton.IsVisible = true;
+
+        var decision = DecideCampaign();
+        bool setup = decision.Verdict == CampaignVerdict.NeedsSetup;
+        bool finished = _campaign.Finished;
+
+        AutoSetupCard.IsVisible = setup;
+        AutoPlanPanel.IsVisible = !setup && !finished;
+        AutoResultCard.IsVisible = finished;
+        AutoStartButton.IsVisible = !finished;
+
+        if (setup)
+        {
+            AutoSetupTitle.Text = LocalizationService.Get("AutoSetupTitle");
+            AutoSetupText.Text = LocalizationService.Get("AutoSetupText");
+            AutoSetupButton.Content = LocalizationService.Get("NextStepOpenSetup");
+            AutoStartButton.IsVisible = false;
+            AutoFootnote.Text = "";
+            return;
+        }
+
+        if (finished)
+        {
+            ShowCampaignResult();
+            return;
+        }
+
+        int phase = _running && _campaignRunActive
+            ? CampaignService.PhaseNumberOf(CurrentCampaignStage())
+            : decision.PhaseNumber;
+
+        AutoHeadline.Text = _running && _campaignRunActive
+            ? string.Format(LocalizationService.Get("CampaignRunningHeadline"), phase, CampaignService.TotalPhases)
+            : _campaign.InProgress
+                ? LocalizationService.Get("CampaignResumeHeadline")
+                : LocalizationService.Get("CampaignIdleHeadline");
+
+        AutoIntro.Text = LocalizationService.Get(
+            _campaign.InProgress ? "CampaignResumeIntro" : "CampaignIdleIntro");
+
+        SetPhaseRow(AutoPhase1Glyph, AutoPhase1Text, 1, phase, "CampaignPhase1");
+        SetPhaseRow(AutoPhase2Glyph, AutoPhase2Text, 2, phase, "CampaignPhase2");
+        SetPhaseRow(AutoPhase3Glyph, AutoPhase3Text, 3, phase, "CampaignPhase3");
+
+        AutoEstimate.Text = LocalizationService.Get("CampaignEstimate");
+
+        AutoStartButton.Content = _running
+            ? LocalizationService.Get("StopTest")
+            : _campaign.InProgress
+                ? LocalizationService.Get("CampaignContinue")
+                : LocalizationService.Get("CampaignStart");
+
+        AutoStartButton.Classes.Set("danger", _running);
+        AutoStartButton.Classes.Set("primary", !_running);
+
+        AutoFootnote.Text = LocalizationService.Get(
+            decision.Verdict == CampaignVerdict.Stalled ? "CampaignStalledHint" : "CampaignFootnote");
+    }
+
+    /// <summary>The stage of the run currently in flight, as recorded when it was started.</summary>
+    private TuningStage CurrentCampaignStage() =>
+        Enum.TryParse<TuningStage>(_campaign.LastStage, out var stage) ? stage : TuningStage.Discover;
+
+    private static void SetPhaseRow(
+        TextBlock glyph, TextBlock text, int number, int current, string key)
+    {
+        bool done = current > number;
+        bool now = current == number;
+
+        glyph.Text = done ? "\u2713" : now ? "\u25b6" : "\u25cb";
+        glyph.Foreground = SolidColorBrush.Parse(done ? "#34D399" : now ? "#60A5FA" : "#8494A8");
+
+        text.Text = LocalizationService.Get(key);
+        text.Foreground = SolidColorBrush.Parse(now ? "#E2E8F0" : "#8494A8");
+    }
+
+    private void ShowCampaignResult()
+    {
+        AutoResultTitle.Text = LocalizationService.Get("CampaignResultTitle");
+        AutoResultText.Text = LocalizationService.Get("CampaignResultText");
+        AutoCopyBiosButton.Content = LocalizationService.Get("CopyBios");
+        AutoAgainButton.Content = LocalizationService.Get("CampaignAgain");
+
+        var lines = _rows.Select(r =>
+        {
+            int v = (int)r.Margin;
+            string sign = v < 0 ? "Negative" : v > 0 ? "Positive" : "Auto";
+            return $"{r.CoreName,-8} {v,4}   \u2192  {sign} / {Math.Abs(v)}";
+        });
+
+        AutoResultValues.Text = string.Join("\n", lines);
+        AutoFootnote.Text = "";
     }
 
     /// <summary>
@@ -1622,15 +1923,28 @@ public partial class MainWindow : Window
             return;
         }
 
-        SelectProfile(_nextStep.Profile);
+        ApplyStepToControls(_nextStep);
+
+        Log(string.Format(LocalizationService.Get("NextStepApplied"), _nextStep.Headline), LogLevel.Success);
+        OnStartStop(sender, e);
+    }
+
+    /// <summary>
+    /// Turns a recommendation into a configured run: the profile, whether the auto-tuner drives
+    /// it, which cores take part and how many passes they get. Shared by the Tests tab's button
+    /// and by the campaign, so the two can never drift into configuring things differently.
+    /// </summary>
+    private void ApplyStepToControls(NextStep step)
+    {
+        SelectProfile(step.Profile);
 
         // Fine steps: the recommendation only reaches for the tuner once the search space is
         // narrow, and at that point -1 costs nothing extra over -3.
-        AutoTunerModeBox.SelectedIndex = _nextStep.UseAutoTuner ? 2 : 0;
+        AutoTunerModeBox.SelectedIndex = step.UseAutoTuner ? 2 : 0;
 
-        if (_nextStep.Cores.Count > 0)
+        if (step.Cores.Count > 0)
         {
-            var wanted = _nextStep.Cores.ToHashSet();
+            var wanted = step.Cores.ToHashSet();
             _suppressSelectAll = true;
             foreach (var row in _rows) row.Selected = wanted.Contains(row.Index);
             _suppressSelectAll = false;
@@ -1659,22 +1973,6 @@ public partial class MainWindow : Window
 
         UpdateDurationHint();
         UpdateStartButtonState();
-
-        Log(string.Format(LocalizationService.Get("NextStepApplied"), _nextStep.Headline), LogLevel.Success);
-        OnStartStop(sender, e);
-    }
-
-    /// <summary>The one way off the first screen, for anyone who wants the knobs.</summary>
-    private void OnOpenAdvanced(object? sender, RoutedEventArgs e) =>
-        RightTabEngineBtn.IsChecked = true;
-
-    private void OnToggleEngineKnobs(object? sender, RoutedEventArgs e)
-    {
-        if (EngineKnobsPanel is null || EngineKnobsButton is null) return;
-
-        bool open = EngineKnobsButton.IsChecked == true;
-        EngineKnobsPanel.IsVisible = open;
-        EngineKnobsButton.Content = LocalizationService.Get(open ? "HideEngineKnobs" : "ShowEngineKnobs");
     }
 
     /// <summary>
@@ -1835,6 +2133,7 @@ public partial class MainWindow : Window
         }
 
         CpuText.Text = LocalizationService.Pick($"{_smu.CpuName} ({_cores.Count} Kerne)", $"{_smu.CpuName} ({_cores.Count} cores)");
+        DescribeCpu();
         UpdatePbo();
         UpdateSmartRecommendations();
 
@@ -2070,6 +2369,12 @@ public partial class MainWindow : Window
 
         if (!StartButton.IsEnabled) return;
 
+        // Set here rather than by the caller, so a run started by hand from the Tests tab always
+        // clears it. A stale flag would send that run's result into the campaign's bookkeeping
+        // and swallow the result panel the reader was waiting for.
+        _campaignRunActive = _startingForCampaign;
+        _startingForCampaign = false;
+
         string engineRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "engines"));
 
         // Which engines the run needs comes from the plan, not from one dropdown.
@@ -2126,7 +2431,7 @@ public partial class MainWindow : Window
             if (customOrder.Count == 0)
             {
                 Log(LocalizationService.Get("CustomOrderNeeded"), LogLevel.Warn);
-                RightTabEngineBtn.IsChecked = true;
+                RightTabTestsBtn.IsChecked = true;
                 CustomOrderBox.Focus();
                 return;
             }
@@ -2359,11 +2664,15 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
             TestStateService.ClearState(runsDir);
+
+            // A campaign that is stopped keeps its place; it just does not go round again.
+            _campaignRunActive = false;
             Log(LocalizationService.Pick("Test abgebrochen.", "Test cancelled."), LogLevel.Warn);
         }
         catch (Exception ex)
         {
             TestStateService.ClearState(runsDir);
+            _campaignRunActive = false;
             Log($"{LocalizationService.Pick("Fehler", "Error")}: {ex.Message}", LogLevel.Error);
         }
         finally
@@ -2634,25 +2943,23 @@ public partial class MainWindow : Window
             $"{LocalizationService.Get("AutoTunerProgress")}: {locked} of {selected.Count} cores locked 🔒");
     }
 
-    /// <summary>Accurate Ryzen CPU generation detection for y-cruncher binary selection.</summary>
-    private ZenGeneration DetectGeneration()
+    /// <summary>
+    /// Which y-cruncher binary to run. One of three lists that used to answer "which Zen is
+    /// this" separately and disagree; they all read <see cref="CpuModelService"/> now.
+    /// </summary>
+    private ZenGeneration DetectGeneration() =>
+        CpuModelService.Detect(_smu.CpuName).YCruncherGeneration;
+
+    /// <summary>
+    /// What this processor is, on the chip next to its name: the family, the range its Curve
+    /// Optimizer actually has, and the handful of things that follow from the design.
+    /// </summary>
+    private void DescribeCpu()
     {
-        string name = _smu.CpuName;
-        if (!name.Contains("Ryzen", StringComparison.OrdinalIgnoreCase))
-            return ZenGeneration.Unknown;
+        if (CpuText is null) return;
 
-        if (name.Contains("9950") || name.Contains("9900") || name.Contains("9800") || name.Contains("9700") || name.Contains("9600"))
-            return ZenGeneration.Zen5;
-        if (name.Contains("7950") || name.Contains("7900") || name.Contains("7800") || name.Contains("7700") || name.Contains("7600") || name.Contains("7500"))
-            return ZenGeneration.Zen4;
-        if (name.Contains("5950") || name.Contains("5900") || name.Contains("5800") || name.Contains("5700") || name.Contains("5600") || name.Contains("5500"))
-            return ZenGeneration.Zen3;
-        if (name.Contains("3950") || name.Contains("3900") || name.Contains("3800") || name.Contains("3700") || name.Contains("3600") || name.Contains("3500"))
-            return ZenGeneration.Zen2;
-        if (name.Contains("2700") || name.Contains("2600") || name.Contains("1800") || name.Contains("1700") || name.Contains("1600"))
-            return ZenGeneration.Zen1;
-
-        return ZenGeneration.Zen4;
+        ToolTip.SetTip(CpuText, CpuModelService.Describe(
+            CpuModelService.Detect(_smu.CpuName), LocalizationService.IsGerman));
     }
 
     /// <summary>Every profile for this processor. The picker shows a subset of it.</summary>
@@ -2999,13 +3306,22 @@ public partial class MainWindow : Window
         _detailIsAudit = false;
         var totalDuration = DateTime.Now - _runStarted;
 
-        PlayNotificationSound(isError: failures.Count > 0);
-        PerformPostTestAction();
-
         if (!string.IsNullOrEmpty(webhookUrl))
         {
             _ = NotificationService.SendRunFinishedAsync(webhookUrl, failures.Count, totalDuration);
         }
+
+        // Mid-campaign there is nothing for the reader to do with this: the next phase starts by
+        // itself, failures are backed off automatically, and a chime every few hours through the
+        // night is not a feature. The campaign reports once, at the end.
+        if (_campaignRunActive)
+        {
+            OnCampaignRunFinished(failures);
+            return;
+        }
+
+        PlayNotificationSound(isError: failures.Count > 0);
+        PerformPostTestAction();
 
         if (failures.Count == 0)
         {
@@ -3291,10 +3607,11 @@ public partial class MainWindow : Window
         _running = running;
         ProgressPanel.IsVisible = running;
 
-        // The footer button is hidden on the first screen while idle, because the card owns the
+        // The footer button is hidden on the Auto tab while idle, because the campaign owns the
         // action there. It has to come back the moment there is a run to stop.
         UpdateStartButtonState();
         ApplyNextStepButton.IsEnabled = !running;
+        RefreshAutoTab();
 
         if (!running)
         {

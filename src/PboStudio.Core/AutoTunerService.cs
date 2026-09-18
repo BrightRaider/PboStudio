@@ -46,23 +46,21 @@ public sealed record AutoTunerStepResult(
 public static class AutoTunerService
 {
     public const int DefaultBiosLimit = -30;
-    public const int ExtendedZen5Limit = -50;
 
-    /// <summary>Detects hardware/BIOS maximum negative Curve Optimizer limit based on CPU architecture.</summary>
-    public static int GetMaxNegativeMargin(string cpuName)
-    {
-        if (string.IsNullOrEmpty(cpuName)) return DefaultBiosLimit;
-
-        // Zen 5 (Ryzen 9000 series) supports extended Curve Shaper / SMU range down to -50
-        if (cpuName.Contains("9950") || cpuName.Contains("9900") || cpuName.Contains("9800") ||
-            cpuName.Contains("9700") || cpuName.Contains("9600"))
-        {
-            return ExtendedZen5Limit;
-        }
-
-        // Zen 2, Zen 3 (5000 series), Zen 4 (7000/8000 series) use standard -30 limit
-        return DefaultBiosLimit;
-    }
+    /// <summary>
+    /// The most negative Curve Optimizer offset this processor accepts.
+    /// <para>
+    /// This used to return -50 for the Ryzen 9000 series, on the reading that Zen 5 has an
+    /// extended range. It does not: Curve Optimizer is -30 to +30 on every AMD desktop part
+    /// that has it. What Zen 5 added is Curve Shaper, a second and separate set of offsets
+    /// across temperature and frequency bands, which this program does not write. A search that
+    /// ran to -50 would end by reporting values nobody can type into a BIOS.
+    /// </para>
+    /// </summary>
+    public static int GetMaxNegativeMargin(string cpuName) =>
+        CpuModelService.Detect(cpuName) is { SupportsCurveOptimizer: true } cpu
+            ? cpu.MaxNegativeMargin
+            : DefaultBiosLimit;
 
     /// <summary>Symmetric: searching up in bigger jumps than it came down would skip candidates.</summary>
     public static int StepSize(AutoTunerMode mode) => mode == AutoTunerMode.Grob ? 3 : 1;
