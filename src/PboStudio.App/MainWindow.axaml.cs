@@ -631,6 +631,7 @@ public partial class MainWindow : Window
         }
 
         MaxTempBox.Value = s.MaxTemp;
+        CurveLimitBox.Value = Math.Clamp(s.CurveOptimizerLimit, CurveOptimizerRange.Widest, CurveOptimizerRange.Standard);
         TreatWheaAsErrorBox.IsChecked = s.TreatWheaWarningAsError;
         RestorePointBox.IsChecked = s.CreateRestorePoint;
         GuardbandBox.Value = s.Guardband;
@@ -693,6 +694,7 @@ public partial class MainWindow : Window
             _ycAlgoBoxes.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key));
 
         s.MaxTemp = (int)(MaxTempBox.Value ?? 90);
+        s.CurveOptimizerLimit = (int)(CurveLimitBox.Value ?? CurveOptimizerRange.Standard);
         s.TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true;
         s.CreateRestorePoint = RestorePointBox.IsChecked == true;
         s.Guardband = (int)(GuardbandBox.Value ?? AutoTunerService.DefaultGuardband);
@@ -936,7 +938,14 @@ public partial class MainWindow : Window
     private void BuildCoreRows()
     {
         var qualities = CoreQualityService.GetCoreQualities(_cores.Count, _smu.CorePerformanceRanking);
-        int maxNegative = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        // A value the processor reports holding is a value it accepts. Reading them first matters:
+        // a row clamps to its limit, so a core the BIOS set to -40 was shown as -30, looked
+        // edited, and "Apply live" would have written -30 over the BIOS value.
+        var held = Enumerable.Range(0, _cores.Count).Select(_smu.ReadCurveOptimizer).ToList();
+        _hardwareReads.Clear();
+        _hardwareReads.AddRange(held.Where(h => h.HasValue).Select(h => h!.Value));
+
+        int maxNegative = EffectiveChipLimit;
 
         for (int i = 0; i < _cores.Count; i++)
         {
@@ -951,7 +960,7 @@ public partial class MainWindow : Window
                 QualityRank = qualities.TryGetValue(i, out var q) ? q.Rank : CoreQualityRank.Standard,
                 CppcPerformance = qualities.TryGetValue(i, out var qp) ? qp.CppcPerformance : 0,
             };
-            if (_smu.ReadCurveOptimizer(i) is { } margin)
+            if (held[i] is { } margin)
             {
                 row.Margin = margin;
                 row.BiosBaseline = margin;
@@ -1200,7 +1209,7 @@ public partial class MainWindow : Window
         Tip(SelectAllBox, "AllCoresTooltip");
         CoHeaderText.Text = LocalizationService.Get("CurveOpt");
         Tip(CoHeaderText, "ColumnCoTooltip");
-        SetAllMaxButton.Content = $"{LocalizationService.Get("SetAllMax")} {AutoTunerService.GetMaxNegativeMargin(_smu.CpuName)}";
+        SetAllMaxButton.Content = $"{LocalizationService.Get("SetAllMax")} {EffectiveChipLimit}";
         Tip(SetAllMaxButton, "SetAllMaxTooltip");
         SetAllOriginalButton.Content = LocalizationService.Get("SetAllReset");
         Tip(SetAllOriginalButton, "SetAllResetTooltip");
@@ -1340,6 +1349,9 @@ public partial class MainWindow : Window
 
         // System tab
         MaxTempLabel.Text = LocalizationService.Get("SafetyTempLimit");
+        CurveLimitLabel.Text = LocalizationService.Get("CurveLimit");
+        CurveLimitHint.Text = LocalizationService.Get("CurveLimitHint");
+        Tip(CurveLimitBox, "CurveLimitTooltip");
         Tip(MaxTempBox, "SafetyTempTooltip");
         PostTestActionLabel.Text = LocalizationService.Get("PostTestAction");
         PostOpt0.Content = LocalizationService.Get("ActionDoNothing");
@@ -1519,6 +1531,27 @@ public partial class MainWindow : Window
             ? _ycBinaryPrefixes[i]
             : null;
 
+    /// <summary>
+    /// A new depth has to reach everything that was built from the old one: each row's clamp,
+    /// the "all to" button and the runtime estimate. The rows were the part that would have been
+    /// forgotten, and a row clamps silently.
+    /// </summary>
+    private void OnCurveLimitChanged(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        if (!_settingsApplied || _rows.Count == 0) return;
+
+        int limit = EffectiveChipLimit;
+        foreach (var row in _rows)
+        {
+            row.MinLimit = limit;
+            row.ChipLimit = limit;
+            row.RefreshLocalization();
+        }
+
+        SetAllMaxButton.Content = $"{LocalizationService.Get("SetAllMax")} {limit}";
+        UpdateDurationHint();
+    }
+
     private void OnAutoTunerModeChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (StartButton is null || AutoTunerModeBox is null) return;
@@ -1577,6 +1610,31 @@ public partial class MainWindow : Window
     // The campaign: one button that runs all three phases
     // ══════════════════════════════════════════════════════════════
 
+    // -- how deep this machine's Curve Optimizer goes --------------------------------------
+
+    /// <summary>What the processor reported for each core at start-up. A value it holds is a value it accepts.</summary>
+    private readonly List<int> _hardwareReads = [];
+
+    /// <summary>Where a write beyond -30 turned out not to stick, or null.</summary>
+    private int? _appliedFloor;
+
+    /// <summary>
+    /// The deepest Curve Optimizer value to work with. It was a constant, then a claim that
+    /// every part stops at -30, which a 7950X3D owner contradicted. It is the standard range,
+    /// widened by what the processor shows and by what the person asks for, and narrowed again
+    /// when a write does not stick. See <see cref="CurveOptimizerRange"/>.
+    /// </summary>
+    private int EffectiveChipLimit => CurveOptimizerRange.Effective(
+        AutoTunerService.GetMaxNegativeMargin(_smu.CpuName),
+        AskedChipLimit,
+        _hardwareReads,
+        _appliedFloor);
+
+    /// <summary>The control once settings are applied; the stored value before, when the rows are built.</summary>
+    private int? AskedChipLimit => _settingsApplied
+        ? (CurveLimitBox?.Value is { } v ? (int)v : null)
+        : _settings.CurveOptimizerLimit;
+
     private CampaignState _campaign = new();
 
     /// <summary>
@@ -1602,7 +1660,7 @@ public partial class MainWindow : Window
     private CampaignDecision DecideCampaign()
     {
         var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
-        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        int chipLimit = EffectiveChipLimit;
 
         var step = NextStepService.Recommend(
             _smu.CpuName, _cores, margins, _knowledge, chipLimit, LocalizationService.IsGerman,
@@ -1724,7 +1782,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void BackOffFailedCores(IEnumerable<int> cores)
     {
-        int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        int chipLimit = EffectiveChipLimit;
         int guardband = CurrentGuardband;
 
         foreach (int core in cores)
@@ -1910,7 +1968,7 @@ public partial class MainWindow : Window
 
             // Enough passes for the longest descent among the selected cores, or the search
             // stops halfway and leaves a core neither tuned nor validated.
-            int chipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+            int chipLimit = EffectiveChipLimit;
             int slots = _rows
                 .Where(r => wanted.Contains(r.Index))
                 .Select(r => AutoTunerService.WorstCaseSlots(
@@ -2453,7 +2511,7 @@ public partial class MainWindow : Window
         double pauseInterval = (double)(PauseIntervalBox?.Value ?? 30);
         double pauseDuration = (double)(PauseDurationBox?.Value ?? 1);
 
-        int maxNegativeLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        int maxNegativeLimit = EffectiveChipLimit;
 
         bool autoRuntime = AutoRuntimeBox.IsChecked == true;
 
@@ -2671,6 +2729,35 @@ public partial class MainWindow : Window
     {
         bool ok = _smu.WriteCurveOptimizer(core, margin);
         if (!ok) return false;
+
+        // Beyond -30 whether the processor accepts the value is the open question, so it is
+        // asked rather than assumed. A value it clamps would otherwise be shown, logged and
+        // recorded as the one that was tested: the search would lock a figure that never ran.
+        if (margin < CurveOptimizerRange.Standard)
+        {
+            int? readBack = _smu.ReadCurveOptimizer(core);
+            if (!CurveOptimizerRange.WasKept(margin, readBack))
+            {
+                int actual = readBack!.Value;
+                _appliedFloor = actual;
+
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var row = Row(core);
+                    row.Margin = actual;
+                    row.Applied = actual;
+
+                    // The limit is a property of the processor, not of this core, and the box
+                    // that asked for it should say what the range actually is now. Setting it
+                    // runs the handler, which brings every row's clamp along.
+                    CurveLimitBox.Value = EffectiveChipLimit;
+
+                    Log(string.Format(LocalizationService.Get("CurveWriteClamped"),
+                        row.CoreName, margin, actual), LogLevel.Warn);
+                });
+                return false;
+            }
+        }
 
         Dispatcher.UIThread.Post(() =>
         {
@@ -3063,7 +3150,7 @@ public partial class MainWindow : Window
             _profiles, _cores,
             _rows.ToDictionary(r => r.Index, r => (int)r.Margin),
             _knowledge,
-            AutoTunerService.GetMaxNegativeMargin(_smu.CpuName),
+            EffectiveChipLimit,
             CurrentGuardband,
             from);
 
@@ -3130,7 +3217,7 @@ public partial class MainWindow : Window
         {
             var mode = AutoTunerModeBox?.SelectedIndex == 1 ? AutoTunerMode.Grob : AutoTunerMode.Fein;
             string modeDesc = mode == AutoTunerMode.Grob ? (isDe ? "Grob -3" : "Coarse -3") : (isDe ? "Fein -1" : "Fine -1");
-            int maxNegativeLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+            int maxNegativeLimit = EffectiveChipLimit;
 
             var activeRows = _rows.Where(r => r.Selected && !r.IsLocked).ToList();
             int lockedCount = _rows.Count(r => r.Selected && r.IsLocked);
@@ -3324,28 +3411,47 @@ public partial class MainWindow : Window
         LiveTelemetryGraph.EmptyMessage = LocalizationService.Get("MetricNoTelemetry");
     }
 
+    private bool _pmTableReported;
+    private bool _thermalWarnedThisRun;
+
     /// <summary>Live telemetry from the power table. Limits are static, the values are not.</summary>
     private void UpdatePbo()
     {
         if (_smu.ReadPbo() is not { } pbo) return;
 
         BoostValue.Text = $"{pbo.BoostMhz} MHz";
-        ScalarValue.Text = $"{pbo.Scalar}×";
+        ScalarValue.Text = $"{pbo.Scalar}\u00d7";
 
-        if (pbo.HasLimits)
-        {
-            SetMetric(PptValue, PptBar, pbo.PptNowW, pbo.PptLimitW, "W");
-            SetMetric(TdcValue, TdcBar, pbo.TdcNowA, pbo.TdcLimitA, "A");
-            SetMetric(EdcValue, EdcBar, pbo.EdcNowA, pbo.EdcLimitA, "A");
-            SetMetric(TempValue, TempBar, pbo.TempNowC, pbo.TempLimitC, "°C");
-        }
-        else
+        ReportPowerTableOnce(pbo);
+
+        // A table this program cannot read has no readings, which is not the same as readings
+        // of zero. It used to read the Zen 3 positions out of every table and show whatever
+        // happened to be there: 0 \u00b0C and 0 W on a Zen 4 part.
+        if (!pbo.TableKnown)
         {
             PptChip.IsVisible = TdcChip.IsVisible = EdcChip.IsVisible = false;
-            SetMetric(TempValue, TempBar, pbo.TempNowC, pbo.TempLimitC, "°C");
+            TempValue.Text = LocalizationService.Pick("n. v.", "n/a");
+            TempBar.Width = 0;
+            ToolTip.SetTip(TempChip, string.Format(LocalizationService.Get("PmTableUnknownTooltip"), pbo.PmTableVersion));
+
+            WarnIfNoThermalProtection(pbo);
+            return;
         }
 
+        // Each chip shows what the layout could actually read. Limits only decide whether there
+        // is a bar: a layout that has no limits, like the Zen 4 one, still has readings.
+        if (pbo.PptNowW is null) PptChip.IsVisible = false;
+        if (pbo.TdcNowA is null) TdcChip.IsVisible = false;
+        if (pbo.EdcNowA is null) EdcChip.IsVisible = false;
+
+        SetMetric(PptValue, PptBar, pbo.PptNowW, pbo.PptLimitW, "W");
+        SetMetric(TdcValue, TdcBar, pbo.TdcNowA, pbo.TdcLimitA, "A");
+        SetMetric(EdcValue, EdcBar, pbo.EdcNowA, pbo.EdcLimitA, "A");
+        SetMetric(TempValue, TempBar, pbo.TempNowC, pbo.TempLimitC, "\u00b0C");
+
         LiveTelemetryGraph.AddSample(pbo.BoostMhz, pbo.TempNowC ?? 0f, pbo.PptNowW ?? 0f);
+
+        WarnIfNoThermalProtection(pbo);
 
         double maxTemp = (double)(MaxTempBox?.Value ?? 90m);
         LiveTelemetryGraph.TempLimit = maxTemp;
@@ -3353,11 +3459,58 @@ public partial class MainWindow : Window
         if (_running && _runCts is not null && !_runCts.IsCancellationRequested && (pbo.TempNowC ?? 0) >= maxTemp)
         {
             Log(LocalizationService.Pick(
-                $"🚨 TEMPERATUR-NOTSCHUTZ: {pbo.TempNowC:F0} °C erreicht (Limit {maxTemp} °C). Test wird abgebrochen.",
-                $"🚨 TEMPERATURE CUT-OFF: reached {pbo.TempNowC:F0} °C (limit {maxTemp} °C). Aborting the run."), LogLevel.Error);
+                $"\U0001F6A8 TEMPERATUR-NOTSCHUTZ: {pbo.TempNowC:F0} \u00b0C erreicht (Limit {maxTemp} \u00b0C). Test wird abgebrochen.",
+                $"\U0001F6A8 TEMPERATURE CUT-OFF: reached {pbo.TempNowC:F0} \u00b0C (limit {maxTemp} \u00b0C). Aborting the run."), LogLevel.Error);
             PlayNotificationSound(isError: true);
             _runCts.Cancel();
         }
+    }
+
+    /// <summary>
+    /// The emergency temperature cut-off compares against the same reading the display shows. When
+    /// there is no reading it never fires, and nothing said so: a stress test ran with no thermal
+    /// protection on a processor whose table was misread.
+    /// </summary>
+    private void WarnIfNoThermalProtection(PboSnapshot pbo)
+    {
+        if (!_running || pbo.TempNowC is not null || _thermalWarnedThisRun) return;
+
+        _thermalWarnedThisRun = true;
+        Log(LocalizationService.Get("NoThermalProtection"), LogLevel.Warn);
+    }
+
+    /// <summary>
+    /// Says once which table layout is in use, and for any layout that has not been checked on
+    /// real hardware - or a table that is not known at all - writes the SMU's own dump of it to a
+    /// file. That dump is what turns "the numbers look wrong" into something fixable: the
+    /// contents can be compared against another monitoring tool to find which positions hold
+    /// the temperature and the power.
+    /// </summary>
+    private void ReportPowerTableOnce(PboSnapshot pbo)
+    {
+        if (_pmTableReported) return;
+        _pmTableReported = true;
+
+        if (pbo.TableKnown && pbo.LayoutVerified) return;
+
+        string? report = _smu.PmTableReport();
+        string path = Path.Combine(SettingsRoot, "pm_table_report.txt");
+
+        try
+        {
+            if (report is not null)
+            {
+                Directory.CreateDirectory(SettingsRoot);
+                File.WriteAllText(path, report);
+            }
+        }
+        catch { report = null; }
+
+        Log(string.Format(
+            LocalizationService.Get(pbo.TableKnown ? "PmTableUnverified" : "PmTableUnknown"),
+            $"0x{pbo.PmTableVersion:X8}",
+            pbo.LayoutName ?? "",
+            report is null ? "" : path), LogLevel.Warn);
     }
 
     private const double MetricBarWidth = 72;
@@ -3548,7 +3701,7 @@ public partial class MainWindow : Window
 
     private async void OnSetAllMax(object? sender, RoutedEventArgs e)
     {
-        int maxLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+        int maxLimit = EffectiveChipLimit;
         int affected = _rows.Count(r => r.Selected);
         if (affected == 0) return;
 
@@ -3684,7 +3837,7 @@ public partial class MainWindow : Window
     {
         foreach (var row in _rows)
         {
-            row.ChipLimit = AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+            row.ChipLimit = EffectiveChipLimit;
             row.Knowledge = _knowledge.GetValueOrDefault(row.Index);
         }
     }
@@ -3698,6 +3851,7 @@ public partial class MainWindow : Window
     {
         _running = running;
         ProgressPanel.IsVisible = running;
+        if (running) _thermalWarnedThisRun = false;
 
         // PPT, TDC, EDC and the scalar are power-limit readouts: at idle they are four chips of
         // jargon reporting that nothing is happening. Temperature and clock stay, because those
@@ -3753,7 +3907,7 @@ public partial class MainWindow : Window
                      // does nothing or, in the case of the tuner's memory, moves the floor out
                      // from under a search that is using it. MaxTempBox stays live on purpose:
                      // raising a safety limit must never require stopping first.
-                     GuardbandBox, AllProfilesBox, ResetKnowledgeButton, AutoRuntimeBox,
+                     CurveLimitBox, GuardbandBox, AllProfilesBox, ResetKnowledgeButton, AutoRuntimeBox,
                      AutoRuntimeCapBox, SpreadSmtBox, IsolateCoreBox, RestorePointBox,
                      YcSecondsBox, YcMemoryBox, YcBinaryBox,
                  })

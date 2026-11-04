@@ -179,6 +179,23 @@ public class WindowWiringTests
         Assert.InRange(button - estimate, 0, 900);
     }
 
+    /// <summary>
+    /// The Curve Optimizer limit was read from a table in ten places, and it stopped being a
+    /// constant: it depends on what the processor reports and on what the person asked for. A
+    /// window that went past the one property would clamp rows, estimate runtimes and bound the
+    /// search by a different number than the one the rest of it uses.
+    /// </summary>
+    [Fact]
+    public void TheWindowAsksForTheChipLimitInOnePlaceOnly()
+    {
+        string code = Code;
+
+        int direct = Regex.Matches(code, @"AutoTunerService\.GetMaxNegativeMargin\(").Count;
+
+        // The one inside EffectiveChipLimit itself.
+        Assert.Equal(1, direct);
+    }
+
     /// <summary>Nothing left pointing at a control that was taken out of the markup.</summary>
     [Fact]
     public void TheCodeDoesNotReferToControlsThatNoLongerExist()

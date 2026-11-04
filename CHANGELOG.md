@@ -1,5 +1,68 @@
 # Changelog
 
+## 1.1.1 — 2026-11-04
+
+Two reports from Ryzen 9 7950X3D owners, both of which turned out to be this program's own
+mistakes. 318 unit tests.
+
+### Fixed
+
+- **Temperature and power read 0 on Zen 4.** The live readings come out of a power table the
+  SMU publishes into memory, and the program read one fixed set of positions out of it — the
+  Zen 3 ones — on every processor. On a Zen 4 part those positions hold something else. Each
+  table version now has its own layout, and a table the program does not recognise shows "n/a"
+  instead of a zero it did not measure.
+
+  **The Zen 4 layout is a best reading, not a verified one.** Its positions come from the sensor
+  definitions in the bundled ZenStates-Core library, not from a measurement made here, because
+  no Zen 4 processor was available. The Zen 3 layout is the one checked on hardware, and it is
+  unchanged. For any layout that has not been checked, and for any table that is not known, the
+  program writes the SMU's own dump of it to `runs/pm_table_report.txt` and says so in the log,
+  so that the right positions can be found by comparing it against another monitoring tool.
+
+- **The temperature cut-off could not act, and nothing said so.** It compares a run against the
+  same reading the display shows. With no reading it never fires: a stress test ran with no
+  thermal protection on a processor whose table was misread. A run now warns, once, when there
+  is no temperature to act on. A temperature outside any believable range is discarded rather
+  than trusted, because a misread low figure is a false sense of protection and a misread high
+  one only ends a run early.
+
+- **A core the BIOS set deeper than -30 was shown as -30.** Each row clamps to the depth the
+  program allows, and the program allowed -30. A core holding -40 was displayed as -30, counted
+  as edited, and "Apply live" would have written -30 over the BIOS value. A value the processor
+  reports holding is now taken as proof that it accepts it.
+
+### Changed
+
+- **The Curve Optimizer depth is no longer a constant.** 1.1.0 said that -30 is the limit on
+  every AMD desktop part. That was stated as a fact and was not sourced, and it is contradicted
+  by a Ryzen 9 7900X3D / 7950X3D owner who uses -40. There is no AMD document that settles it;
+  what exists is forum reports of ±50 on newer AGESA versions and a quoted comment that the
+  range was extended with the 7000X3D. The earlier -50 default was just as unfounded, applied to
+  everybody — so the default stays at the standard -30, which is what every part is known to
+  accept, and the depth actually used is worked out from evidence: what the processor reports
+  holding, what the person asks for, and where a write stops sticking.
+
+  A new setting under *Safety & system*, "Deepest Curve Optimizer value", lets a person say
+  their BIOS accepts more, down to -50. Every write beyond -30 is then read back. A value the
+  processor does not keep is reported and is not tested as though it had been set, which would
+  have let the search lock a figure that never ran.
+
+  Inside -30 nothing is second-guessed. That path is the one verified on hardware, and a
+  mismatch there is more likely a read that raced the write than a refused value.
+
+### Not changed, and why
+
+- **Zen 5 telemetry.** Its power table is not recognised, so it shows "n/a" and the dump is
+  written. Reading it wrongly would be worse than not reading it.
+
+### Known gaps
+
+- The Zen 4 telemetry positions and the deeper-than--30 write path have not been run on a
+  Zen 4 or Zen 5 processor. Both are covered by tests against synthetic tables and values.
+- The 1.1.0 entry below still states the -30 claim as it was written. It is left as history;
+  this entry is the correction.
+
 ## 1.1.0 — 2026-09-18
 
 One button that runs the whole thing, a window cut down to three tabs, and a Curve Optimizer

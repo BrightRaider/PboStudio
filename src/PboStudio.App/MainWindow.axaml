@@ -892,6 +892,17 @@
                                  Increment="1" FormatString="0" />
                 </StackPanel>
 
+                <!-- Curve Optimizer is -30 on every part that has it, and deeper on some boards
+                     and AGESA versions. Opt-in rather than assumed: every write beyond -30 is
+                     read back, so a value the processor does not keep is caught, not trusted. -->
+                <StackPanel Spacing="3">
+                  <TextBlock x:Name="CurveLimitLabel" Classes="label" />
+                  <NumericUpDown x:Name="CurveLimitBox" Value="-30" Minimum="-50" Maximum="-30"
+                                 Increment="1" FormatString="0" HorizontalAlignment="Stretch"
+                                 ValueChanged="OnCurveLimitChanged" />
+                  <TextBlock x:Name="CurveLimitHint" Classes="caption" TextWrapping="Wrap" />
+                </StackPanel>
+
                 <CheckBox x:Name="TreatWheaAsErrorBox" IsChecked="True" />
 
                 <!-- Parks every other core at 0 while one is under test, so a machine check

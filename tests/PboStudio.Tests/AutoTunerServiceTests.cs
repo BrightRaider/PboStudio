@@ -163,11 +163,10 @@ public class AutoTunerServiceTests
     }
 
     /// <summary>
-    /// This asserted -50 for Zen 5, on the reading that the generation has an extended range.
-    /// It does not. Curve Optimizer is -30 to +30 on every AMD desktop part that has it; what
-    /// Zen 5 added is Curve Shaper, a second and separate set of offsets across temperature and
-    /// frequency bands, which this program does not write. A search allowed to run to -50 ends
-    /// by reporting values that cannot be entered in a BIOS, which is the whole deliverable.
+    /// This asserted -50 for Zen 5 as the default. The default is the standard -30 for every
+    /// model with the feature: -50 was an unverified depth applied to everybody, and a search
+    /// that runs to a value the BIOS refuses ends by reporting something nobody can enter.
+    /// Deeper is opt-in and verified, see CurveOptimizerRange.
     /// </summary>
     [Theory]
     [InlineData("AMD Ryzen 9 9950X 16-Core Processor")]

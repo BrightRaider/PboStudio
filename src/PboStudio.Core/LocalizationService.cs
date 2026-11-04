@@ -46,6 +46,18 @@ public static class LocalizationService
             // ---- Live metrics ----
             "MetricBoost" => isDe ? "TAKT" : "CLOCK",
             "MetricTemp" => isDe ? "TEMP" : "TEMP",
+            "PmTableUnknownTooltip" => isDe
+                ? "Die Leistungstabelle dieses Prozessors (Version 0x{0:X8}) ist PboStudio nicht bekannt, deshalb gibt es keine Temperatur- und Leistungswerte. Das ist keine Null, sondern fehlende Unterstützung. Der Temperatur-Notschutz kann dann nicht greifen."
+                : "PboStudio does not know this processor's power table (version 0x{0:X8}), so there are no temperature or power readings. That is missing support, not a zero. The temperature cut-off cannot act without one.",
+            "PmTableUnknown" => isDe
+                ? "Leistungstabelle {0} ist PboStudio nicht bekannt: keine Temperatur- und Leistungswerte. Der SMU-Bericht liegt unter {2} \u2014 an ein GitHub-Issue angehängt, lässt sich damit die richtige Zuordnung finden."
+                : "Power table {0} is not known to PboStudio: no temperature or power readings. The SMU report is at {2} \u2014 attached to a GitHub issue it lets the right mapping be found.",
+            "PmTableUnverified" => isDe
+                ? "Leistungstabelle {0} wird mit der {1}-Zuordnung gelesen, die auf echter Hardware noch nicht geprüft ist. Stimmen die Werte nicht mit HWiNFO überein, bitte {2} an ein GitHub-Issue anhängen."
+                : "Power table {0} is read with the {1} mapping, which has not been checked on real hardware yet. If the values disagree with HWiNFO, please attach {2} to a GitHub issue.",
+            "NoThermalProtection" => isDe
+                ? "\u26a0\ufe0f Keine Temperatur lesbar \u2014 der Temperatur-Notschutz kann in diesem Lauf nicht greifen. Beobachte die Temperatur selbst."
+                : "\u26a0\ufe0f No temperature reading \u2014 the temperature cut-off cannot act during this run. Watch the temperature yourself.",
             "MetricNoTelemetry" => isDe ? "Keine Telemetrie — PawnIO-Treiber nicht aktiv" : "No telemetry — PawnIO driver not active",
             "MetricLoading" => isDe ? "Telemetrie wird geladen…" : "Loading telemetry…",
             "TooltipPpt" => isDe
@@ -328,6 +340,16 @@ public static class LocalizationService
 
             // ---- System tab ----
             "SafetyTempLimit" => isDe ? "Notfall-Temperaturlimit (°C)" : "Emergency temperature limit (°C)",
+            "CurveLimit" => isDe ? "Tiefster Curve-Optimizer-Wert" : "Deepest Curve Optimizer value",
+            "CurveLimitHint" => isDe
+                ? "-30 geht auf jedem Ryzen. Tiefer nur, wenn dein BIOS es annimmt."
+                : "-30 works on every Ryzen. Deeper only if your BIOS accepts it.",
+            "CurveLimitTooltip" => isDe
+                ? "Manche Boards und AGESA-Versionen nehmen auf Zen 4 und Zen 5 Werte unter -30 an, andere nicht, und es gibt dazu kein offizielles AMD-Dokument. Deshalb ist -30 der Standard. Stellst du hier einen tieferen Wert ein, wird jeder Schreibvorgang jenseits von -30 zurückgelesen: übernimmt der Prozessor den Wert nicht, wird das gemeldet und nicht getestet, als wäre er gesetzt."
+                : "Some boards and AGESA versions accept values below -30 on Zen 4 and Zen 5 and others do not, and there is no official AMD document on it. That is why -30 is the default. Set a deeper value here and every write beyond -30 is read back: if the processor does not keep it, that is reported instead of being tested as though it had been set.",
+            "CurveWriteClamped" => isDe
+                ? "{0}: Der Prozessor hat {1} nicht übernommen und steht auf {2}. Tiefer geht es auf diesem System nicht; der Bereich ist darauf begrenzt."
+                : "{0}: the processor did not keep {1} and holds {2}. That is as deep as this system goes; the range is limited to it.",
             "SafetyTempTooltip" => isDe ? "Übersteigt die CPU-Temperatur diesen Wert, wird der Testlauf sofort abgebrochen. Bleibt auch während eines Laufs änderbar." : "If the CPU temperature exceeds this value the run is aborted immediately. Stays editable during a run.",
             "PostTestAction" => isDe ? "Aktion nach Testende" : "Post-test action",
             "ActionDoNothing" => isDe ? "Nichts tun (PC eingeschaltet lassen)" : "Do nothing (keep PC running)",

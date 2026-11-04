@@ -12,18 +12,20 @@ public enum CpuSocket { Unknown, AM4, AM5, ThreadRipper }
 /// The program had three separate answers to "which Zen is this": a generation detector in the
 /// window for picking a y-cruncher binary, a limit table in the auto-tuner, and a third list in
 /// the recommendation service that also named profiles by display string. They disagreed. The
-/// auto-tuner's table was the expensive one — it let the search walk a Ryzen 9000 down to -50,
-/// a number the Curve Optimizer cannot express on any AMD desktop part, which makes the values
-/// it ends up reporting impossible to type into a BIOS.
+/// auto-tuner's table was the expensive one — it let the search walk a Ryzen 9000 down to -50 by
+/// default, a depth nobody had checked, which can end in values that cannot be typed into a
+/// BIOS. The default here is the standard -30; going deeper is something a board is shown to
+/// accept, see <see cref="CurveOptimizerRange"/>.
 /// </summary>
 /// <param name="SupportsCurveOptimizer">
 /// False on Zen 1, Zen+ and Zen 2. Curve Optimizer arrived with Zen 3; on the older parts PBO
 /// has only its scalar and power limits, so there is nothing here to tune.
 /// </param>
 /// <param name="MaxNegativeMargin">
-/// The most negative per-core offset the Curve Optimizer accepts. It is -30 on every desktop
-/// part that has the feature at all. Zen 5 adds Curve Shaper, which is a second, separate set
-/// of offsets across temperature and frequency bands — not a wider range for this one.
+/// The depth every part with the feature is known to accept, -30. Some boards and AGESA versions
+/// are reported to take more on Zen 4 and Zen 5; that is not assumed here, it is shown by the
+/// processor or asked for by the person. Zen 5's Curve Shaper is a separate set of offsets
+/// across temperature and frequency bands, not a wider range for this one.
 /// </param>
 /// <param name="NegativeOnly">
 /// True for the Zen 3 X3D parts, which accept undervolting but no positive offset and no
@@ -180,8 +182,8 @@ public static class CpuModelService
         var parts = new List<string>
         {
             isGerman
-                ? $"{FamilyName(cpu.Family)}, Curve Optimizer bis {cpu.MaxNegativeMargin}"
-                : $"{FamilyName(cpu.Family)}, Curve Optimizer down to {cpu.MaxNegativeMargin}",
+                ? $"{FamilyName(cpu.Family)}, Curve Optimizer standardmäßig bis {cpu.MaxNegativeMargin}"
+                : $"{FamilyName(cpu.Family)}, Curve Optimizer down to {cpu.MaxNegativeMargin} by default",
         };
 
         if (cpu.IsX3d)

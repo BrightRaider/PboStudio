@@ -48,13 +48,17 @@ public static class AutoTunerService
     public const int DefaultBiosLimit = -30;
 
     /// <summary>
-    /// The most negative Curve Optimizer offset this processor accepts.
+    /// The depth this processor family is known to accept: the standard -30, which is what every
+    /// Ryzen with the feature takes and the only figure that has been checked here.
     /// <para>
-    /// This used to return -50 for the Ryzen 9000 series, on the reading that Zen 5 has an
-    /// extended range. It does not: Curve Optimizer is -30 to +30 on every AMD desktop part
-    /// that has it. What Zen 5 added is Curve Shaper, a second and separate set of offsets
-    /// across temperature and frequency bands, which this program does not write. A search that
-    /// ran to -50 would end by reporting values nobody can type into a BIOS.
+    /// It used to be -50 for the Ryzen 9000 series, as a default. That was an unverified depth
+    /// applied to everybody, and a search that runs to a value the BIOS refuses ends by reporting
+    /// something nobody can enter. 1.1.0 then went the other way and stated -30 as a fact about
+    /// every desktop part, which a 7950X3D owner contradicted: newer AGESA versions are reported
+    /// to accept more on Zen 4 and Zen 5, though no AMD document says so. So this is the floor,
+    /// not the answer. The depth actually used is worked out by
+    /// <see cref="CurveOptimizerRange"/> from what the processor shows and what the person asks
+    /// for.
     /// </para>
     /// </summary>
     public static int GetMaxNegativeMargin(string cpuName) =>

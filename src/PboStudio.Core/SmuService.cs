@@ -17,9 +17,18 @@ public sealed record PboSnapshot(
     float? PptLimitW = null, float? PptNowW = null,
     float? TdcLimitA = null, float? TdcNowA = null,
     float? EdcLimitA = null, float? EdcNowA = null,
-    float? TempLimitC = null, float? TempNowC = null)
+    float? TempLimitC = null, float? TempNowC = null,
+    uint PmTableVersion = 0,
+    string? LayoutName = null,
+    bool LayoutVerified = true)
 {
     public bool HasLimits => PptLimitW is > 0;
+
+    /// <summary>
+    /// Whether this processor's power table is one the program knows how to read. False means
+    /// the live readings are absent because they cannot be read, not because they are zero.
+    /// </summary>
+    public bool TableKnown => LayoutName is not null;
 }
 
 /// <summary>
@@ -137,12 +146,15 @@ public sealed class SmuService : ISmuService
         }
     }
 
-    // Layout of the power monitoring table the SMU publishes into DRAM.
-    private const int PptLimit = 0, PptValue = 1;
-    private const int TdcLimit = 2, TdcValue = 3;
-    private const int TempLimit = 4, TempValue = 5;
-    private const int EdcLimit = 8, EdcValue = 9;
-
+    /// <summary>
+    /// The live readings, read from wherever this processor generation keeps them.
+    /// <para>
+    /// The positions used to be a fixed set - the Zen 3 ones - applied to every processor. On a
+    /// Zen 4 part they hold something else and came out as zero. A table version this program
+    /// does not recognise now yields a snapshot with no readings and <see cref="PboSnapshot.TableKnown"/>
+    /// false, which the window can say in words.
+    /// </para>
+    /// </summary>
     public PboSnapshot? ReadPbo()
     {
         lock (_smuLock)
@@ -155,6 +167,13 @@ public sealed class SmuService : ISmuService
             uint boost = 0;
             try { boost = _cpu.GetFMax(); } catch { }
 
+            uint version = 0;
+            try { version = _cpu.RyzenSmu?.PmTableVersion ?? 0; } catch { }
+
+            var layout = PmTableLayout.For(version);
+            if (layout is null)
+                return new PboSnapshot(scalar, boost, PmTableVersion: version);
+
             float[]? t = null;
             try
             {
@@ -163,17 +182,30 @@ public sealed class SmuService : ISmuService
             }
             catch { }
 
-            if (t is null || t.Length <= EdcValue)
-                return new PboSnapshot(scalar, boost);
+            var reading = t is null ? null : layout.Read(t, scalar, boost);
 
-            return new PboSnapshot(scalar, boost,
-                Sane(t[PptLimit]), Sane(t[PptValue]),
-                Sane(t[TdcLimit]), Sane(t[TdcValue]),
-                Sane(t[EdcLimit]), Sane(t[EdcValue]),
-                Sane(t[TempLimit]), Sane(t[TempValue]));
+            return (reading ?? new PboSnapshot(scalar, boost)) with
+            {
+                PmTableVersion = version,
+                LayoutName = layout.Name,
+                LayoutVerified = layout.Verified,
+            };
+        }
+    }
 
-            static float? Sane(float v) =>
-                float.IsFinite(v) && v > 0 && v < 10000 ? v : null;
+    /// <summary>
+    /// The SMU's own report, including a dump of the power table. When a processor's layout is
+    /// not known this is what makes it knowable: the contents can be compared against another
+    /// monitoring tool to find which positions hold the temperature and power.
+    /// </summary>
+    public string? PmTableReport()
+    {
+        lock (_smuLock)
+        {
+            if (_cpu?.RyzenSmu is not { } smu) return null;
+
+            try { return smu.GetReport(); }
+            catch (Exception ex) { return $"Could not produce the report: {ex.Message}"; }
         }
     }
 

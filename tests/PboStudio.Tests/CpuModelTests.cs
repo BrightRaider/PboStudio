@@ -14,10 +14,9 @@ public class CpuModelTests
     // ── the bug this file exists for ──────────────────────────────
 
     /// <summary>
-    /// The auto-tuner's limit table let a Ryzen 9000 be walked down to -50. No AMD desktop part
-    /// has a Curve Optimizer range past -30; what Zen 5 added is Curve Shaper, a second set of
-    /// offsets across temperature and frequency bands. A search that ends at -50 reports a value
-    /// that cannot be typed into a BIOS, which is the one thing the whole program is for.
+    /// The auto-tuner's limit table let a Ryzen 9000 be walked down to -50 by default, a depth
+    /// nobody had checked. The default is the standard -30 for every model; going deeper is
+    /// something a board is shown to accept or the person asks for, see CurveOptimizerRange.
     /// </summary>
     [Theory]
     [InlineData("AMD Ryzen 9 9950X3D 16-Core Processor")]

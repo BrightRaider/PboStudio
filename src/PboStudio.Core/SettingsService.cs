@@ -71,6 +71,13 @@ public sealed class AppSettings
     public bool CreateRestorePoint { get; set; } = true;
 
     /// <summary>Points of headroom between the measured boundary and the locked value.</summary>
+    /// <summary>
+    /// The deepest Curve Optimizer value the person says their BIOS accepts. -30 is accepted
+    /// everywhere and is the default; anything deeper is opt-in, and verified by reading each
+    /// write back.
+    /// </summary>
+    public int CurveOptimizerLimit { get; set; } = CurveOptimizerRange.Standard;
+
     public int Guardband { get; set; } = AutoTunerService.DefaultGuardband;
     public int PostTestAction { get; set; }
     public string WebhookUrl { get; set; } = "";
