@@ -12,19 +12,21 @@ public enum CpuSocket { Unknown, AM4, AM5, ThreadRipper }
 /// The program had three separate answers to "which Zen is this": a generation detector in the
 /// window for picking a y-cruncher binary, a limit table in the auto-tuner, and a third list in
 /// the recommendation service that also named profiles by display string. They disagreed. The
-/// auto-tuner's table was the expensive one — it let the search walk a Ryzen 9000 down to -50 by
-/// default, a depth nobody had checked, which can end in values that cannot be typed into a
-/// BIOS. The default here is the standard -30; going deeper is something a board is shown to
-/// accept, see <see cref="CurveOptimizerRange"/>.
+/// auto-tuner's table was the expensive one — it let the search walk a Ryzen 9000 down to -50
+/// with nothing checking that the board kept the value, which can end in figures that cannot be
+/// typed into a BIOS. The depth is now an allowance that the processor corrects: -30 before
+/// Zen 4 and -50 from Zen 4 on, with every deeper write read back, see
+/// <see cref="CurveOptimizerRange"/>.
 /// </summary>
 /// <param name="SupportsCurveOptimizer">
 /// False on Zen 1, Zen+ and Zen 2. Curve Optimizer arrived with Zen 3; on the older parts PBO
 /// has only its scalar and power limits, so there is nothing here to tune.
 /// </param>
 /// <param name="MaxNegativeMargin">
-/// The depth every part with the feature is known to accept, -30. Some boards and AGESA versions
-/// are reported to take more on Zen 4 and Zen 5; that is not assumed here, it is shown by the
-/// processor or asked for by the person. Zen 5's Curve Shaper is a separate set of offsets
+/// How deep the search may start out: -30 on Zen 3, -50 on Zen 4 and newer, which is what the
+/// vendored library gives as the range (see <see cref="CpuModelService.ExtendedLimit"/>). It is a
+/// starting allowance, not a promise: a write beyond -30 is read back, and the depth the
+/// processor actually keeps replaces it. Zen 5's Curve Shaper is a separate set of offsets
 /// across temperature and frequency bands, not a wider range for this one.
 /// </param>
 /// <param name="NegativeOnly">
@@ -75,14 +77,19 @@ public static class CpuModelService
     public const int CurveOptimizerLimit = -30;
 
     /// <summary>
-    /// What the Ryzen 9000 series starts out allowed to try. It was the default here from the start,
-    /// was removed in 1.1.0 on an unsourced claim that every desktop part stops at -30, and is back.
-    /// What makes that safe now is what was missing then: every write beyond -30 is read back, a
+    /// What Zen 4 and newer (Ryzen 7000, 8000, 9000) start out allowed to try. The vendored ZenStates
+    /// library states the range as "-30 to 30 before Zen 4, and from -50 to 50 on Zen 4 and newer"
+    /// in the commands this program sends. That is a library comment, not an AMD document, and it
+    /// has not been checked on Zen 4 or Zen 5 hardware here. 1.1.2 applied it to Zen 5 only, which
+    /// stopped a Zen 4 part that takes -50 at -30. The figure was the default from the start, was
+    /// removed in 1.1.0 on an unsourced claim that every desktop part stops at -30, and came back
+    /// in 1.1.1.
+    /// What makes that safe is what was missing in 1.1.0: every write beyond -30 is read back, a
     /// value the processor does not keep ends the search at the last value that held, and the depth
     /// the processor turns out to accept is remembered. A board that stops at -30 costs one refused
     /// write per core, once.
     /// </summary>
-    public const int Zen5DefaultLimit = -50;
+    public const int ExtendedLimit = -50;
 
     /// <summary>
     /// Exactly four digits, which is how every Ryzen model number is written. The negative
@@ -142,7 +149,7 @@ public static class CpuModelService
             isX3d,
             isApu,
             hasCo,
-            !hasCo ? 0 : family == CpuFamily.Zen5 ? Zen5DefaultLimit : CurveOptimizerLimit,
+            !hasCo ? 0 : family is CpuFamily.Zen4 or CpuFamily.Zen5 ? ExtendedLimit : CurveOptimizerLimit,
 
             // The Zen 3 X3D parts take an undervolt and nothing else: no positive offset, no
             // multiplier, no voltage control. Later X3D designs put the cache under the cores

@@ -6,8 +6,9 @@ namespace PboStudio.Core;
 /// 1.1.0 said it was -30 on every AMD desktop part. That was stated as fact and not sourced, and
 /// a report from a Ryzen 9 7900X3D / 7950X3D owner contradicts it: -40 entered in the BIOS and
 /// used, and -30 as the stopping point of this program. There is no AMD document that settles it
-/// either way - the figure circulating is +/-50 from AGESA 1005 on, from forums and a quoted
-/// comment, not from a specification.
+/// either way. The vendored ZenStates library says the range is -30 to 30 before Zen 4 and -50 to
+/// 50 on Zen 4 and newer, in a comment on the commands this program sends - the best source
+/// available, not a specification, and not yet checked on a Zen 4 or Zen 5 part here.
 ///
 /// So the range is no longer a constant. It is what the standard says as a floor, widened by
 /// what the processor itself demonstrates: a value it reports having, a value the person
@@ -28,7 +29,7 @@ public static class CurveOptimizerRange
     /// <param name="userLimit">
     /// The deepest value the person wants searched, or null for the processor's own default. It works
     /// in both directions within the standard and the widest: deeper than the default for a board
-    /// that accepts more, shallower for somebody who wants a Ryzen 9000 held at the standard -30.
+    /// that accepts more, shallower for somebody who wants a Ryzen 7000 or 9000 held at the standard -30.
     /// Nothing shallower than -30 is honoured - there is no reason to refuse a value every part takes.
     /// </param>
     /// <param name="readFromHardware">

@@ -163,14 +163,15 @@ public class AutoTunerServiceTests
     }
 
     /// <summary>
-    /// -50 is the default for the Ryzen 9000 series and -30 for everything else that has the feature.
+    /// -50 is the default for Zen 4 and newer (Ryzen 7000, 8000, 9000) and -30 for the Zen 3 parts.
     /// The -50 was removed in 1.1.0 on an unsourced claim and returned with the verification it
     /// lacked: writes beyond -30 are read back and a refused value ends the search where it held.
     /// </summary>
     [Theory]
     [InlineData("AMD Ryzen 9 9950X 16-Core Processor", -50)]
     [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor", -50)]
-    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor", -30)]
+    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor", -50)]
+    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor", -50)]
     [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor", -30)]
     public void GetMaxNegativeMargin_FollowsTheGenerationsDefault(string cpu, int expected)
     {

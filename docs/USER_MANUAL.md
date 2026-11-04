@@ -47,7 +47,7 @@ No manual `.ini` file editing is required — testing, error analysis, and core 
     - a risk-coloured CO value (green → amber → orange → red as it approaches the chip limit),
     - a `▲/▼` delta against the BIOS starting value (amber while only the table knows it, muted once the CPU holds it),
     - status carried by glyph **and** colour (`○ Ready`, `● running`, `✓ passed`, `✕ FAILED`, `🔒 limit`).
-  - **Quick actions**: `[⚡ All to -30]` (or `-50` on Zen 5, with a confirmation) and `[🔄 BIOS values]`.
+  - **Quick actions**: `[⚡ All to -30]` (or `-50` on Zen 4 and newer, with a confirmation) and `[🔄 BIOS values]`.
   - **`APPLY CO VALUES`** sits directly below the table: all three routes side by side (see section 7).
 - **Right Column (3-tab control panel)**:
   - **`[🎯 Setup]`**: profile selector with explanation, runtime estimate, auto-tuner card with step-down progress.

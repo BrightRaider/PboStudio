@@ -51,7 +51,7 @@ Das Hauptfenster ist in übersichtliche Funktionsbereiche gegliedert:
     - `▲/▼`-Delta gegenüber dem BIOS-Ausgangswert (bernstein = noch nicht angewendet, gedämpft = in der CPU aktiv),
     - Status mit Symbol **und** Farbe (`○ Bereit`, `● läuft`, `✓ bestanden`, `✕ FEHLER`, `🔒 Limit`).
   - **Quick-Actions im Tabellenkopf**:
-    - **`[⚡ Alle auf -30]`** (bzw. `-50` bei Zen 5): setzt alle ausgewählten Kerne auf das Chip-Limit. Fragt vorher nach — dieser Wert ist auf kaum einer CPU stabil.
+    - **`[⚡ Alle auf -30]`** (bzw. `-50` ab Zen 4): setzt alle ausgewählten Kerne auf das Chip-Limit. Fragt vorher nach — dieser Wert ist auf kaum einer CPU stabil.
     - **`[🔄 BIOS-Werte]`**: zurück auf die Werte, die beim Programmstart aus der CPU gelesen wurden. Ändert nur die Tabelle; die CPU folgt erst mit `⚡ Live anwenden`.
   - **`CO-WERTE ANWENDEN`** direkt unter der Tabelle: die drei Wege nebeneinander, jeweils mit Kurzerklärung (siehe Kapitel 9).
 - **Rechte Spalte (3-Tab Kontrollpanel)**:
@@ -153,8 +153,8 @@ Damit trägt kein fixierter Wert das Etikett „fertig", ohne getestet worden zu
 2. **Die Suche ist durch „Durchgänge" begrenzt.** Von `-30` aus mit Grob und 3 Durchgängen kommst du nur bis `-24`. Reicht das nicht, bleibt der Kern offen statt fixiert. Die Laufzeit-Abschätzung im Setup-Tab rechnet den ungünstigsten Fall mit.
 
 ### 🎯 Hardware-Limits je nach CPU-Generation:
-- **Ryzen 5000 (Zen 3) & Ryzen 7000 / 8000 (Zen 4):** Standard-Limit = **`-30`**
-- **Ryzen 9000 (Zen 5 Granite Ridge):** Erweitertes Limit = **`-50`** (Curve Shaper)
+- **Ryzen 5000 (Zen 3):** Startwert = **`-30`**
+- **Ryzen 7000 / 8000 (Zen 4) & Ryzen 9000 (Zen 5):** Startwert = **`-50`**. Jeder Schreibvorgang unter `-30` wird zurückgelesen; nimmt der Prozessor den Wert nicht an, endet die Suche beim letzten Wert, der gehalten hat. Die Zahlen stammen aus der mitgelieferten Bibliothek, nicht aus einem AMD-Dokument.
 
 ---
 

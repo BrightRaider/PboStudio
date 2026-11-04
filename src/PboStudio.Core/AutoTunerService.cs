@@ -48,17 +48,17 @@ public static class AutoTunerService
     public const int DefaultBiosLimit = -30;
 
     /// <summary>
-    /// The depth this processor family is known to accept: the standard -30, which is what every
-    /// Ryzen with the feature takes and the only figure that has been checked here.
+    /// The depth this processor family starts out allowed to try: -30 on Zen 3, -50 on Zen 4 and
+    /// newer. Only -30 has been checked on hardware here.
     /// <para>
-    /// It used to be -50 for the Ryzen 9000 series, as a default. That was an unverified depth
-    /// applied to everybody, and a search that runs to a value the BIOS refuses ends by reporting
-    /// something nobody can enter. 1.1.0 then went the other way and stated -30 as a fact about
-    /// every desktop part, which a 7950X3D owner contradicted: newer AGESA versions are reported
-    /// to accept more on Zen 4 and Zen 5, though no AMD document says so. So this is the floor,
-    /// not the answer. The depth actually used is worked out by
-    /// <see cref="CurveOptimizerRange"/> from what the processor shows and what the person asks
-    /// for.
+    /// It used to be -50 for the Ryzen 9000 series, with nothing checking that the board kept the
+    /// value, and a search that runs to a value the BIOS refuses ends by reporting something nobody
+    /// can enter. 1.1.0 then went the other way and stated -30 as a fact about every desktop part,
+    /// which a 7950X3D owner contradicted. The vendored library gives the range as -50 to 50 on
+    /// Zen 4 and newer (a code comment, not an AMD document), which 1.1.3 follows for Zen 4 too.
+    /// So this is a starting allowance, not the answer. The depth actually used is worked out by
+    /// <see cref="CurveOptimizerRange"/> from what the processor shows, what the person asks for,
+    /// and what a read-back after each write shows it kept.
     /// </para>
     /// </summary>
     public static int GetMaxNegativeMargin(string cpuName) =>

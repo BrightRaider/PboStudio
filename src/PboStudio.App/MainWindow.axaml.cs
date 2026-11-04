@@ -1706,7 +1706,7 @@ public partial class MainWindow : Window
     /// <summary>Where a write beyond -30 turned out not to stick, or null.</summary>
     private int? _appliedFloor;
 
-    /// <summary>What this processor family starts out allowed to try: -30, or -50 on the Ryzen 9000 series.</summary>
+    /// <summary>What this processor family starts out allowed to try: -30, or -50 from Zen 4 on (Ryzen 7000 and newer).</summary>
     private int ModelCurveLimit => AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
 
     /// <summary>

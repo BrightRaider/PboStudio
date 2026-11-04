@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.3 — 2026-11-04
+
+One change, found while reading the vendored library for the 1.1.2 review and not acted on then.
+
+### Changed
+
+- **Ryzen 7000 and 8000 (Zen 4) start at -50, like Ryzen 9000.** The library the program uses to talk
+  to the processor documents the Curve Optimizer range in the commands it sends: "-30 to 30 before
+  Zen 4, and from -50 to 50 on Zen 4 and newer". 1.1.2 applied that to Zen 5 only and left Zen 4 at
+  -30, so a Zen 4 part that takes more was stopped at -30. Zen 3 stays at -30. The safeguards are
+  the same as for Zen 5: every write beyond -30 is read back, a value the processor does not keep ends
+  the search where it held, and the depth found is remembered for that BIOS. The setting under *Safety &
+  system* can still hold any part at -30. The texts and both manuals say the same.
+- Four existing tests asserted -30 for Zen 4 and were changed on purpose; the new tests state the rule
+  (Zen 4 and newer -50, Zen 3 -30) and the Curve Shaper staying a Zen 5 feature. Run against the 1.1.2
+  code before the change, eight cases of them failed with -30 where -50 is expected. 459 tests in all.
+
+### Not verified
+
+- **The source is a code comment in a library, not an AMD document**, and it has not been checked on
+  a Zen 4 or Zen 5 processor. The read-back is what protects a board that takes less.
+- Everything listed as unverified under 1.1.2 still is: the Zen 4 telemetry positions, the write path
+  beyond -30, the core mapping on 6+6 and 6-core parts, and the APIC mapping where IDs skip numbers.
+
 ## 1.1.2 — 2026-11-04
 
 A review of the whole code base, not of a diff, after a run of defects that each turned out to be

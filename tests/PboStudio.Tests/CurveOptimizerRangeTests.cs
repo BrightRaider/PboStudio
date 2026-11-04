@@ -163,9 +163,9 @@ public class CurveOptimizerRangeTests
 
     // -- what feeds it -----------------------------------------------
 
-    /// <summary>The model's own default is a starting point: -50 for Zen 5, the standard for the rest.</summary>
+    /// <summary>The model's own default is a starting point: -50 for Zen 4 and newer, the standard before.</summary>
     [Theory]
-    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor", -30)]
+    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor", -50)]
     [InlineData("AMD Ryzen 9 9950X 16-Core Processor", -50)]
     [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor", -30)]
     public void TheDefaultForEveryModelIsItsGenerationsOwn(string cpu, int expected)

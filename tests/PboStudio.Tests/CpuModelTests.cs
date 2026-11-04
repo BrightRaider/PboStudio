@@ -14,37 +14,52 @@ public class CpuModelTests
     // ── the Ryzen 9000 default ────────────────────────────────────
 
     /// <summary>
-    /// The default for the Ryzen 9000 series is -50. It was -50 from the first commit, was removed
-    /// in 1.1.0 on an unsourced claim that every desktop part stops at -30, and is back. What makes
-    /// it safe is not the number but what surrounds it: every write beyond -30 is read back, a value
-    /// the processor does not keep ends the search at the last value that held, and that depth is
-    /// remembered. See CurveOptimizerRange and the runner's depth-limit handling.
+    /// The default for Zen 4 and newer (Ryzen 7000, 8000 and 9000) is -50. The vendored ZenStates
+    /// library documents the Curve Optimizer range as "-30 to 30 before Zen 4, and from -50 to 50 on
+    /// Zen 4 and newer" in the commands this program sends. 1.1.2 applied that to Zen 5 only and left
+    /// Zen 4 at -30, which cuts a part that takes -50 off at -30: the search ends at a depth the
+    /// board would have accepted. Before that the figure was removed in 1.1.0 on an unsourced claim
+    /// and came back in 1.1.1. What makes it safe is not the number but what surrounds it: every
+    /// write beyond -30 is read back, a value the processor does not keep ends the search at the
+    /// last value that held, and that depth is remembered. See CurveOptimizerRange and the
+    /// runner's depth-limit handling.
     /// </summary>
     [Theory]
-    [InlineData("AMD Ryzen 9 9950X3D 16-Core Processor")]
-    [InlineData("AMD Ryzen 9 9950X 16-Core Processor")]
-    [InlineData("AMD Ryzen 9 9900X 12-Core Processor")]
-    [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor")]
-    [InlineData("AMD Ryzen 7 9700X 8-Core Processor")]
-    [InlineData("AMD Ryzen 5 9600X 6-Core Processor")]
-    public void Zen5PartsDefaultToMinusFifty(string name)
+    [InlineData("AMD Ryzen 9 9950X3D 16-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 9 9950X 16-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 9 9900X 12-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 7 9700X 8-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 5 9600X 6-Core Processor", CpuFamily.Zen5)]
+    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor", CpuFamily.Zen4)]
+    [InlineData("AMD Ryzen 9 7900X3D 12-Core Processor", CpuFamily.Zen4)]
+    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor", CpuFamily.Zen4)]
+    [InlineData("AMD Ryzen 7 7700X 8-Core Processor", CpuFamily.Zen4)]
+    [InlineData("AMD Ryzen 5 7600X 6-Core Processor", CpuFamily.Zen4)]
+    public void Zen4AndNewerPartsDefaultToMinusFifty(string name, CpuFamily family)
     {
         var cpu = Of(name);
 
-        Assert.Equal(CpuFamily.Zen5, cpu.Family);
+        Assert.Equal(family, cpu.Family);
         Assert.Equal(-50, cpu.MaxNegativeMargin);
         Assert.Equal(-50, AutoTunerService.GetMaxNegativeMargin(name));
-        Assert.True(cpu.HasCurveShaper);
     }
 
-    /// <summary>The deeper default belongs to Zen 5 only. Every other part with the feature stays at -30.</summary>
+    /// <summary>The Curve Shaper is a Zen 5 feature; the deeper range is not tied to it.</summary>
     [Theory]
-    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor")]
-    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor")]
-    [InlineData("AMD Ryzen 7 7700X 8-Core Processor")]
+    [InlineData("AMD Ryzen 9 9950X 16-Core Processor", true)]
+    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor", false)]
+    public void TheCurveShaperBelongsToZen5Only(string name, bool expected)
+    {
+        Assert.Equal(expected, Of(name).HasCurveShaper);
+    }
+
+    /// <summary>Before Zen 4 the range is -30 to 30, per the same source, so the Zen 3 parts stay at the standard.</summary>
+    [Theory]
     [InlineData("AMD Ryzen 9 5950X 16-Core Processor")]
     [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor")]
-    public void EveryOtherPartWithTheFeatureStaysAtTheStandard(string name)
+    [InlineData("AMD Ryzen 5 5600X 6-Core Processor")]
+    public void Zen3PartsStayAtTheStandard(string name)
     {
         Assert.Equal(-30, Of(name).MaxNegativeMargin);
         Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin(name));
@@ -163,7 +178,7 @@ public class CpuModelTests
 
         Assert.Equal(CpuFamily.Zen4, cpu.Family);
         Assert.Equal(CpuSocket.AM5, cpu.Socket);
-        Assert.Equal(-30, cpu.MaxNegativeMargin);
+        Assert.Equal(-50, cpu.MaxNegativeMargin);   // 1.1.3: Zen 4 and newer, see Zen4AndNewerPartsDefaultToMinusFifty
         Assert.False(cpu.HasCurveShaper);
     }
 
