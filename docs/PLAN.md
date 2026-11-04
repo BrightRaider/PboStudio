@@ -130,7 +130,7 @@ Das ist das Herzstück und der größte Brocken. Läuft ohne Oberfläche, gegen 
 **4 — Automatik.** Suchschleife, Absturzsicherung, Fortsetzen, Wiederherstellungspunkt.
 
 **5 — Auslieferung.** Erststart-Assistent (Treiber, Engines), Native AOT, eine EXE.
-Ohne Signatur meldet sich SmartScreen — bekannt aus BrightRaider.
+Ohne Signatur meldet sich SmartScreen — bekannt aus anderen eigenen Programmen.
 
 ## Offen
 
