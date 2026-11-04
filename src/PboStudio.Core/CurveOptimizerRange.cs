@@ -26,9 +26,10 @@ public static class CurveOptimizerRange
 
     /// <param name="modelLimit">What this processor family is known to accept.</param>
     /// <param name="userLimit">
-    /// The deepest value the person has said their BIOS accepts, or null. Only ever deepens the
-    /// range; asking for a shallower one than the standard is ignored, because there is no
-    /// reason to refuse a value every part takes.
+    /// The deepest value the person wants searched, or null for the processor's own default. It works
+    /// in both directions within the standard and the widest: deeper than the default for a board
+    /// that accepts more, shallower for somebody who wants a Ryzen 9000 held at the standard -30.
+    /// Nothing shallower than -30 is honoured - there is no reason to refuse a value every part takes.
     /// </param>
     /// <param name="readFromHardware">
     /// Values the processor reported for its cores at start-up. A value it holds is a value it
@@ -47,8 +48,8 @@ public static class CurveOptimizerRange
     {
         int limit = Math.Max(Widest, Math.Min(Standard, modelLimit));
 
-        if (userLimit is { } asked && asked < limit)
-            limit = Math.Max(Widest, asked);
+        if (userLimit is { } asked)
+            limit = Math.Clamp(asked, Widest, Standard);
 
         foreach (int held in readFromHardware)
             if (held < limit)

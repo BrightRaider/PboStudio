@@ -342,11 +342,11 @@ public static class LocalizationService
             "SafetyTempLimit" => isDe ? "Notfall-Temperaturlimit (°C)" : "Emergency temperature limit (°C)",
             "CurveLimit" => isDe ? "Tiefster Curve-Optimizer-Wert" : "Deepest Curve Optimizer value",
             "CurveLimitHint" => isDe
-                ? "-30 geht auf jedem Ryzen. Tiefer nur, wenn dein BIOS es annimmt."
-                : "-30 works on every Ryzen. Deeper only if your BIOS accepts it.",
+                ? "Startet bei -30 (Ryzen 9000: -50). Tiefer wird nur genutzt, wenn der Prozessor es behält."
+                : "Starts at -30 (Ryzen 9000: -50). Anything deeper is only used if the processor keeps it.",
             "CurveLimitTooltip" => isDe
-                ? "Manche Boards und AGESA-Versionen nehmen auf Zen 4 und Zen 5 Werte unter -30 an, andere nicht, und es gibt dazu kein offizielles AMD-Dokument. Deshalb ist -30 der Standard. Stellst du hier einen tieferen Wert ein, wird jeder Schreibvorgang jenseits von -30 zurückgelesen: übernimmt der Prozessor den Wert nicht, wird das gemeldet und nicht getestet, als wäre er gesetzt."
-                : "Some boards and AGESA versions accept values below -30 on Zen 4 and Zen 5 and others do not, and there is no official AMD document on it. That is why -30 is the default. Set a deeper value here and every write beyond -30 is read back: if the processor does not keep it, that is reported instead of being tested as though it had been set.",
+                ? "Manche Boards und AGESA-Versionen nehmen auf Zen 4 und Zen 5 Werte unter -30 an, andere nicht, und es gibt dazu kein offizielles AMD-Dokument. Deshalb ist -30 der Standard und -50 nur der Startwert der Ryzen-9000-Serie. Jeder Schreibvorgang jenseits von -30 wird zurückgelesen: übernimmt der Prozessor den Wert nicht, wird das gemeldet, die Suche endet beim letzten Wert, der gehalten hat, und die gefundene Grenze wird für dieses BIOS gemerkt. Du kannst den Wert hier auch flacher stellen, etwa einen Ryzen 9000 bei -30 halten."
+                : "Some boards and AGESA versions accept values below -30 on Zen 4 and Zen 5 and others do not, and there is no official AMD document on it. That is why -30 is the default, and -50 only the starting point of the Ryzen 9000 series. Every write beyond -30 is read back: if the processor does not keep the value, that is reported, the search ends at the last value that held, and the depth found is remembered for this BIOS. You can also set it shallower here, for instance to hold a Ryzen 9000 at -30.",
             "CurveWriteClamped" => isDe
                 ? "{0}: Der Prozessor hat {1} nicht übernommen und steht auf {2}. Tiefer geht es auf diesem System nicht; der Bereich ist darauf begrenzt."
                 : "{0}: the processor did not keep {1} and holds {2}. That is as deep as this system goes; the range is limited to it.",

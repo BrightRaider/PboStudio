@@ -8,11 +8,16 @@ namespace PboStudio.Core;
 /// </summary>
 public static class NotificationService
 {
-    private static readonly HttpClient HttpClient = new();
+    // A webhook that never answers must not hold a run's wrap-up: the default is a hundred seconds.
+    private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public static async Task<bool> SendWebhookAsync(string webhookUrl, string title, string description, int colorHex = 0x2D6A4F)
     {
-        if (string.IsNullOrWhiteSpace(webhookUrl) || !Uri.TryCreate(webhookUrl, UriKind.Absolute, out _))
+        // https only: the message carries the processor name and the run's results, and a typo that
+        // lands on a plain-http address would send them in the clear.
+        if (string.IsNullOrWhiteSpace(webhookUrl)
+            || !Uri.TryCreate(webhookUrl, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps)
             return false;
 
         try
@@ -64,7 +69,7 @@ public static class NotificationService
             return SendWebhookAsync(
                 webhookUrl,
                 "✅ PboStudio: Test erfolgreich beendet",
-                $"Alle Kerne haben den Test bestanden!\n**Gesamtdauer:** {duration:h\\:mm\\:ss}",
+                $"Alle Kerne haben den Test bestanden!\n**Gesamtdauer:** {DurationFormat.HoursSeconds(duration)}",
                 0x2ECC71 // Green
             );
         }
@@ -72,7 +77,7 @@ public static class NotificationService
         return SendWebhookAsync(
             webhookUrl,
             $"❌ PboStudio: Test beendet ({failedCores} Fehler)",
-            $"{failedCores} Kern(e) sind durchgefallen. Empfehlungen in der App beachten.\n**Gesamtdauer:** {duration:h\\:mm\\:ss}",
+            $"{failedCores} Kern(e) sind durchgefallen. Empfehlungen in der App beachten.\n**Gesamtdauer:** {DurationFormat.HoursSeconds(duration)}",
             0xE74C3C // Red
         );
     }

@@ -196,6 +196,82 @@ public class WindowWiringTests
         Assert.Equal(1, direct);
     }
 
+    // -- classes of mistake found in a full review, kept from coming back ---------------------
+
+    private static IEnumerable<(string File, string Text)> AllSource()
+    {
+        string root = RepoRoot();
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                || f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar)) continue;
+            yield return (Path.GetRelativePath(root, f), File.ReadAllText(f));
+        }
+    }
+
+    /// <summary>
+    /// "h:mm" on a TimeSpan prints the hours component, 0 to 23, so one day read as "0:00" and the
+    /// elapsed counter of a long run jumped back to zero overnight. DurationFormat counts past a day.
+    /// </summary>
+    [Fact]
+    public void NoDurationIsFormattedWithAnHoursComponentThatWrapsAtADay()
+    {
+        var offenders = AllSource()
+            .Where(f => System.Text.RegularExpressions.Regex.IsMatch(f.Text, @"\{[^{}]*:h\\?:mm"))
+            .Select(f => f.File);
+
+        Assert.Empty(offenders);
+    }
+
+    /// <summary>
+    /// Started by bare name a tool is looked for in the program's own folder first, and the program
+    /// runs as administrator. SystemTools hands out full paths in the system folder.
+    /// </summary>
+    [Fact]
+    public void WindowsToolsAreNeverStartedByBareName()
+    {
+        string[] bare = ["\"powershell.exe\"", "\"schtasks\"", "\"schtasks.exe\"", "\"shutdown.exe\"", "\"rundll32.exe\""];
+
+        var offenders = AllSource()
+            .Where(f => !f.File.EndsWith("ProcessRunner.cs", StringComparison.Ordinal))
+            .Where(f => bare.Any(b => f.Text.Contains("Process.Start(" + b) || f.Text.Contains("ProcessStartInfo(" + b)))
+            .Select(f => f.File);
+
+        Assert.Empty(offenders);
+    }
+
+    /// <summary>
+    /// A combo box restored with a literal upper bound drifts out of step with its items: the order
+    /// box has five and was clamped to 3, so "core pairs" came back as "custom" after a restart.
+    /// </summary>
+    [Fact]
+    public void ARestoredComboIndexIsClampedToTheItemsItActuallyHas()
+    {
+        string code = Code;
+
+        var literal = System.Text.RegularExpressions.Regex.Matches(
+            code, @"Box\.SelectedIndex = Math\.Clamp\(s\.\w+, 0, \d+\)");
+
+        Assert.Empty(literal.Select(m => m.Value));
+    }
+
+    /// <summary>
+    /// Both engines report a failed calculation in a file this program polls. Reading up to the file's
+    /// length and resuming from there lost the second half of a line that was half written, and with
+    /// it the failure. Only LogTail reads those files.
+    /// </summary>
+    [Fact]
+    public void TheEnginesReadTheirLogsOnlyThroughLogTail()
+    {
+        foreach (var (file, text) in AllSource().Where(f =>
+                     f.File.EndsWith("Prime95Engine.cs", StringComparison.Ordinal)
+                     || f.File.EndsWith("YCruncherEngine.cs", StringComparison.Ordinal)))
+        {
+            Assert.Contains("LogTail.ReadNewLines", text);
+            Assert.DoesNotContain("new StreamReader(", text);
+        }
+    }
+
     /// <summary>Nothing left pointing at a control that was taken out of the markup.</summary>
     [Fact]
     public void TheCodeDoesNotReferToControlsThatNoLongerExist()

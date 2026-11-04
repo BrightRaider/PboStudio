@@ -71,7 +71,18 @@ public sealed record CpuModel(
 
 public static class CpuModelService
 {
+    /// <summary>What every part with the feature accepts.</summary>
     public const int CurveOptimizerLimit = -30;
+
+    /// <summary>
+    /// What the Ryzen 9000 series starts out allowed to try. It was the default here from the start,
+    /// was removed in 1.1.0 on an unsourced claim that every desktop part stops at -30, and is back.
+    /// What makes that safe now is what was missing then: every write beyond -30 is read back, a
+    /// value the processor does not keep ends the search at the last value that held, and the depth
+    /// the processor turns out to accept is remembered. A board that stops at -30 costs one refused
+    /// write per core, once.
+    /// </summary>
+    public const int Zen5DefaultLimit = -50;
 
     /// <summary>
     /// Exactly four digits, which is how every Ryzen model number is written. The negative
@@ -131,7 +142,7 @@ public static class CpuModelService
             isX3d,
             isApu,
             hasCo,
-            hasCo ? CurveOptimizerLimit : 0,
+            !hasCo ? 0 : family == CpuFamily.Zen5 ? Zen5DefaultLimit : CurveOptimizerLimit,
 
             // The Zen 3 X3D parts take an undervolt and nothing else: no positive offset, no
             // multiplier, no voltage control. Later X3D designs put the cache under the cores

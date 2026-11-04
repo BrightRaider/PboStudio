@@ -1,3 +1,5 @@
+using System.Net;
+using System.Reflection;
 using System.Text;
 
 namespace PboStudio.Core;
@@ -12,12 +14,17 @@ public static class ReportExporterService
         TimeSpan totalDuration,
         int failureCount)
     {
+        // Text that did not come from this program goes through the encoder: the processor name and
+        // the profile name are written into the page as markup otherwise.
+        string cpu = WebUtility.HtmlEncode(cpuName);
+        string profile = WebUtility.HtmlEncode(testedProfile);
+
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html>");
         sb.AppendLine("<html lang=\"de\">");
         sb.AppendLine("<head>");
         sb.AppendLine("  <meta charset=\"UTF-8\">");
-        sb.AppendLine($" <title>PboStudio Stabilitäts-Report - {cpuName}</title>");
+        sb.AppendLine($" <title>PboStudio Stabilitäts-Report - {cpu}</title>");
         sb.AppendLine("  <style>");
         sb.AppendLine("    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0B0D12; color: #E2E8F0; padding: 24px; }");
         sb.AppendLine("    .card { background: #141720; border: 1px solid #222838; border-radius: 8px; padding: 20px; margin-bottom: 16px; }");
@@ -34,11 +41,11 @@ public static class ReportExporterService
 
         sb.AppendLine("  <div class=\"card\">");
         sb.AppendLine("    <h1>⚡ PboStudio Curve Optimizer Stabilitäts-Zertifikat</h1>");
-        sb.AppendLine($"   <p><strong>Prozessor:</strong> {cpuName}</p>");
-        sb.AppendLine($"   <p><strong>Test-Profil:</strong> {testedProfile}</p>");
-        sb.AppendLine($"   <p><strong>Gesamtdauer:</strong> {totalDuration:h\\:mm\\:ss} Std</p>");
+        sb.AppendLine($"   <p><strong>Prozessor:</strong> {cpu}</p>");
+        sb.AppendLine($"   <p><strong>Test-Profil:</strong> {profile}</p>");
+        sb.AppendLine($"   <p><strong>Gesamtdauer:</strong> {DurationFormat.HoursSeconds(totalDuration)} Std</p>");
         sb.AppendLine($"   <p><strong>Ergebnis:</strong> {(failureCount == 0 ? "<span class=\"badge pass\">BESTANDEN (STABIL)</span>" : $"<span class=\"badge fail\">{failureCount} FEHLER ERKANNT</span>")}</p>");
-        sb.AppendLine($"   <p><small>Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss} mit PboStudio v2.0</small></p>");
+        sb.AppendLine($"   <p><small>Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss} mit PboStudio {AppVersion()}</small></p>");
         sb.AppendLine("  </div>");
 
         sb.AppendLine("  <div class=\"card\">");
@@ -71,6 +78,19 @@ public static class ReportExporterService
         sb.AppendLine("</html>");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The running program's version. The footer said "v2.0" - a number no release has ever had -
+    /// from the day the report was written.
+    /// </summary>
+    private static string AppVersion()
+    {
+        var info = Assembly.GetEntryAssembly()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        // "1.1.2+abcdef" -> "1.1.2"
+        return "v" + (info?.Split('+')[0] ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "?");
     }
 
     public static string SaveReport(

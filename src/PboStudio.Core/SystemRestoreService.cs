@@ -97,37 +97,11 @@ public static class SystemRestoreService
         return line.Length > 200 ? line[..200] + "…" : line;
     }
 
-    private static (bool Ok, string Output) RunPowerShell(string script, TimeSpan timeout)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo("powershell.exe")
-            {
-                // -NonInteractive so a policy prompt can never block a background call.
-                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var process = Process.Start(psi);
-            if (process is null) return (false, "could not start powershell");
-
-            string stdout = process.StandardOutput.ReadToEnd();
-            string stderr = process.StandardError.ReadToEnd();
-
-            if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                return (false, "timed out");
-            }
-
-            return (process.ExitCode == 0, string.IsNullOrWhiteSpace(stderr) ? stdout : stderr);
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
+    private static (bool Ok, string Output) RunPowerShell(string script, TimeSpan timeout) =>
+        // -NonInteractive so a policy prompt can never block a background call. By full path, and
+        // with a timeout that holds: see SystemTools and ProcessRunner.
+        ProcessRunner.Run(
+            SystemTools.PowerShell,
+            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{script.Replace("\"", "\\\"")}\"",
+            timeout);
 }

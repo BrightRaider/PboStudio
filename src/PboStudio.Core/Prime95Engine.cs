@@ -233,38 +233,24 @@ internal sealed class Prime95Session : IStressSession
     {
         if (!File.Exists(_resultsPath)) return;
 
-        try
+        // Whole lines only: a marker split across two polls would otherwise match neither half.
+        foreach (string line in LogTail.ReadNewLines(_resultsPath, ref _resultsOffset))
         {
-            using var stream = new FileStream(_resultsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            if (stream.Length <= _resultsOffset) return;
-
-            stream.Seek(_resultsOffset, SeekOrigin.Begin);
-            using var reader = new StreamReader(stream, Encoding.ASCII);
-
-            while (reader.ReadLine() is { } line)
+            if (line.Contains("passed", StringComparison.OrdinalIgnoreCase))
             {
-                if (line.Contains("passed", StringComparison.OrdinalIgnoreCase))
+                if (PassedFft.Match(line) is { Success: true } m
+                    && int.TryParse(m.Groups[1].Value, out int fft)
+                    && !_seenFftSizes.Add(fft))
                 {
-                    if (PassedFft.Match(line) is { Success: true } m
-                        && int.TryParse(m.Groups[1].Value, out int fft)
-                        && !_seenFftSizes.Add(fft))
-                    {
-                        _cycles++;
-                        _seenFftSizes.Clear();
-                        _seenFftSizes.Add(fft);
-                    }
-                    continue;
+                    _cycles++;
+                    _seenFftSizes.Clear();
+                    _seenFftSizes.Add(fft);
                 }
-
-                if (ErrorMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase)))
-                    _pending.Add(new Failure(FailureKind.CalculationError, line.Trim(), DateTime.Now));
+                continue;
             }
 
-            _resultsOffset = stream.Length;
-        }
-        catch (IOException)
-        {
-            // Prime95 holds the file briefly while writing; the next poll picks it up.
+            if (ErrorMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase)))
+                _pending.Add(new Failure(FailureKind.CalculationError, line.Trim(), DateTime.Now));
         }
     }
 

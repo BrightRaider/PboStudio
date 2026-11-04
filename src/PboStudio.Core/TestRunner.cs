@@ -67,6 +67,13 @@ public sealed record TestPlan
     public static bool IsWorkerFault(Failure f) =>
         f.Kind is FailureKind.ProcessGone or FailureKind.WentIdle;
 
+    /// <summary>
+    /// The processor's own APIC IDs, so a machine check can be attributed to the right core. Null
+    /// falls back to treating the ID as the logical processor number, which only holds where the
+    /// IDs happen not to skip.
+    /// </summary>
+    public IReadOnlyDictionary<int, int>? ApicMap { get; init; }
+
     public bool StopOnError { get; init; }
     public bool SkipCoreOnError { get; init; } = true;
     public bool TreatWheaWarningAsError { get; init; } = true;
@@ -160,6 +167,15 @@ public sealed record TestPlan
     }
 }
 
+/// <summary>Cancels a source when it goes out of scope, for use with <c>using</c>.</summary>
+internal sealed class CancelOnDispose(CancellationTokenSource source) : IDisposable
+{
+    public void Dispose()
+    {
+        try { source.Cancel(); } catch (ObjectDisposedException) { }
+    }
+}
+
 /// <summary>How the load is interrupted so the core has to boost back up.</summary>
 public enum TransientMode
 {
@@ -238,104 +254,131 @@ public sealed class TestRunner
         whea.Raised += e => { lock (wheaHits) wheaHits.Add(e); };
         whea.Start();
 
-        for (int iteration = 1; iteration <= _plan.MaxIterations && !ct.IsCancellationRequested; iteration++)
+        // Whatever ends the run - the end of the passes, an engine that will not start, the
+        // temperature cut-off, or the reader pressing stop - the cores parked at 0 for isolation
+        // have to go back to their values. Restoring only on the normal way out left every other
+        // core at 0 after a cancel, with the table claiming otherwise: the undervolt silently gone.
+        try
         {
-            Emit(new TestEvent.IterationStarted(iteration));
-
-            foreach (int coreIndex in order)
+            for (int iteration = 1; iteration <= _plan.MaxIterations && !ct.IsCancellationRequested; iteration++)
             {
-                if (ct.IsCancellationRequested) break;
-                if (excluded.Contains(coreIndex)) continue;
+                Emit(new TestEvent.IterationStarted(iteration));
 
-                lock (wheaHits) wheaHits.Clear();
-
-                ApplyPlannedMargin(coreIndex, currentMargins);
-
-                var found = await TestCoreAsync(_cores[coreIndex], iteration, wheaHits, ct);
-
-                // A worker that died or went quiet is reported either way; whether it condemns
-                // the core is the reader's call.
-                if (!_plan.TreatWorkerFaultsAsErrors)
+                foreach (int coreIndex in order)
                 {
-                    foreach (var ignored in found.Where(TestPlan.IsWorkerFault))
-                        Emit(new TestEvent.Info(
-                            $"Core {coreIndex}: {ignored.Kind} ignored - worker faults are not counted as errors."));
+                    if (ct.IsCancellationRequested) break;
+                    if (excluded.Contains(coreIndex)) continue;
 
-                    found = [.. found.Where(f => !TestPlan.IsWorkerFault(f))];
-                }
+                    lock (wheaHits) wheaHits.Clear();
 
-                if (found.Count > 0)
-                {
-                    if (!failures.TryGetValue(coreIndex, out var list))
-                        failures[coreIndex] = list = [];
-                    list.AddRange(found);
+                    var applied = ApplyPlannedMargin(coreIndex, currentMargins);
 
-                    foreach (var f in found)
-                        Emit(new TestEvent.CoreFailed(coreIndex, f));
-
-                    if (_plan.AutoTuner.HasValue)
+                    // Beyond the standard range the processor may simply not go that deep. Testing
+                    // "whatever it currently holds" and then booking the result against the value that
+                    // was asked for would have the search walk to the floor on passes at a depth that
+                    // never ran, and lock a figure nobody tested. It found its limit instead: settle
+                    // where it last held up.
+                    if (applied == MarginApplication.Refused
+                        && _plan.AutoTuner is { } mode
+                        && currentMargins[coreIndex] < CurveOptimizerRange.Standard)
                     {
-                        int cur = currentMargins[coreIndex];
-                        var res = AutoTunerService.CalculateNextStep(
-                            coreIndex, cur, passed: false, _plan.AutoTuner.Value,
-                            _plan.FloorFor(coreIndex), _plan.IsGerman,
-                            (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null),
-                            _plan.GuardbandFor(coreIndex));
-                        currentMargins[coreIndex] = res.NextMargin;
-                        tunerState[coreIndex] = res.State;
-                        Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
-                        if (res.CoreLocked)
+                        SettleAtDepthLimit(coreIndex, mode, currentMargins, tunerState, excluded);
+                        continue;
+                    }
+
+                    var found = await TestCoreAsync(_cores[coreIndex], iteration, wheaHits, ct);
+
+                    // A worker that died or went quiet is reported either way; whether it condemns
+                    // the core is the reader's call.
+                    if (!_plan.TreatWorkerFaultsAsErrors)
+                    {
+                        foreach (var ignored in found.Where(TestPlan.IsWorkerFault))
+                            Emit(new TestEvent.Info(
+                                $"Core {coreIndex}: {ignored.Kind} ignored - worker faults are not counted as errors."));
+
+                        found = [.. found.Where(f => !TestPlan.IsWorkerFault(f))];
+                    }
+
+                    if (found.Count > 0)
+                    {
+                        if (!failures.TryGetValue(coreIndex, out var list))
+                            failures[coreIndex] = list = [];
+                        list.AddRange(found);
+
+                        foreach (var f in found)
+                            Emit(new TestEvent.CoreFailed(coreIndex, f));
+
+                        if (_plan.AutoTuner.HasValue)
                         {
-                            excluded.Add(coreIndex);
-                            _plan.LockedCores?.Add(coreIndex);
+                            int cur = currentMargins[coreIndex];
+                            var res = AutoTunerService.CalculateNextStep(
+                                coreIndex, cur, passed: false, _plan.AutoTuner.Value,
+                                _plan.FloorFor(coreIndex), _plan.IsGerman,
+                                (tunerState.TryGetValue(coreIndex, out var priorFail) ? priorFail : null),
+                                _plan.GuardbandFor(coreIndex));
+                            currentMargins[coreIndex] = res.NextMargin;
+                            tunerState[coreIndex] = res.State;
+                            Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
+                            if (res.CoreLocked)
+                            {
+                                excluded.Add(coreIndex);
+                                _plan.LockedCores?.Add(coreIndex);
+                            }
+                        }
+                        else
+                        {
+                            if (_plan.StopOnError)
+                            {
+                                Emit(new TestEvent.Info("Stopping: configured to halt on the first error."));
+                                goto done;
+                            }
+                            if (_plan.SkipCoreOnError) excluded.Add(coreIndex);
                         }
                     }
                     else
                     {
-                        if (_plan.StopOnError)
+                        Emit(new TestEvent.CorePassed(coreIndex, _plan.RuntimePerCore));
+
+                        if (_plan.AutoTuner.HasValue)
                         {
-                            Emit(new TestEvent.Info("Stopping: configured to halt on the first error."));
-                            goto done;
+                            int cur = currentMargins[coreIndex];
+                            var res = AutoTunerService.CalculateNextStep(
+                                coreIndex, cur, passed: true, _plan.AutoTuner.Value,
+                                _plan.FloorFor(coreIndex), _plan.IsGerman,
+                                (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null),
+                                _plan.GuardbandFor(coreIndex));
+                            currentMargins[coreIndex] = res.NextMargin;
+                            tunerState[coreIndex] = res.State;
+                            Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
+                            if (res.CoreLocked)
+                            {
+                                excluded.Add(coreIndex);
+                                _plan.LockedCores?.Add(coreIndex);
+                            }
                         }
-                        if (_plan.SkipCoreOnError) excluded.Add(coreIndex);
                     }
+
+                    if (_plan.DelayBetweenCores > TimeSpan.Zero)
+                        await Task.Delay(_plan.DelayBetweenCores, ct).ConfigureAwait(false);
                 }
-                else
+
+                // Distinct cores, not entries: a pair order visits each core many times, so comparing
+                // the count of excluded cores to the length of the order never came true there, and a
+                // finished run spun through its remaining passes doing nothing. The same comparison
+                // ended a custom order early when the cores left out of it were counted as excluded.
+                if (order.Distinct().All(excluded.Contains))
                 {
-                    Emit(new TestEvent.CorePassed(coreIndex, _plan.RuntimePerCore));
-
-                    if (_plan.AutoTuner.HasValue)
-                    {
-                        int cur = currentMargins[coreIndex];
-                        var res = AutoTunerService.CalculateNextStep(
-                            coreIndex, cur, passed: true, _plan.AutoTuner.Value,
-                            _plan.FloorFor(coreIndex), _plan.IsGerman,
-                            (tunerState.TryGetValue(coreIndex, out var priorPass) ? priorPass : null),
-                            _plan.GuardbandFor(coreIndex));
-                        currentMargins[coreIndex] = res.NextMargin;
-                        tunerState[coreIndex] = res.State;
-                        Emit(new TestEvent.CoreAutoTuned(coreIndex, res));
-                        if (res.CoreLocked)
-                        {
-                            excluded.Add(coreIndex);
-                            _plan.LockedCores?.Add(coreIndex);
-                        }
-                    }
+                    Emit(new TestEvent.Info("Every core has been excluded or locked; nothing left to test."));
+                    break;
                 }
-
-                if (_plan.DelayBetweenCores > TimeSpan.Zero)
-                    await Task.Delay(_plan.DelayBetweenCores, ct).ConfigureAwait(false);
             }
-
-            if (excluded.Count >= order.Count)
-            {
-                Emit(new TestEvent.Info("Every core has been excluded or locked; nothing left to test."));
-                break;
-            }
+        }
+        finally
+        {
+            RestoreParkedCores(currentMargins);
         }
 
     done:
-        RestoreParkedCores(currentMargins);
         Emit(new TestEvent.RunFinished(failures));
         return failures;
     }
@@ -379,6 +422,10 @@ public sealed class TestRunner
             ? StartPulser(session, ct)
             : null;
 
+        // Disposing a CancellationTokenSource does not cancel it. The pulser used to stop only
+        // because its next read of the disposed token threw; cancelling says so directly.
+        using var stopPulser = pulser is null ? null : new CancelOnDispose(pulser);
+
         var clock = Stopwatch.StartNew();
         var lastCpu = session.CpuTime;
         var lastCheck = clock.Elapsed;
@@ -407,7 +454,7 @@ public sealed class TestRunner
                     // A machine check names the logical processor that raised it. When that is
                     // some other core, blaming this one would back off a value that was never
                     // at fault - so it is reported, but not counted against the core under test.
-                    int? blamed = hit.ApicId is { } id ? WheaWatcher.CoreForApicId(id, _cores) : null;
+                    int? blamed = hit.ApicId is { } id ? WheaWatcher.CoreForApicId(id, _cores, _plan.ApicMap) : null;
                     if (blamed is { } other && other != core.Index)
                     {
                         Emit(new TestEvent.Info(_plan.IsGerman
@@ -426,8 +473,8 @@ public sealed class TestRunner
             if (_plan.IsAutoRuntime && session.WorkloadCyclesCompleted >= 1)
             {
                 Emit(new TestEvent.Info(_plan.IsGerman
-                    ? $"Kern {core.Index}: kompletter Testdurchlauf nach {clock.Elapsed:h\\:mm\\:ss} abgeschlossen."
-                    : $"Core {core.Index}: full workload completed after {clock.Elapsed:h\\:mm\\:ss}."));
+                    ? $"Kern {core.Index}: kompletter Testdurchlauf nach {DurationFormat.HoursSeconds(clock.Elapsed)} abgeschlossen."
+                    : $"Core {core.Index}: full workload completed after {DurationFormat.HoursSeconds(clock.Elapsed)}."));
                 break;
             }
 
@@ -506,10 +553,12 @@ public sealed class TestRunner
     }
 
     /// <summary>Puts the processor at the value about to be measured, and says so out loud.</summary>
-    private void ApplyPlannedMargin(int coreIndex, IReadOnlyDictionary<int, int> currentMargins)
+    private enum MarginApplication { NotConfigured, Applied, Refused }
+
+    private MarginApplication ApplyPlannedMargin(int coreIndex, IReadOnlyDictionary<int, int> currentMargins)
     {
-        if (_plan.ApplyMargin is not { } apply) return;
-        if (!currentMargins.TryGetValue(coreIndex, out int planned)) return;
+        if (_plan.ApplyMargin is not { } apply) return MarginApplication.NotConfigured;
+        if (!currentMargins.TryGetValue(coreIndex, out int planned)) return MarginApplication.NotConfigured;
 
         if (_plan.IsolateTestedCore)
         {
@@ -536,6 +585,48 @@ public sealed class TestRunner
             : (_plan.IsGerman
                 ? $"Kern {coreIndex}: Curve Optimizer konnte nicht auf {planned} gesetzt werden — getestet wird der aktuell anliegende Wert."
                 : $"Core {coreIndex}: could not set Curve Optimizer to {planned} — testing whatever the CPU currently holds.")));
+
+        return ok ? MarginApplication.Applied : MarginApplication.Refused;
+    }
+
+    /// <summary>
+    /// The processor would not take the next, deeper value. That is where it stops: lock the core at
+    /// the last value that held, with the usual headroom on top. With nothing proven to fall back
+    /// on, the core is left out rather than tested at a value it does not hold.
+    /// </summary>
+    private void SettleAtDepthLimit(
+        int core,
+        AutoTunerMode mode,
+        Dictionary<int, int> currentMargins,
+        IDictionary<int, AutoTunerCoreState> tunerState,
+        HashSet<int> excluded)
+    {
+        int refused = currentMargins[core];
+
+        if (tunerState.TryGetValue(core, out var state) && state.LastKnownGood is { } good)
+        {
+            Emit(new TestEvent.Info(_plan.IsGerman
+                ? $"Kern {core}: Der Prozessor nimmt {refused} nicht an — tiefer geht es nicht. Fixiert wird beim letzten Wert, der gehalten hat ({good})."
+                : $"Core {core}: the processor does not take {refused} — that is as deep as it goes. Locking at the last value that held ({good})."));
+
+            // Passing at the limit is exactly the existing lock path, so the headroom and the advice
+            // line come out the same as for a core that reached the chip limit.
+            var res = AutoTunerService.CalculateNextStep(
+                core, good, passed: true, mode, maxLimit: good, _plan.IsGerman, state, _plan.GuardbandFor(core));
+
+            currentMargins[core] = res.NextMargin;
+            tunerState[core] = res.State;
+            Emit(new TestEvent.CoreAutoTuned(core, res));
+
+            excluded.Add(core);
+            _plan.LockedCores?.Add(core);
+            return;
+        }
+
+        Emit(new TestEvent.Info(_plan.IsGerman
+            ? $"Kern {core}: Der Prozessor nimmt {refused} nicht an, und es gibt keinen bewährten Wert als Rückfall. Der Kern wird ausgelassen, statt bei einem Wert getestet zu werden, den er nicht hat."
+            : $"Core {core}: the processor does not take {refused} and there is no proven value to fall back on. The core is skipped rather than tested at a value it does not hold."));
+        excluded.Add(core);
     }
 
     private List<int> BuildOrder()

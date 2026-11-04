@@ -40,13 +40,28 @@ public sealed class WheaWatcher : IDisposable
 
     public event Action<WheaEvent>? Raised;
 
+    private static readonly string FatalQuery =
+        $"*[System[Provider[@Name='{Provider}'] and (EventID=18)]]";
+
+    /// <summary>
+    /// Fatal machine checks only, newest first.
+    /// <para>
+    /// The crash check used to take the twenty newest WHEA records of any kind. A machine that has
+    /// logged a few dozen corrected errors since it last crashed pushed the crash out of that
+    /// window, and it was never offered. Asking for the fatal ones directly cannot be crowded out.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<WheaEvent> ReadFatal(int max = 50) => Read(FatalQuery, max);
+
     /// <summary>Machine checks already in the log, newest first. Useful as a "before" baseline.</summary>
-    public static IReadOnlyList<WheaEvent> ReadExisting(int max = 20)
+    public static IReadOnlyList<WheaEvent> ReadExisting(int max = 20) => Read(Query, max);
+
+    private static IReadOnlyList<WheaEvent> Read(string xpath, int max)
     {
         var found = new List<WheaEvent>();
         try
         {
-            var query = new EventLogQuery("System", PathType.LogName, Query) { ReverseDirection = true };
+            var query = new EventLogQuery("System", PathType.LogName, xpath) { ReverseDirection = true };
             using var reader = new EventLogReader(query);
 
             for (EventRecord? rec = reader.ReadEvent(); rec is not null && found.Count < max; rec = reader.ReadEvent())
@@ -99,13 +114,13 @@ public sealed class WheaWatcher : IDisposable
     /// it holds on the parts this tool targets, and returns null instead of guessing if the id
     /// does not match anything known.
     /// </summary>
-    public static int? CoreForApicId(int apicId, IReadOnlyList<PhysicalCore> cores)
-    {
-        foreach (var core in cores)
-            if (core.LogicalProcessors.Contains(apicId)) return core.Index;
+    public static int? CoreForApicId(int apicId, IReadOnlyList<PhysicalCore> cores) =>
+        ApicTopology.CoreForApicId(apicId, cores, null);
 
-        return null;
-    }
+    /// <summary>The same lookup using the processor's own APIC IDs, which is exact.</summary>
+    public static int? CoreForApicId(
+        int apicId, IReadOnlyList<PhysicalCore> cores, IReadOnlyDictionary<int, int>? apicToLogical) =>
+        ApicTopology.CoreForApicId(apicId, cores, apicToLogical);
 
     public void Dispose()
     {

@@ -63,10 +63,11 @@ public static class WheaCrashService
     public static IReadOnlyList<WheaCrash> Unacknowledged(
         string workRoot,
         IReadOnlyList<PhysicalCore> cores,
-        IReadOnlyList<WheaEvent>? events = null)
+        IReadOnlyList<WheaEvent>? events = null,
+        IReadOnlyDictionary<int, int>? apicToLogical = null)
     {
         var since = LastAcknowledged(workRoot);
-        events ??= WheaWatcher.ReadExisting();
+        events ??= WheaWatcher.ReadFatal();
 
         var crashes = new List<WheaCrash>();
         foreach (var e in events)
@@ -74,7 +75,7 @@ public static class WheaCrashService
             if (e.EventId != FatalMachineCheckId || e.IsWarning) continue;
             if (since is { } cutoff && e.Time <= cutoff) continue;
             if (e.ApicId is not { } apic) continue;
-            if (WheaWatcher.CoreForApicId(apic, cores) is not { } core) continue;
+            if (WheaWatcher.CoreForApicId(apic, cores, apicToLogical) is not { } core) continue;
 
             crashes.Add(new WheaCrash(core, e.Time, e.EventId));
         }

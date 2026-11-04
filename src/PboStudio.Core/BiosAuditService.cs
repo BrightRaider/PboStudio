@@ -6,7 +6,9 @@ public sealed record RamAuditResult(
     int ConfiguredSpeedMhz,
     int MaxSpeedMhz,
     bool IsXmpExpoActive,
-    string Advice
+    string Advice,
+    /// <summary>False when the speeds could not be read at all. Nothing is concluded from that.</summary>
+    bool Known = true
 );
 
 public sealed record BiosAuditResult(
@@ -38,7 +40,14 @@ public static class BiosAuditService
         int score = 100;
         var items = new List<string>();
 
-        if (!ram.IsXmpExpoActive)
+        if (!ram.Known)
+        {
+            // Not a finding: the reading failed. Scoring it as "EXPO is off" invented a fault.
+            items.Add(LocalizationService.Pick(
+                "ℹ️ Die RAM-Geschwindigkeit konnte nicht gelesen werden — dazu gibt es keine Aussage.",
+                "ℹ️ The RAM speed could not be read, so nothing is said about it."));
+        }
+        else if (!ram.IsXmpExpoActive)
         {
             score -= 25;
             items.Add(LocalizationService.Pick(
@@ -73,6 +82,7 @@ public static class BiosAuditService
     {
         int configuredSpeed = 0;
         int maxSpeed = 0;
+        bool readFailed = false;
 
         try
         {
@@ -92,12 +102,25 @@ public static class BiosAuditService
         }
         catch
         {
-            // Fallback for non-WMI or restricted environments
-            configuredSpeed = 4800;
-            maxSpeed = 6000;
+            readFailed = true;
         }
 
-        if (configuredSpeed == 0) configuredSpeed = 4800;
+        return ClassifyRam(configuredSpeed, maxSpeed, readFailed);
+    }
+
+    /// <summary>
+    /// Turns two speeds into a verdict. A failed or empty reading is "unknown", never a finding: the
+    /// fallback used to substitute 4800 and 6000, which reads as "EXPO is off" and cost 25 points
+    /// for a fault that was not measured.
+    /// </summary>
+    internal static RamAuditResult ClassifyRam(int configuredSpeed, int maxSpeed, bool readFailed)
+    {
+        if (readFailed || (configuredSpeed == 0 && maxSpeed == 0))
+            return new RamAuditResult(0, 0, IsXmpExpoActive: true,
+                LocalizationService.Pick("RAM-Geschwindigkeit nicht lesbar.", "RAM speed could not be read."),
+                Known: false);
+
+        if (configuredSpeed == 0) configuredSpeed = maxSpeed;
         if (maxSpeed == 0) maxSpeed = configuredSpeed;
 
         // Standard JEDEC fallbacks for DDR4/DDR5: <= 2666, 3200, 4800

@@ -67,58 +67,23 @@ public static class TaskSchedulerService
         }
     }
 
-    public static bool IsAutostartEnabled()
-    {
-        try
-        {
-            var psi = new ProcessStartInfo("schtasks", $"/Query /TN \"{TaskName}\"")
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            };
-            using var p = Process.Start(psi);
-            p?.WaitForExit();
-            return p?.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static readonly TimeSpan SchtasksTimeout = TimeSpan.FromSeconds(20);
 
+    public static bool IsAutostartEnabled() =>
+        ProcessRunner.Run(SystemTools.SchTasks, $"/Query /TN \"{TaskName}\"", SchtasksTimeout).Ok;
+
+    /// <summary>
+    /// Creates or removes the logon task. It runs elevated at every logon, so it is only as safe as
+    /// the folder the executable sits in: anything that can replace the file there gets
+    /// administrator rights at the next logon without a prompt. Said in the tooltip, because the
+    /// program is portable and can be anywhere.
+    /// </summary>
     public static bool SetAutostart(bool enable, string exePath)
     {
-        try
-        {
-            if (enable)
-            {
-                // Create elevated task on logon
-                string cmd = $"/Create /TN \"{TaskName}\" /TR \"\\\"{exePath}\\\" --apply-saved\" /SC ONLOGON /RL HIGHEST /F";
-                var psi = new ProcessStartInfo("schtasks", cmd)
-                {
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                };
-                using var p = Process.Start(psi);
-                p?.WaitForExit();
-                return p?.ExitCode == 0;
-            }
-            else
-            {
-                string cmd = $"/Delete /TN \"{TaskName}\" /F";
-                var psi = new ProcessStartInfo("schtasks", cmd)
-                {
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                };
-                using var p = Process.Start(psi);
-                p?.WaitForExit();
-                return p?.ExitCode == 0;
-            }
-        }
-        catch
-        {
-            return false;
-        }
+        string args = enable
+            ? $"/Create /TN \"{TaskName}\" /TR \"\\\"{exePath}\\\" --apply-saved\" /SC ONLOGON /RL HIGHEST /F"
+            : $"/Delete /TN \"{TaskName}\" /F";
+
+        return ProcessRunner.Run(SystemTools.SchTasks, args, SchtasksTimeout).Ok;
     }
 }

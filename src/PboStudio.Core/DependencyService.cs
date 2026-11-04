@@ -65,9 +65,9 @@ public static class DependencyService
         "y-cruncher",
         [
             "https://cdn.numberworld.org/y-cruncher-downloads/y-cruncher%20v0.8.7.9547b.zip",
-            "http://www.numberworld.org/y-cruncher/y-cruncher%20v0.8.7.9547b.zip",
+            "https://www.numberworld.org/y-cruncher/y-cruncher%20v0.8.7.9547b.zip",
         ],
-        "http://www.numberworld.org/y-cruncher/",
+        "https://www.numberworld.org/y-cruncher/",
         @"https?://[^""'\s<>]*y-cruncher[^""'\s<>]*\.zip",
         "ycruncher");
 
@@ -91,33 +91,74 @@ public static class DependencyService
     public static async Task DownloadAndInstallPawnIoAsync(
         string baseDirectory, Action<string>? progress = null, CancellationToken ct = default)
     {
-        string installer;
+        string? installer = null;
+        string? privateDir = null;
 
-        if (HasBundledPawnIo(baseDirectory))
+        try
         {
-            installer = BundledPawnIoPath(baseDirectory);
-            progress?.Invoke(LocalizationService.Pick(
-                "Mitgelieferter PawnIO-Installer wird verwendet…",
-                "Using the bundled PawnIO installer…"));
+            // The bundled installer is checked like a downloaded one: the folder it sits in is as
+            // writable as the program itself.
+            if (HasBundledPawnIo(baseDirectory))
+            {
+                string bundled = BundledPawnIoPath(baseDirectory);
+
+                if (DownloadPolicy.Sha256Matches(bundled, DownloadPolicy.PawnIoInstallerSha256))
+                {
+                    installer = bundled;
+                    progress?.Invoke(LocalizationService.Pick(
+                        "Mitgelieferter PawnIO-Installer wird verwendet (Prüfsumme stimmt)…",
+                        "Using the bundled PawnIO installer (checksum matches)…"));
+                }
+                else
+                {
+                    progress?.Invoke(LocalizationService.Pick(
+                        "Der mitgelieferte PawnIO-Installer stimmt nicht mit der erwarteten Prüfsumme überein und wird nicht verwendet — lade stattdessen herunter…",
+                        "The bundled PawnIO installer does not match the expected checksum and will not be used - downloading instead…"));
+                }
+            }
+
+            if (installer is null)
+            {
+                progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird heruntergeladen…", "Downloading the PawnIO installer…"));
+
+                // A fresh folder with an unpredictable name, and CreateNew: the old fixed name in the
+                // shared temp folder could be planted in advance, and Create would overwrite it.
+                privateDir = Directory.CreateTempSubdirectory("pbo-pawnio-").FullName;
+                installer = Path.Combine(privateDir, "PawnIO_setup.exe");
+
+                using (var response = await HttpClient.GetAsync(PawnIoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+                {
+                    response.EnsureSuccessStatusCode();
+                    using var fileStream = new FileStream(installer, FileMode.CreateNew, FileAccess.Write, FileShare.None, 8192, true);
+                    await response.Content.CopyToAsync(fileStream, ct);
+                }
+
+                if (!DownloadPolicy.Sha256Matches(installer, DownloadPolicy.PawnIoInstallerSha256))
+                {
+                    try { File.Delete(installer); } catch { }
+                    throw new InvalidDataException(LocalizationService.Pick(
+                        "Der heruntergeladene PawnIO-Installer hat nicht die erwartete Prüfsumme und wird nicht gestartet.",
+                        "The downloaded PawnIO installer does not have the expected checksum and will not be started."));
+                }
+            }
+
+            progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird gestartet (Administratorrechte erforderlich)…", "Starting the PawnIO installer (administrator rights required)…"));
+            var psi = new System.Diagnostics.ProcessStartInfo(installer)
+            {
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            System.Diagnostics.Process.Start(psi);
         }
-        else
+        catch
         {
-            installer = Path.Combine(Path.GetTempPath(), "PawnIO_setup.exe");
-            progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird heruntergeladen…", "Downloading the PawnIO installer…"));
-
-            using var response = await HttpClient.GetAsync(PawnIoDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-            response.EnsureSuccessStatusCode();
-            using var fileStream = new FileStream(installer, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-            await response.Content.CopyToAsync(fileStream, ct);
+            // Nothing downloaded for a failed run is worth leaving behind.
+            if (privateDir is not null)
+            {
+                try { Directory.Delete(privateDir, recursive: true); } catch { }
+            }
+            throw;
         }
-
-        progress?.Invoke(LocalizationService.Pick("PawnIO-Installer wird gestartet (Administratorrechte erforderlich)…", "Starting the PawnIO installer (administrator rights required)…"));
-        var psi = new System.Diagnostics.ProcessStartInfo(installer)
-        {
-            UseShellExecute = true,
-            Verb = "runas"
-        };
-        System.Diagnostics.Process.Start(psi);
     }
 
     public static EngineStatus CheckDependencies(string baseDirectory, SmuService smu)
@@ -153,7 +194,7 @@ public static class DependencyService
     /// </summary>
     public sealed class EngineDownloadException(string message, EngineSource source) : Exception(message)
     {
-        public EngineSource Source { get; } = source;
+        public new EngineSource Source { get; } = source;
     }
 
     /// <summary>
@@ -169,9 +210,25 @@ public static class DependencyService
         var failures = new List<string>();
         var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        var allowedHosts = source.Urls.Append(source.PageUrl)
+            .Select(u => Uri.TryCreate(u, UriKind.Absolute, out var uri) ? uri.Host : "")
+            .Where(h => h.Length > 0)
+            .ToList();
+
         async Task<bool> TryUrlAsync(string url, bool discovered)
         {
             if (!tried.Add(url)) return false;
+
+            // https, and the vendor's own domain. A link on a page is not trusted because the page
+            // named it, and an engine downloaded here is run as administrator.
+            if (!DownloadPolicy.IsAllowed(url, allowedHosts))
+            {
+                failures.Add($"{url}: " + LocalizationService.Pick(
+                    "nicht über HTTPS oder nicht von der Domain des Herstellers — übersprungen",
+                    "not https, or not on the vendor's own domain - skipped"));
+                return false;
+            }
+
             try
             {
                 if (discovered)

@@ -235,31 +235,20 @@ internal sealed class YCruncherSession : IStressSession
     {
         if (!File.Exists(_logPath)) return;
 
-        try
+        // Whole lines only: a marker split across two polls would otherwise match neither half.
+        foreach (string line in LogTail.ReadNewLines(_logPath, ref _offset))
         {
-            using var stream = new FileStream(_logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            if (stream.Length <= _offset) return;
+            if (line.Contains("Iteration:", StringComparison.OrdinalIgnoreCase)) _iterationHeaders++;
 
-            stream.Seek(_offset, SeekOrigin.Begin);
-            using var reader = new StreamReader(stream);
+            if (line.Contains("passed", StringComparison.OrdinalIgnoreCase)) continue;
 
-            while (reader.ReadLine() is { } line)
-            {
-                if (line.Contains("Iteration:", StringComparison.OrdinalIgnoreCase)) _iterationHeaders++;
+            // Expected noise: the job object denies every processor outside the mask, and
+            // y-cruncher announces each refusal. That is the confinement working, not a fault.
+            if (line.Contains("core affinity", StringComparison.OrdinalIgnoreCase)) continue;
 
-                if (line.Contains("passed", StringComparison.OrdinalIgnoreCase)) continue;
-
-                // Expected noise: the job object denies every processor outside the mask, and
-                // y-cruncher announces each refusal. That is the confinement working, not a fault.
-                if (line.Contains("core affinity", StringComparison.OrdinalIgnoreCase)) continue;
-
-                if (ErrorMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase)))
-                    _pending.Add(new Failure(FailureKind.CalculationError, line.Trim(), DateTime.Now));
-            }
-
-            _offset = stream.Length;
+            if (ErrorMarkers.Any(m => line.Contains(m, StringComparison.OrdinalIgnoreCase)))
+                _pending.Add(new Failure(FailureKind.CalculationError, line.Trim(), DateTime.Now));
         }
-        catch (IOException) { }
     }
 
     public void Suspend()

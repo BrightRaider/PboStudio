@@ -503,6 +503,13 @@ public partial class MainWindow : Window
         var loaded = CoreKnowledgeService.Load(SettingsRoot);
         _knowledge = loaded.Cores;
         _knowledgeBios = loaded.BiosVersion;
+
+        // A depth learned under this BIOS is still true. Under another it may not be: firmware
+        // changes what is accepted, so it is found out again rather than assumed.
+        if (_settings.LearnedCurveFloor != 0 && _settings.LearnedCurveFloorBios == _knowledgeBios)
+            _appliedFloor = _settings.LearnedCurveFloor;
+
+        _apicMap = ApicTopology.Read(Environment.ProcessorCount);
         LocalizationService.CurrentLanguage =
             _settings.UiLanguage == nameof(Language.German) ? Language.German : Language.English;
 
@@ -535,6 +542,13 @@ public partial class MainWindow : Window
         StartWatchdog();
         CheckInterruptedRun();
         CheckRealWorldCrashes();
+
+        // Said once, where it can be read: a mapping nobody can see is one nobody checks.
+        if (_smu.IsAvailable)
+            Log($"SMU core mapping: {_smu.CoreMapping}");
+        Log(_apicMap is null
+            ? "APIC map: not readable - machine checks are attributed assuming APIC ID = logical processor."
+            : $"APIC map: read from the processor ({_apicMap.Count} logical processors).");
 
         // After ApplyLocalization, because LoadProfiles resets the profile selection and
         // OnProfileChanged overwrites the engine controls from the preset.
@@ -596,22 +610,22 @@ public partial class MainWindow : Window
 
         MinutesBox.Value = s.MinutesPerCore;
         IterationsBox.Value = s.Iterations;
-        EngineBox.SelectedIndex = Math.Clamp(s.EngineIndex, 0, 2);
-        ThreadsBox.SelectedIndex = Math.Clamp(s.ThreadsIndex, 0, 1);
-        ModeBox.SelectedIndex = Math.Clamp(s.ModeIndex, 0, 3);
-        FftBox.SelectedIndex = Math.Clamp(s.FftIndex, 0, 8);
+        EngineBox.SelectedIndex = Math.Clamp(s.EngineIndex, 0, EngineBox.ItemCount - 1);
+        ThreadsBox.SelectedIndex = Math.Clamp(s.ThreadsIndex, 0, ThreadsBox.ItemCount - 1);
+        ModeBox.SelectedIndex = Math.Clamp(s.ModeIndex, 0, ModeBox.ItemCount - 1);
+        FftBox.SelectedIndex = Math.Clamp(s.FftIndex, 0, FftBox.ItemCount - 1);
         FftMinBox.Value = s.CustomFftMin;
         FftMaxBox.Value = s.CustomFftMax;
-        YcAlgoBox.SelectedIndex = Math.Clamp(s.YcAlgoIndex, 0, 2);
+        YcAlgoBox.SelectedIndex = Math.Clamp(s.YcAlgoIndex, 0, YcAlgoBox.ItemCount - 1);
         PauseIntervalBox.Value = s.PauseInterval;
         PauseDurationBox.Value = s.PauseDuration;
-        OrderBox.SelectedIndex = Math.Clamp(s.OrderIndex, 0, 3);
+        OrderBox.SelectedIndex = Math.Clamp(s.OrderIndex, 0, OrderBox.ItemCount - 1);
         CustomOrderBox.Text = s.CustomOrder;
         StopOnErrorBox.IsChecked = s.StopOnError;
         SkipCoreOnErrorBox.IsChecked = s.SkipCoreOnError;
         WorkerFaultsAreErrorsBox.IsChecked = s.WorkerFaultsAreErrors;
         FlashOnErrorBox.IsChecked = s.FlashOnError;
-        PriorityBox.SelectedIndex = Math.Clamp(s.StressPriority, 0, 2);
+        PriorityBox.SelectedIndex = Math.Clamp(s.StressPriority, 0, PriorityBox.ItemCount - 1);
         PrimeMemoryBox.Value = s.PrimeMemoryMb;
         CoreDelayBox.Value = s.DelayBetweenCores;
 
@@ -631,7 +645,9 @@ public partial class MainWindow : Window
         }
 
         MaxTempBox.Value = s.MaxTemp;
-        CurveLimitBox.Value = Math.Clamp(s.CurveOptimizerLimit, CurveOptimizerRange.Widest, CurveOptimizerRange.Standard);
+        _limitChosenByUser = s.ChosenCurveLimit() is not null;
+        CurveLimitBox.Value = Math.Clamp(
+            s.ChosenCurveLimit() ?? ModelCurveLimit, CurveOptimizerRange.Widest, CurveOptimizerRange.Standard);
         TreatWheaAsErrorBox.IsChecked = s.TreatWheaWarningAsError;
         RestorePointBox.IsChecked = s.CreateRestorePoint;
         GuardbandBox.Value = s.Guardband;
@@ -641,12 +657,18 @@ public partial class MainWindow : Window
         RefreshAutoRuntime();
         RefreshThreadOptions();
         RefreshYcAlgoPanel();
-        PostTestActionBox.SelectedIndex = Math.Clamp(s.PostTestAction, 0, 2);
+        PostTestActionBox.SelectedIndex = Math.Clamp(s.PostTestAction, 0, PostTestActionBox.ItemCount - 1);
         WebhookBox.Text = s.WebhookUrl;
 
-        AutoTunerModeBox.SelectedIndex = Math.Clamp(s.AutoTunerMode, 0, 2);
+        AutoTunerModeBox.SelectedIndex = Math.Clamp(s.AutoTunerMode, 0, AutoTunerModeBox.ItemCount - 1);
 
         _settingsApplied = true;
+
+        // Now that the box is live, make it show the range that is actually in force: a core the BIOS
+        // holds deeper than the default widens it, and a depth learned earlier narrows it.
+        SyncLimitBox();
+        foreach (var row in _rows) { row.MinLimit = EffectiveChipLimit; row.ChipLimit = EffectiveChipLimit; }
+
         UpdateDurationHint();
     }
 
@@ -694,7 +716,11 @@ public partial class MainWindow : Window
             _ycAlgoBoxes.Where(kv => kv.Value.IsChecked == true).Select(kv => kv.Key));
 
         s.MaxTemp = (int)(MaxTempBox.Value ?? 90);
-        s.CurveOptimizerLimit = (int)(CurveLimitBox.Value ?? CurveOptimizerRange.Standard);
+        // Stored as a choice only if it was one. Writing the number unconditionally recorded an
+        // untouched box as a decision, which for a Ryzen 9000 pinned it to -30 for good. The old
+        // field is cleared so a deeper value 1.1.1 left behind cannot come back after being undone.
+        s.CurveOptimizerLimitChosen = _limitChosenByUser ? (int)(CurveLimitBox.Value ?? ModelCurveLimit) : null;
+        s.CurveOptimizerLimit = CurveOptimizerRange.Standard;
         s.TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true;
         s.CreateRestorePoint = RestorePointBox.IsChecked == true;
         s.Guardband = (int)(GuardbandBox.Value ?? AutoTunerService.DefaultGuardband);
@@ -739,6 +765,30 @@ public partial class MainWindow : Window
             // Logging must never be the reason the app fails to start.
             return (null, null);
         }
+    }
+
+    private bool _closingAfterRun;
+
+    /// <summary>
+    /// Closing during a run stops the run first. The process used to just exit: with "test only this
+    /// core" every other core stayed parked at 0 in the processor, and the next start read those zeros
+    /// as the BIOS values and offered them as the thing to reset to.
+    /// </summary>
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        // The second attempt goes through, so a run that will not stop cannot make the window unclosable.
+        if (_running && !_closingAfterRun)
+        {
+            e.Cancel = true;
+            _closingAfterRun = true;
+            _runCts?.Cancel();
+            Log(LocalizationService.Pick(
+                "Fenster wird geschlossen, sobald der Lauf beendet ist und die Kerne zurückgesetzt sind…",
+                "The window closes once the run has stopped and the cores are restored…"), LogLevel.Warn);
+            return;
+        }
+
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -870,22 +920,30 @@ public partial class MainWindow : Window
         var profile = TaskSchedulerService.LoadSavedProfile(workRoot);
         if (profile == null || !_smu.IsAvailable) return;
 
+        // Written to the processor at every logon, so it has to be this processor's profile and
+        // every value has to be one the processor accepts. Neither was checked.
+        var check = SavedProfileValidator.Check(profile, _smu.CpuName, _rows.Count, EffectiveChipLimit);
+
+        foreach (string problem in check.Problems)
+            Log(LocalizationService.Pick($"🚀 Autostart: {problem} — nicht angewendet.", $"🚀 Autostart: {problem} - not applied."), LogLevel.Warn);
+
         int count = 0;
         foreach (var row in _rows)
         {
-            if (profile.CoreMargins.TryGetValue(row.Index, out int val))
+            if (!check.Margins.TryGetValue(row.Index, out int val)) continue;
+
+            if (WriteVerified(row.Index, val) is { } held && held == val)
             {
-                if (_smu.WriteCurveOptimizer(row.Index, val))
-                {
-                    row.Margin = val;
-                    row.Applied = val;
-                    count++;
-                }
+                row.Margin = val;
+                row.Applied = val;
+                count++;
             }
         }
+
         Log(LocalizationService.Pick(
             $"🚀 Autostart: {count} Curve-Optimizer-Werte aus gespeichertem Profil übernommen.",
-            $"🚀 Autostart: applied {count} Curve Optimizer values from the saved profile."), LogLevel.Success);
+            $"🚀 Autostart: applied {count} Curve Optimizer values from the saved profile."),
+            check.WrongProcessor || check.Problems.Count > 0 ? LogLevel.Warn : LogLevel.Success);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1041,7 +1099,22 @@ public partial class MainWindow : Window
     private void CheckInterruptedRun()
     {
         string workRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "engines", "runs"));
-        _interruptedState = TestStateService.DetectInterruptedRun(workRoot);
+        var interrupted = TestStateService.ClassifyInterruptedRun(workRoot, TestStateService.SystemStartTime());
+
+        if (interrupted is { SystemRestarted: false })
+        {
+            // The computer never went down since that run last wrote its state. The program was closed
+            // or killed. Calling that a crash would offer to "back off" a core that did not fail, and
+            // record the value it held as unstable for good.
+            TestStateService.ClearState(workRoot);
+            Log(LocalizationService.Pick(
+                $"Ein früherer Lauf (Kern {interrupted.State.CurrentCore}) wurde beendet, ohne dass der Rechner neu gestartet ist — das Programm wurde geschlossen. Das ist kein Absturz und wird nicht als instabil vermerkt.",
+                $"An earlier run (core {interrupted.State.CurrentCore}) ended without the computer restarting - the program was closed. That is not a crash and is not recorded as unstable."),
+                LogLevel.Info);
+            return;
+        }
+
+        _interruptedState = interrupted?.State;
 
         if (_interruptedState is null) return;
 
@@ -1081,8 +1154,11 @@ public partial class MainWindow : Window
     {
         if (_interruptedState is null) return;
 
+        // The value that crashed, as the button says - not whatever the processor holds after the
+        // reboot, which is the BIOS value. The label read "back off to -24" and the click did
+        // something else.
         int crashedCore = _interruptedState.CurrentCore;
-        int currentMargin = (int)Row(crashedCore).Margin;
+        int currentMargin = _interruptedState.CoreMargins.GetValueOrDefault(crashedCore, (int)Row(crashedCore).Margin);
         Row(crashedCore).Margin = Math.Min(0, currentMargin + 4);
 
         var completed = _interruptedState.CompletedCores.ToHashSet();
@@ -1114,7 +1190,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void CheckRealWorldCrashes()
     {
-        _pendingCrashes = WheaCrashService.Unacknowledged(SettingsRoot, _cores);
+        _pendingCrashes = WheaCrashService.Unacknowledged(SettingsRoot, _cores, null, _apicMap);
         if (_pendingCrashes.Count == 0) return;
 
         var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
@@ -1540,6 +1616,15 @@ public partial class MainWindow : Window
     {
         if (!_settingsApplied || _rows.Count == 0) return;
 
+        if (!_syncingLimit)
+        {
+            // The person is choosing. A depth learned earlier is theirs to retry - after a BIOS
+            // update, say - so it is dropped, and the value becomes a choice worth storing.
+            _limitChosenByUser = true;
+            _appliedFloor = null;
+            _settings.LearnedCurveFloor = 0;
+        }
+
         int limit = EffectiveChipLimit;
         foreach (var row in _rows)
         {
@@ -1550,6 +1635,9 @@ public partial class MainWindow : Window
 
         SetAllMaxButton.Content = $"{LocalizationService.Get("SetAllMax")} {limit}";
         UpdateDurationHint();
+
+        // What was typed can be overruled by what the processor holds; the box should say so.
+        if (!_syncingLimit) SyncLimitBox();
     }
 
     private void OnAutoTunerModeChanged(object? sender, SelectionChangedEventArgs e)
@@ -1588,8 +1676,8 @@ public partial class MainWindow : Window
     /// <summary>"about 1:40 hrs", or "up to" when the search decides when to stop.</summary>
     private string DurationLabel(TimeSpan span) =>
         AutoTunerModeBox?.SelectedIndex > 0 || AutoRuntimeBox?.IsChecked == true
-            ? LocalizationService.Pick($"höchstens {span:h\\:mm} Std.", $"up to {span:h\\:mm} hrs")
-            : LocalizationService.Pick($"ca. {span:h\\:mm} Std.", $"about {span:h\\:mm} hrs");
+            ? LocalizationService.Pick($"höchstens {DurationFormat.Hours(span)} Std.", $"up to {DurationFormat.Hours(span)} hrs")
+            : LocalizationService.Pick($"ca. {DurationFormat.Hours(span)} Std.", $"about {DurationFormat.Hours(span)} hrs");
 
     /// <summary>
     /// Selects a profile by identity, widening the picker if the profile is one of the nine
@@ -1618,22 +1706,76 @@ public partial class MainWindow : Window
     /// <summary>Where a write beyond -30 turned out not to stick, or null.</summary>
     private int? _appliedFloor;
 
+    /// <summary>What this processor family starts out allowed to try: -30, or -50 on the Ryzen 9000 series.</summary>
+    private int ModelCurveLimit => AutoTunerService.GetMaxNegativeMargin(_smu.CpuName);
+
     /// <summary>
-    /// The deepest Curve Optimizer value to work with. It was a constant, then a claim that
-    /// every part stops at -30, which a 7950X3D owner contradicted. It is the standard range,
-    /// widened by what the processor shows and by what the person asks for, and narrowed again
-    /// when a write does not stick. See <see cref="CurveOptimizerRange"/>.
+    /// The deepest Curve Optimizer value to work with. It was a constant, then a claim that every
+    /// part stops at -30, which a 7950X3D owner contradicted. It starts from the processor's own
+    /// default, is widened by what the processor shows and narrowed or widened by what the person
+    /// asks for, and is pulled back when a write does not stick. See <see cref="CurveOptimizerRange"/>.
     /// </summary>
     private int EffectiveChipLimit => CurveOptimizerRange.Effective(
-        AutoTunerService.GetMaxNegativeMargin(_smu.CpuName),
+        ModelCurveLimit,
         AskedChipLimit,
         _hardwareReads,
         _appliedFloor);
 
-    /// <summary>The control once settings are applied; the stored value before, when the rows are built.</summary>
+    /// <summary>The box once settings are applied (it always shows a number); the stored choice before.</summary>
     private int? AskedChipLimit => _settingsApplied
         ? (CurveLimitBox?.Value is { } v ? (int)v : null)
-        : _settings.CurveOptimizerLimit;
+        : _settings.ChosenCurveLimit();
+
+    /// <summary>Whether the person has touched the box. Only then is its value a choice worth keeping.</summary>
+    private bool _limitChosenByUser;
+
+    /// <summary>Set while the program, not the person, moves the box.</summary>
+    private bool _syncingLimit;
+
+    /// <summary>The processor's own APIC IDs, so a machine check is blamed on the right core.</summary>
+    private IReadOnlyDictionary<int, int>? _apicMap;
+
+    /// <summary>Makes the box say what the range actually is, which a hardware reading can change.</summary>
+    private void SyncLimitBox()
+    {
+        if (CurveLimitBox is null) return;
+
+        int effective = EffectiveChipLimit;
+        if ((int?)CurveLimitBox.Value == effective) return;
+
+        _syncingLimit = true;
+        try { CurveLimitBox.Value = effective; }
+        finally { _syncingLimit = false; }
+    }
+
+    /// <summary>
+    /// A write beyond -30 turned out not to stick: that is where this processor stops. Remembered for
+    /// the next session too, under this BIOS, so it is not found out again at the cost of one refused
+    /// write per core on every start. UI thread only.
+    /// </summary>
+    private void NoteDepthLimit(int actual)
+    {
+        _appliedFloor = actual;
+        _settings.LearnedCurveFloor = actual;
+        _settings.LearnedCurveFloorBios = CurrentBiosVersion;
+
+        SyncLimitBox();
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Writes a margin and, beyond the standard range, reads it back. Returns what the processor
+    /// holds afterwards, or null when the write itself was refused. Inside -30 the read is skipped:
+    /// that path is the one verified on hardware.
+    /// </summary>
+    private int? WriteVerified(int core, int margin)
+    {
+        if (!_smu.WriteCurveOptimizer(core, margin)) return null;
+        if (margin >= CurveOptimizerRange.Standard) return margin;
+
+        int? readBack = _smu.ReadCurveOptimizer(core);
+        return CurveOptimizerRange.WasKept(margin, readBack) ? margin : readBack;
+    }
 
     private CampaignState _campaign = new();
 
@@ -1652,6 +1794,9 @@ public partial class MainWindow : Window
 
     /// <summary>Set for exactly as long as it takes the next OnStartStop to read it.</summary>
     private bool _startingForCampaign;
+
+    /// <summary>True while a start is being prepared (the restore point), before the run is marked as running.</summary>
+    private bool _startPending;
 
     /// <summary>
     /// What the campaign would do next, given where the machine stands. The decision itself is
@@ -1735,6 +1880,7 @@ public partial class MainWindow : Window
         var step = decision.Step!;
         var margins = _rows.ToDictionary(r => r.Index, r => (int)r.Margin);
 
+        var beforeThisRun = _campaign;
         _campaign = _campaign with
         {
             LastStage = step.Stage.ToString(),
@@ -1750,6 +1896,17 @@ public partial class MainWindow : Window
 
         _startingForCampaign = true;
         OnStartStop(this, new RoutedEventArgs());
+
+        // A start that bailed out - no engine, no core selected, the setup window opening - never ran.
+        // Its signature was already stored, so pressing Continue after fixing the cause was met with
+        // "the last run changed nothing" for a run that had not happened.
+        if (!_running && !_startPending)
+        {
+            _campaign = beforeThisRun;
+            CampaignService.Save(SettingsRoot, _campaign);
+            _campaignRunActive = false;
+            RefreshAutoTab();
+        }
     }
 
     /// <summary>
@@ -2086,14 +2243,14 @@ public partial class MainWindow : Window
             Log(LocalizationService.Pick(
                 "🌙 Test beendet: PC wechselt in den Energiesparmodus…",
                 "🌙 Test finished: putting the PC into standby…"));
-            try { Process.Start("rundll32.exe", "powrprof.dll,SetSuspendState 0,1,0"); } catch { }
+            try { Process.Start(SystemTools.RunDll32, "powrprof.dll,SetSuspendState 0,1,0"); } catch { }
         }
         else if (index == 2)
         {
             Log(LocalizationService.Pick(
                 "🔌 Test beendet: PC wird in 30 Sekunden heruntergefahren.",
                 "🔌 Test finished: shutting the PC down in 30 seconds."));
-            try { Process.Start("shutdown.exe", "/s /t 30 /c \"PboStudio test finished.\""); } catch { }
+            try { Process.Start(SystemTools.Shutdown, "/s /t 30 /c \"PboStudio test finished.\""); } catch { }
         }
     }
 
@@ -2254,14 +2411,28 @@ public partial class MainWindow : Window
             return;
         }
 
-        int applied = 0, failed = 0;
+        int applied = 0, failed = 0, clamped = 0;
         var currentMargins = new Dictionary<int, int>();
 
         foreach (var row in _rows)
         {
             if (row.IsChanged)
             {
-                if (_smu.WriteCurveOptimizer(row.Index, (int)row.Margin))
+                int wanted = (int)row.Margin;
+                int? held = WriteVerified(row.Index, wanted);
+
+                if (held is { } now && now != wanted)
+                {
+                    // The processor took the write but not the value. Showing the typed number as
+                    // applied - and saving it, for the autostart task to write again at every
+                    // logon - would be a lie about what the chip holds.
+                    row.Margin = now;
+                    row.Applied = now;
+                    NoteDepthLimit(now);
+                    clamped++;
+                    Log(string.Format(LocalizationService.Get("CurveWriteClamped"), row.CoreName, wanted, now), LogLevel.Warn);
+                }
+                else if (held is not null)
                 {
                     Log($"{row.CoreName}: {row.Applied} → {row.Margin}", LogLevel.Success);
                     row.Applied = row.Margin;
@@ -2281,9 +2452,9 @@ public partial class MainWindow : Window
         SaveCurrentProfile();
 
         Log(LocalizationService.Pick(
-            $"{applied} Kern(e) live gesetzt" + (failed > 0 ? $", {failed} abgelehnt" : "") + ". Profil unter runs/co_saved.json gespeichert.",
-            $"{applied} core(s) applied live" + (failed > 0 ? $", {failed} rejected" : "") + ". Profile saved to runs/co_saved.json."),
-            failed > 0 ? LogLevel.Warn : LogLevel.Success);
+            $"{applied} Kern(e) live gesetzt" + (failed > 0 ? $", {failed} abgelehnt" : "") + (clamped > 0 ? $", {clamped} vom Prozessor begrenzt" : "") + ". Profil unter runs/co_saved.json gespeichert.",
+            $"{applied} core(s) applied live" + (failed > 0 ? $", {failed} rejected" : "") + (clamped > 0 ? $", {clamped} limited by the processor" : "") + ". Profile saved to runs/co_saved.json."),
+            failed + clamped > 0 ? LogLevel.Warn : LogLevel.Success);
     }
 
     /// <summary>
@@ -2405,6 +2576,10 @@ public partial class MainWindow : Window
 
         if (!StartButton.IsEnabled) return;
 
+        // The restore point below can take minutes and nothing marked the run as started until it was
+        // done. F5 and the Auto button stayed live, and a second run began beside the first.
+        if (_startPending) return;
+
         // Set here rather than by the caller, so a run started by hand from the Tests tab always
         // clears it. A stale flag would send that run's result into the campaign's bookkeeping
         // and swallow the result panel the reader was waiting for.
@@ -2494,8 +2669,16 @@ public partial class MainWindow : Window
         {
             Log(LocalizationService.Get("RestorePointWorking"));
             StartButton.IsEnabled = false;
-            var restore = await Task.Run(() => SystemRestoreService.Create(LocalizationService.IsGerman));
-            StartButton.IsEnabled = true;
+            _startPending = true;
+            RefreshAutoTab();
+
+            SystemRestoreService.RestoreResult restore;
+            try { restore = await Task.Run(() => SystemRestoreService.Create(LocalizationService.IsGerman)); }
+            finally
+            {
+                _startPending = false;
+                StartButton.IsEnabled = true;
+            }
             Log(restore.Message, restore.Created ? LogLevel.Success : LogLevel.Warn);
         }
 
@@ -2538,6 +2721,7 @@ public partial class MainWindow : Window
             StopOnError = StopOnErrorBox.IsChecked == true,
             SkipCoreOnError = SkipCoreOnErrorBox.IsChecked == true,
             TreatWorkerFaultsAsErrors = WorkerFaultsAreErrorsBox.IsChecked == true,
+            ApicMap = _apicMap,
             TreatWheaWarningAsError = TreatWheaAsErrorBox.IsChecked == true,
             DelayBetweenCores = TimeSpan.FromSeconds((double)(CoreDelayBox.Value ?? 2)),
             AutoTuner = autoTunerMode,
@@ -2727,36 +2911,29 @@ public partial class MainWindow : Window
     /// </summary>
     private bool ApplyMarginToHardware(int core, int margin)
     {
-        bool ok = _smu.WriteCurveOptimizer(core, margin);
-        if (!ok) return false;
+        // Beyond -30 whether the processor accepts the value is the open question, so it is asked
+        // rather than assumed. A value it clamps would otherwise be shown, logged and recorded as
+        // the one that was tested: the search would lock a figure that never ran.
+        int? held = WriteVerified(core, margin);
+        if (held is null) return false;
 
-        // Beyond -30 whether the processor accepts the value is the open question, so it is
-        // asked rather than assumed. A value it clamps would otherwise be shown, logged and
-        // recorded as the one that was tested: the search would lock a figure that never ran.
-        if (margin < CurveOptimizerRange.Standard)
+        if (held != margin)
         {
-            int? readBack = _smu.ReadCurveOptimizer(core);
-            if (!CurveOptimizerRange.WasKept(margin, readBack))
+            int actual = held.Value;
+
+            Dispatcher.UIThread.Post(() =>
             {
-                int actual = readBack!.Value;
-                _appliedFloor = actual;
+                var row = Row(core);
+                row.Margin = actual;
+                row.Applied = actual;
 
-                Dispatcher.UIThread.Post(() =>
-                {
-                    var row = Row(core);
-                    row.Margin = actual;
-                    row.Applied = actual;
+                Log(string.Format(LocalizationService.Get("CurveWriteClamped"),
+                    row.CoreName, margin, actual), LogLevel.Warn);
 
-                    // The limit is a property of the processor, not of this core, and the box
-                    // that asked for it should say what the range actually is now. Setting it
-                    // runs the handler, which brings every row's clamp along.
-                    CurveLimitBox.Value = EffectiveChipLimit;
-
-                    Log(string.Format(LocalizationService.Get("CurveWriteClamped"),
-                        row.CoreName, margin, actual), LogLevel.Warn);
-                });
-                return false;
-            }
+                // The limit is a property of the processor, not of this core.
+                NoteDepthLimit(actual);
+            });
+            return false;
         }
 
         Dispatcher.UIThread.Post(() =>
@@ -3182,7 +3359,7 @@ public partial class MainWindow : Window
         if (span <= TimeSpan.Zero) return isDe ? "0 Std." : "0 hrs";
 
         if (span.TotalHours < 24)
-            return isDe ? $"{span:h\\:mm} Std." : $"{span:h\\:mm} hrs";
+            return isDe ? $"{DurationFormat.Hours(span)} Std." : $"{DurationFormat.Hours(span)} hrs";
 
         int days = (int)span.TotalDays;
         int hours = span.Hours;
@@ -3243,8 +3420,8 @@ public partial class MainWindow : Window
             {
                 string lockedNote = lockedCount > 0 ? (isDe ? $", {lockedCount} 🔒 fixiert" : $", {lockedCount} 🔒 locked") : "";
                 DurationHint.Text = isDe
-                    ? $"🔍 Suche ({modeDesc}): max. {total:h\\:mm} Std. ({activeRows.Count} aktive Kerne{lockedNote})"
-                    : $"🔍 Search ({modeDesc}): up to {total:h\\:mm} hrs ({activeRows.Count} active cores{lockedNote})";
+                    ? $"🔍 Suche ({modeDesc}): max. {DurationFormat.Hours(total)} Std. ({activeRows.Count} aktive Kerne{lockedNote})"
+                    : $"🔍 Search ({modeDesc}): up to {DurationFormat.Hours(total)} hrs ({activeRows.Count} active cores{lockedNote})";
 
                 DurationHintSub.Text = isDe
                     ? $"Senkt jeden Kern schrittweise bis zum Chip-Limit ({maxNegativeLimit}) ab. Fällt er durch, geht es wieder aufwärts und wird erneut getestet, bis ein Wert hält — erst dieser wird fixiert (🔒). Höchstens {maxPasses} Durchgänge à {MinutesBox.Value} Min; reichen sie nicht, bleibt der Kern offen."
@@ -3268,8 +3445,8 @@ public partial class MainWindow : Window
             DurationHint.Text = total <= TimeSpan.Zero
                 ? ""
                 : (isDe
-                    ? $"⏱️ Statischer Test: {selectedCores} Kerne × {perCore} × {IterationsBox.Value} Durchgänge{phaseNote} = höchstens {total:h\\:mm} Std."
-                    : $"⏱️ Static test: {selectedCores} cores × {perCore} × {IterationsBox.Value} passes{phaseNote} = at most {total:h\\:mm} hrs");
+                    ? $"⏱️ Statischer Test: {selectedCores} Kerne × {perCore} × {IterationsBox.Value} Durchgänge{phaseNote} = höchstens {DurationFormat.Hours(total)} Std."
+                    : $"⏱️ Static test: {selectedCores} cores × {perCore} × {IterationsBox.Value} passes{phaseNote} = at most {DurationFormat.Hours(total)} hrs");
 
             DurationHintSub.Text = autoRuntime
                 ? (isDe
@@ -3666,7 +3843,7 @@ public partial class MainWindow : Window
     private void UpdateClock()
     {
         var elapsed = DateTime.Now - _runStarted;
-        ElapsedText.Text = $"{elapsed:h\\:mm\\:ss}";
+        ElapsedText.Text = $"{DurationFormat.HoursSeconds(elapsed)}";
 
         if (_plannedTotal <= TimeSpan.Zero) return;
 
@@ -3676,8 +3853,8 @@ public partial class MainWindow : Window
         var left = _plannedTotal - elapsed;
         RemainingText.Text = left > TimeSpan.Zero
             ? LocalizationService.Pick(
-                $"noch etwa {left:h\\:mm\\:ss} · fertig gegen {DateTime.Now.Add(left):HH:mm} Uhr",
-                $"about {left:h\\:mm\\:ss} left · done around {DateTime.Now.Add(left):HH:mm}")
+                $"noch etwa {DurationFormat.HoursSeconds(left)} · fertig gegen {DateTime.Now.Add(left):HH:mm} Uhr",
+                $"about {DurationFormat.HoursSeconds(left)} left · done around {DateTime.Now.Add(left):HH:mm}")
             : LocalizationService.Pick("gleich fertig", "almost done");
 
         PhaseText.Text = _phaseLabel;
@@ -3864,12 +4041,15 @@ public partial class MainWindow : Window
         UpdateStartButtonState();
         RefreshAutoTab();
 
+        if (!running && _closingAfterRun)
+            Dispatcher.UIThread.Post(Close, DispatcherPriority.Background);
+
         if (!running)
         {
             _clock.Stop();
             Log(LocalizationService.Pick(
-                $"Gesamtdauer: {DateTime.Now - _runStarted:h\\:mm\\:ss}",
-                $"Total duration: {DateTime.Now - _runStarted:h\\:mm\\:ss}"));
+                $"Gesamtdauer: {DurationFormat.HoursSeconds(DateTime.Now - _runStarted)}",
+                $"Total duration: {DurationFormat.HoursSeconds(DateTime.Now - _runStarted)}"));
         }
 
         if (running)

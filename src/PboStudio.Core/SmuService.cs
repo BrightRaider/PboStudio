@@ -42,6 +42,15 @@ public sealed class SmuService : ISmuService
 
     public string? InitError { get; }
 
+    private readonly int _ccdCount = 1;
+    private readonly IReadOnlyList<SmuCoreSlot>? _slotMap;
+
+    /// <summary>
+    /// How cores are addressed on this processor, for the log: from the fuse map, or the evenly
+    /// divided fallback, or not at all. A mapping the reader cannot see is one nobody checks.
+    /// </summary>
+    public string CoreMapping { get; } = "";
+
     /// <summary>
     /// A <c>Cpu</c> object alone is not enough. Without the PawnIO driver ZenStates still
     /// constructs one, but it reports a topology of zero cores - which then divided by zero
@@ -73,7 +82,19 @@ public sealed class SmuService : ISmuService
         }
 
         CpuName = _cpu.info.cpuName?.Trim() ?? "unknown";
-        PhysicalCores = (int)_cpu.info.topology.physicalCores;
+
+        // The library's own figure is chiplets times eight: slots, not cores. It happens to equal
+        // the core count on an 8-core and a 16-core part and is wrong everywhere else, so the
+        // count comes from what Windows enumerates - the same list the rest of the program uses.
+        int windowsCores = 0;
+        try { windowsCores = CoreTopology.Enumerate().Count; } catch { }
+
+        uint slotFigure = _cpu.info.topology.physicalCores;
+        PhysicalCores = windowsCores > 0 ? windowsCores : (int)slotFigure;
+
+        _ccdCount = (int)Math.Max(1u, _cpu.info.topology.ccds);
+        _slotMap = SmuCoreMap.Build(_cpu.info.topology.coreDisableMap, windowsCores);
+        CoreMapping = DescribeMapping(windowsCores);
         ReportedCcdCount = _cpu.info.topology.ccds > 0 ? (int)_cpu.info.topology.ccds : null;
         CorePerformanceRanking = _cpu.info.topology.performanceOfCore is { Length: > 0 } perf
             ? [.. perf.Select(v => (int)v)]
@@ -106,11 +127,25 @@ public sealed class SmuService : ISmuService
     {
         if (_cpu is null || PhysicalCores <= 0) return null;
 
-        uint ccds = Math.Max(1u, _cpu.info.topology.ccds);
-        uint perCcd = (uint)PhysicalCores / ccds;
-        if (perCcd == 0) return null;
+        var slot = _slotMap is not null
+            ? (core >= 0 && core < _slotMap.Count ? _slotMap[core] : null)
+            : SmuCoreMap.Fallback(core, _ccdCount, PhysicalCores);
 
-        return _cpu.MakeCoreMask((uint)core % perCcd, (uint)core / perCcd, 0);
+        return slot is null ? null : _cpu.MakeCoreMask((uint)slot.Slot, (uint)slot.Ccd, 0);
+    }
+
+    private string DescribeMapping(int windowsCores)
+    {
+        if (_slotMap is not null)
+        {
+            var perCcd = _slotMap.GroupBy(c => c.Ccd)
+                .Select(g => $"CCD{g.Key} slots {string.Join(",", g.Select(c => c.Slot))}");
+            return $"fuse map, {windowsCores} cores: {string.Join("; ", perCcd)}";
+        }
+
+        return SmuCoreMap.Fallback(0, _ccdCount, PhysicalCores) is not null
+            ? $"fuse map unavailable or inconsistent; {PhysicalCores} cores divided evenly over {_ccdCount} chiplet(s)"
+            : "no usable core mapping - Curve Optimizer access is disabled";
     }
 
     /// <summary>

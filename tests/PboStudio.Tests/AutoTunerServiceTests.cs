@@ -163,18 +163,17 @@ public class AutoTunerServiceTests
     }
 
     /// <summary>
-    /// This asserted -50 for Zen 5 as the default. The default is the standard -30 for every
-    /// model with the feature: -50 was an unverified depth applied to everybody, and a search
-    /// that runs to a value the BIOS refuses ends by reporting something nobody can enter.
-    /// Deeper is opt-in and verified, see CurveOptimizerRange.
+    /// -50 is the default for the Ryzen 9000 series and -30 for everything else that has the feature.
+    /// The -50 was removed in 1.1.0 on an unsourced claim and returned with the verification it
+    /// lacked: writes beyond -30 are read back and a refused value ends the search where it held.
     /// </summary>
     [Theory]
-    [InlineData("AMD Ryzen 9 9950X 16-Core Processor")]
-    [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor")]
-    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor")]
-    [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor")]
-    public void GetMaxNegativeMargin_IsMinusThirtyOnEveryPartThatHasTheFeature(string cpu)
+    [InlineData("AMD Ryzen 9 9950X 16-Core Processor", -50)]
+    [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor", -50)]
+    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor", -30)]
+    [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor", -30)]
+    public void GetMaxNegativeMargin_FollowsTheGenerationsDefault(string cpu, int expected)
     {
-        Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin(cpu));
+        Assert.Equal(expected, AutoTunerService.GetMaxNegativeMargin(cpu));
     }
 }

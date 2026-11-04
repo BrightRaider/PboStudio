@@ -72,11 +72,35 @@ public sealed class AppSettings
 
     /// <summary>Points of headroom between the measured boundary and the locked value.</summary>
     /// <summary>
-    /// The deepest Curve Optimizer value the person says their BIOS accepts. -30 is accepted
-    /// everywhere and is the default; anything deeper is opt-in, and verified by reading each
-    /// write back.
+    /// What 1.1.1 stored. Read once, for anybody who chose a deeper value there; never written
+    /// with anything but the default. It cannot tell "chose -30" from "never touched it", which is
+    /// why <see cref="CurveOptimizerLimitChosen"/> exists.
     /// </summary>
     public int CurveOptimizerLimit { get; set; } = CurveOptimizerRange.Standard;
+
+    /// <summary>
+    /// The depth the person chose, or null to follow the processor's own default. Null matters: a
+    /// stored -30 would pin a Ryzen 9000 to the standard for good, including for everybody whose
+    /// settings file merely recorded the untouched box.
+    /// </summary>
+    public int? CurveOptimizerLimitChosen { get; set; }
+
+    /// <summary>The chosen depth, falling back to a deeper value 1.1.1 stored.</summary>
+    public int? ChosenCurveLimit() =>
+        CurveOptimizerLimitChosen
+        ?? (CurveOptimizerLimit < CurveOptimizerRange.Standard ? CurveOptimizerLimit : null);
+
+    /// <summary>
+    /// The depth a write beyond -30 turned out to stop at, so the next session does not have to
+    /// find it out again - one refused write per core, per start. Zero means none is known.
+    /// </summary>
+    public int LearnedCurveFloor { get; set; }
+
+    /// <summary>
+    /// The BIOS it was learned under. A firmware update can change what is accepted, so a floor
+    /// from another version is not applied.
+    /// </summary>
+    public string LearnedCurveFloorBios { get; set; } = "";
 
     public int Guardband { get; set; } = AutoTunerService.DefaultGuardband;
     public int PostTestAction { get; set; }

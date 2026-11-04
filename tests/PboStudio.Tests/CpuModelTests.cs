@@ -11,12 +11,14 @@ public class CpuModelTests
 {
     private static CpuModel Of(string name) => CpuModelService.Detect(name);
 
-    // ── the bug this file exists for ──────────────────────────────
+    // ── the Ryzen 9000 default ────────────────────────────────────
 
     /// <summary>
-    /// The auto-tuner's limit table let a Ryzen 9000 be walked down to -50 by default, a depth
-    /// nobody had checked. The default is the standard -30 for every model; going deeper is
-    /// something a board is shown to accept or the person asks for, see CurveOptimizerRange.
+    /// The default for the Ryzen 9000 series is -50. It was -50 from the first commit, was removed
+    /// in 1.1.0 on an unsourced claim that every desktop part stops at -30, and is back. What makes
+    /// it safe is not the number but what surrounds it: every write beyond -30 is read back, a value
+    /// the processor does not keep ends the search at the last value that held, and that depth is
+    /// remembered. See CurveOptimizerRange and the runner's depth-limit handling.
     /// </summary>
     [Theory]
     [InlineData("AMD Ryzen 9 9950X3D 16-Core Processor")]
@@ -25,14 +27,34 @@ public class CpuModelTests
     [InlineData("AMD Ryzen 7 9800X3D 8-Core Processor")]
     [InlineData("AMD Ryzen 7 9700X 8-Core Processor")]
     [InlineData("AMD Ryzen 5 9600X 6-Core Processor")]
-    public void NoZen5PartGoesPastThirty(string name)
+    public void Zen5PartsDefaultToMinusFifty(string name)
     {
         var cpu = Of(name);
 
         Assert.Equal(CpuFamily.Zen5, cpu.Family);
-        Assert.Equal(-30, cpu.MaxNegativeMargin);
-        Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin(name));
+        Assert.Equal(-50, cpu.MaxNegativeMargin);
+        Assert.Equal(-50, AutoTunerService.GetMaxNegativeMargin(name));
         Assert.True(cpu.HasCurveShaper);
+    }
+
+    /// <summary>The deeper default belongs to Zen 5 only. Every other part with the feature stays at -30.</summary>
+    [Theory]
+    [InlineData("AMD Ryzen 9 7950X3D 16-Core Processor")]
+    [InlineData("AMD Ryzen 7 7800X3D 8-Core Processor")]
+    [InlineData("AMD Ryzen 7 7700X 8-Core Processor")]
+    [InlineData("AMD Ryzen 9 5950X 16-Core Processor")]
+    [InlineData("AMD Ryzen 7 5800X3D 8-Core Processor")]
+    public void EveryOtherPartWithTheFeatureStaysAtTheStandard(string name)
+    {
+        Assert.Equal(-30, Of(name).MaxNegativeMargin);
+        Assert.Equal(-30, AutoTunerService.GetMaxNegativeMargin(name));
+    }
+
+    /// <summary>A processor without the feature has no depth to speak of, whatever generation it is.</summary>
+    [Fact]
+    public void APartWithoutTheFeatureHasNoDepth()
+    {
+        Assert.Equal(0, Of("AMD Ryzen 7 2700X Eight-Core Processor").MaxNegativeMargin);
     }
 
     // ── AM4 ───────────────────────────────────────────────────────

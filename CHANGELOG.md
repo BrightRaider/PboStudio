@@ -1,5 +1,119 @@
 # Changelog
 
+## 1.1.2 — 2026-11-04
+
+A review of the whole code base, not of a diff, after a run of defects that each turned out to be
+somewhere nobody had looked. It found more than expected, several of them in the part of the program
+that decides whether a core passed. 453 unit tests, up from 318. For the runner fixes and the log reading,
+the new tests were run against the previous code and fail there; the others are covered by tests of the
+new behaviour, and the ones that depend on real hardware say so below.
+
+### Fixed — a core could pass without being tested
+
+- **A refused deep value was booked as a pass.** When the processor will not take a Curve Optimizer
+  value below -30, the runner tested "whatever the CPU currently holds" and recorded the result against
+  the value that had been asked for. On a board that stops at -30 the search walked to its floor on
+  passes at a depth that never ran and locked a figure nobody tested. A refused value now ends the
+  search at the last value that held, with the usual headroom; a core with nothing proven to fall back
+  on is skipped rather than tested. Inside -30 nothing changed: that path is the verified one.
+- **A failure line split across two polls was missed.** Both engines report an error by writing a line
+  that the program reads once a second. The read went to the end of the file and resumed from the
+  file's length, so a line that was half written at that moment had its first half inspected and its
+  second half never. "FATAL ERROR" cut between two polls matched neither, and the core passed. Only
+  complete lines are consumed now.
+- **Cores 6 to 11 of a 12-core processor were addressed on the wrong chiplet.** The map from Windows
+  cores to the SMU's (chiplet, slot) addressing divided by eight - the library's slot count - where it
+  needed the number of enabled cores. It is right for an 8-core and a 16-core part and wrong for every
+  6+6 and 6-core one (7900X3D, 7900X, 5900X, 9900X, the 6-core parts): a value went to some other
+  core, the core under test passed at a value it never held. The fuse map the processor reports now
+  decides, and the mapping is written to the log at start. **Not run on such a processor** - it is
+  covered by tests on synthetic fuse maps, and on the 8-core part this was verified on it produces the
+  identical mapping, which was checked on the real hardware.
+- **A machine check could be blamed on the wrong core.** The APIC ID in a WHEA event was taken to be the
+  logical processor's number. True where it was checked, an assumption where cores are fused off and the
+  IDs skip numbers - and the error runs in the dangerous direction: a genuine fault on the core under
+  test credited to another core and reported as "not counted against this core". The IDs are read from
+  the processor itself (CPUID leaf 0xB on each logical processor), which on the 8-core part came back as
+  the identity.
+- **The crash check could be crowded out.** It looked at the twenty newest WHEA records of any kind, so a
+  few dozen corrected errors after a crash pushed the crash out of view. Fatal events are queried
+  directly.
+
+### Fixed — values lost, or recorded wrongly
+
+- **Stopping a run left the other cores parked at 0.** With "test only this core" the others are held at
+  0 for each slot and restored at the end - but only on the normal way out. Stopping, the temperature
+  cut-off, an engine that would not start, and closing the window all skipped it, leaving the undervolt
+  gone from every other core while the table showed it. The next start then read those zeros as the BIOS
+  values. Restoring is unconditional now, and closing the window stops the run first.
+- **A closed program was recorded as a system crash.** Any run that ended abnormally left its state file,
+  and the next start reported "unexpected system restart on core N" and wrote that core's value into the
+  tuner's memory as a failure for good. A real crash is now told apart by the computer having started
+  again after the file was last written.
+- **"Apply live" showed a value the processor had not kept.** The typed number was marked applied and
+  saved to the autostart profile. A write beyond -30 is read back and the row shows what the processor
+  holds.
+- **The autostart profile was written to the processor unexamined at every logon.** It is checked now:
+  it must belong to this processor (a 5800X3D swapped for a 7800X3D has the same eight cores and would
+  have received every old value) and every value must be in range.
+- **Combo boxes restored to the wrong item.** The order box has five entries and was clamped to three, so
+  "core pairs" came back as "custom order"; free y-cruncher algorithm choice was lost the same way.
+- **"Back off and resume" did something other than its label.** The button said -24 and applied the value
+  the processor held after the reboot (the BIOS value) plus four.
+- **A second run could start beside the first** while the restore point was being created, which can
+  take minutes. And a campaign start that bailed out (no engine, setup window opening) was recorded as a
+  run, so pressing Continue afterwards was met with "the last run changed nothing".
+- **A finished run kept spinning on pair orders**, and a custom order over a subset of cores ended after
+  its first pass regardless of how many were asked for.
+
+### Fixed — security
+
+The program runs as administrator and starts what it downloads.
+
+- **The PawnIO installer - a kernel driver - was started elevated with no check.** It sat under a fixed
+  name in the shared temp folder, where it could be planted in advance, and nothing verified the bytes.
+  It is downloaded to a private folder and checked against its SHA-256 before it runs; the copy in the
+  offline bundle is checked the same way, and the pinned hash was confirmed against the one GitHub
+  publishes and against the bundled file, which match.
+- **A plain-http address stood in the y-cruncher mirror list**, the page scanned for the current version
+  was fetched over http, and a link found there was followed whatever host it named. Everything is https
+  now, and a download is only taken from the vendor's own domain.
+- **PowerShell, schtasks, shutdown and rundll32 were started by bare name**, which looks in the program's
+  own folder first. They are started from the system folder by full path.
+- **A hung PowerShell froze the caller for good.** Output was read to the end before the timeout was
+  consulted; reading to the end blocks until the process lets go. This was the call that creates the
+  restore point, on the thread that starts a run.
+- The webhook only accepts https addresses and gives up after fifteen seconds.
+
+### Fixed — smaller
+
+- **Durations past a day were wrong.** "h:mm" on a TimeSpan prints the hours component, 0 to 23: the
+  elapsed counter jumped back to zero after a day, and an estimate of 24 hours read as 0:00. Fourteen
+  places.
+- **The platform audit invented a fault.** When the memory speed could not be read it substituted values
+  that read as "EXPO is off" and took 25 points off. An unreadable value is now unknown, not a finding.
+- **The report** wrote the processor and profile names into the page unencoded, and its footer named a
+  version, "v2.0", that no release has had.
+
+### Changed
+
+- **Ryzen 9000 starts at -50 again.** It was the default from the first commit, was removed in 1.1.0 on
+  an unsourced claim, and is back, with what was missing then: every write beyond -30 is read back, a
+  value the processor does not keep ends the search where it held, and the depth found is remembered for
+  that BIOS, so a board that stops at -30 costs one refused write per core, once. Every other part keeps
+  -30 as its starting point. The setting under *Safety & system* can now hold a Ryzen 9000 at the standard
+  as well as deepen any part. It is stored as a choice or as no choice - a stored -30 used to be
+  indistinguishable from an untouched box and would have pinned every Ryzen 9000 that ran 1.1.1.
+
+### Not verified
+
+- **The Zen 4 telemetry positions** (1.1.1) and the **deeper-than--30 write path** have still not run on a
+  Zen 4 or Zen 5 processor.
+- **The core mapping on 6+6 and 6-core parts**, and **the APIC mapping where IDs skip numbers.** Both are
+  tested against synthetic maps; both gave the identity on the 8-core part. The logic is the same either
+  way, but neither has been seen on the processors it is for.
+- Zen 5 telemetry is still "n/a": its power table is not recognised.
+
 ## 1.1.1 — 2026-11-04
 
 Two reports from Ryzen 9 7950X3D owners, both of which turned out to be this program's own
