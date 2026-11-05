@@ -133,7 +133,7 @@ Der Durchlauf ist **„gestört"**, sobald **eine** dieser Bedingungen erfüllt 
 | fremde Last aller anderen Kerne, gleitender Mittelwert über 10 s | über **15 %** |
 | ein einzelner anderer Kern, gleitender Mittelwert über 10 s | über **40 %** |
 
-*Herleitung.* Gemessen auf einem Ryzen 7 5800X3D (16 logische Prozessoren), 30 Sekunden normaler Alltag mit Browser,
+*Herleitung.* Gemessen auf einem Ryzen 7 5800X3D (16 logische Prozessoren), 30 Sekunden normaler Alltag mit drei Browsern und etwa 100 Tabs,
 Entwicklungsumgebung und Sprachchat, im Sekundentakt: Gesamtlast im Mittel **6,0 %**, höchster Sekundenwert **15,3 %**; je
 logischem Prozessor im Mittel 1,8 bis 17,2 %, einzelne Sekunden bis 93 %. Die Schwellen liegen mit Abstand über diesem
 Alltag und gelten für **gleitende Mittelwerte**, nicht für Spitzen, damit ein kurzer Ausschlag nichts stört. Ein Spiel liegt
@@ -210,7 +210,7 @@ Die Zahlen (Zähler, Obergrenze, Takt der Messwerttabelle) sind offen und gehen 
    Absturz am Anmeldebildschirm stehen. Die Bereitschaftsprüfung sagt das vorher.
 7. ~~Schwelle für „gestört"~~ **Startwerte festgelegt** (5 % / 15 % / 40 %, Herleitung oben). Ein Spiel liegt
    darüber (League of Legends, gemessen). Zu prüfen bleibt, wie die Werte auf anderen Rechnern ausfallen und wo leichtere
-   Last liegt, etwa Videowiedergabe oder ein Browser mit vielen Tabs. Das Protokoll liefert dafür die Messwerte.
+   Last liegt, etwa Videowiedergabe. Viele Tabs sind in der Alltagsmessung schon enthalten. Das Protokoll liefert dafür die Messwerte.
 8. **Zahlen für das Weitermachen und die Messwerttabelle** (Zähler, Obergrenze, Takt): Rückmeldung von rensus898 abwarten.
 
 ## Prüfstein
