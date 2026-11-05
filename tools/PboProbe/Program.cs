@@ -164,6 +164,43 @@ Console.WriteLine($"SMU type   : {cpu.smu.SMU_TYPE}   SMU ver: {cpu.smu.Version:
 Console.WriteLine($"Topology   : {ccds} CCD / {topo.ccxs} CCX / {coreCount} cores / {topo.logicalCores} threads");
 Console.WriteLine();
 
+// Read-only: can the core voltage be read here, and does it agree with what a monitoring tool shows?
+// Two sources: the SVI2 telemetry plane over SMN (package core voltage) and each core's own VID from
+// MSR C001_0293. Writes the result to volt.txt next to the exe, because an elevated console closes.
+if (args.Length > 0 && args[0].Equals("volt", StringComparison.OrdinalIgnoreCase))
+{
+    var lines = new List<string>();
+    void Out(string s) { Console.WriteLine(s); lines.Add(s); }
+
+    Out($"SVI2 core plane address 0x{info.svi2.coreAddress:X8}, soc plane 0x{info.svi2.socAddress:X8}");
+    for (int sample = 0; sample < 5; sample++)
+    {
+        uint raw = cpu.ReadDword(info.svi2.coreAddress);
+        uint rawSoc = cpu.ReadDword(info.svi2.socAddress);
+        uint vid = (raw >> 16) & 0xFF;
+        uint vidSoc = (rawSoc >> 16) & 0xFF;
+        Out($"sample {sample}: core telemetry raw 0x{raw:X8} -> vid {vid} -> {Utils.VidToVoltage(vid):F3} V" +
+            $"   soc raw 0x{rawSoc:X8} -> {Utils.VidToVoltage(vidSoc):F3} V");
+
+        // One reading per physical core, on its first thread (adjacent threads are SMT siblings).
+        var parts = new List<string>();
+        for (int c = 0; c < coreCount; c++)
+        {
+            uint eax = 0, edx = 0;
+            bool readOk = cpu.ReadMsrTx(0xC0010293, ref eax, ref edx, OpenHardwareMonitor.Hardware.GroupAffinity.Single(0, 2 * c));
+            var st = new Cpu.HwPstateStatus { Value = eax };
+            double mhz = st.CurCpuDfsId == 0 ? 0 : st.CurCpuFid * 25.0 / (st.CurCpuDfsId / 8.0);
+            parts.Add(readOk
+                ? $"c{c}: vid {st.CurCpuVid} {Utils.VidToVoltage(st.CurCpuVid):F3}V {mhz:F0}MHz"
+                : $"c{c}: read failed");
+        }
+        Out("   " + string.Join(" | ", parts));
+        Thread.Sleep(1000);
+    }
+    File.WriteAllLines(Path.Combine(AppContext.BaseDirectory, "volt.txt"), lines);
+    return 0;
+}
+
 if (args.Length > 0 && args[0].Equals("pmtable", StringComparison.OrdinalIgnoreCase))
 {
     var version = cpu.GetTableVersion();
