@@ -211,7 +211,24 @@ Die Zahlen (Zähler, Obergrenze, Takt der Messwerttabelle) sind offen und gehen 
 7. ~~Schwelle für „gestört"~~ **Startwerte festgelegt** (5 % / 15 % / 40 %, Herleitung oben). Ein Spiel liegt
    darüber (League of Legends, gemessen). Zu prüfen bleibt, wie die Werte auf anderen Rechnern ausfallen und wo leichtere
    Last liegt, etwa Videowiedergabe. Viele Tabs sind in der Alltagsmessung schon enthalten. Das Protokoll liefert dafür die Messwerte.
-8. **Zahlen für das Weitermachen und die Messwerttabelle** (Zähler, Obergrenze, Takt): Rückmeldung von rensus898 abwarten.
+8. ~~Zahlen für das Weitermachen und die Messwerttabelle~~ **Festgelegt nach der Rückmeldung von rensus898 (Issue 3):**
+   - Zähler vor dem Weitermachen: **60 Sekunden**.
+   - Fortsetzungen hintereinander sind eine **Einstellung, auch „unbegrenzt"**. Ein abgestürzter Kern wird um 3 Schritte
+     zurückgenommen und bleibt bis zum Absichern aus dem aktiven Zyklus. Dadurch kann ein **zuordenbarer** Absturz keine
+     Endlosschleife erzeugen, denn jeder nimmt einen Kern aus dem Zyklus. Begrenzt (Standard: 3 hintereinander) werden nur
+     Abstürze, die sich keinem Kern zuordnen lassen.
+   - Die Zuordnung kommt aus dem **Zustand des Laufs** (welcher Kern gerade getestet wurde), nicht aus dem Windows-Log, denn
+     harte Abstürze ohne Fehlereintrag sind der Normalfall.
+   - Die Messwerttabelle schreibt **alle 5 Sekunden** Takt, Temperatur und Leistung, dazu die **Kernspannung**.
+   - **Kernspannung, gemessen auf einem Ryzen 7 5800X3D (Zen 3):** Zwei Quellen sind lesbar und stimmen überein, die
+     SVI2-Telemetrie des Kernpegels über den Systemverwaltungsbus und die VID jedes Kerns aus MSR C001_0293. Fünf Proben im
+     Sekundentakt ergaben 1,16 bis 1,22 V, alle Kerne zeigen dieselbe Spannung (eine gemeinsame Schiene), die beiden Quellen
+     weichen in vier von fünf Proben um höchstens einen VID-Schritt (6 mV) voneinander ab. Die fünfte Probe wich um sieben
+     Schritte ab, weil sich die Spannung zwischen den zwei Lesevorgängen änderte. Die Taktangabe aus derselben MSR ist der
+     angeforderte Zustand, nicht der tatsächliche Takt. **Zen 4 und Zen 5 sind nicht gemessen:** Dort gilt eine andere
+     Umrechnung der VID (SVI3), und die Telemetrieadresse ist in der Bibliothek für Zen 4 als unbekannt markiert, für Zen 5
+     fehlt sie. Die MSR ist architektonisch und wahrscheinlich lesbar. Bis zur Messung steht dort „nicht verfügbar" statt
+     einer Zahl, und `families.toml` bekommt dafür einen Prüfstatus für die Spannung ([ADR-0005](../adr/0005-smu-zugriff.md)).
 
 ## Prüfstein
 
