@@ -11,6 +11,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod depth;
+
 /// Conversions between the voltage codes the processor reports and volts.
 pub mod voltage {
     /// SVI2 (Zen 2 and Zen 3): `1.55 V - code * 6.25 mV`.

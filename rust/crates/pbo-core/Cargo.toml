@@ -7,3 +7,7 @@ license.workspace = true
 
 # Nothing here, on purpose. `cargo tree -p pbo-core` must show only this crate (ADR-0003).
 [dependencies]
+
+# Only the tests read the language-neutral vectors; the crate itself still has no dependency (ADR-0003).
+[dev-dependencies]
+serde_json = "1"
