@@ -134,7 +134,7 @@ Der Durchlauf ist **„gestört"**, sobald **eine** dieser Bedingungen erfüllt 
 | ein einzelner anderer Kern, gleitender Mittelwert über 10 s | über **40 %** |
 
 *Herleitung.* Gemessen auf einem Ryzen 7 5800X3D (16 logische Prozessoren), 30 Sekunden normaler Alltag mit drei Browsern und etwa 100 Tabs,
-Entwicklungsumgebung und Sprachchat, im Sekundentakt: Gesamtlast im Mittel **6,0 %**, höchster Sekundenwert **15,3 %**; je
+Entwicklungsumgebung, Sprachchat und weiteren Hintergrundprogrammen, im Sekundentakt: Gesamtlast im Mittel **6,0 %**, höchster Sekundenwert **15,3 %**; je
 logischem Prozessor im Mittel 1,8 bis 17,2 %, einzelne Sekunden bis 93 %. Die Schwellen liegen mit Abstand über diesem
 Alltag und gelten für **gleitende Mittelwerte**, nicht für Spitzen, damit ein kurzer Ausschlag nichts stört. Ein Spiel liegt
 darüber, **gemessen mit League of Legends in einer laufenden Partie** (zweite Messung, 30 Sekunden im Sekundentakt):
