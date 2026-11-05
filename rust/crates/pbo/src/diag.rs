@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use pbo_core::{cpu, margin, pm, pstate, topology, voltage};
+use pbo_core::{coremap, cpu, margin, pm, pstate, topology, voltage};
 use pbo_os as os;
 use pbo_smu::{AmdFamily17, RyzenSmu};
 use windows_sys::Win32::UI::Shell::IsUserAnAdmin;
@@ -261,14 +261,15 @@ pub fn run(args: &[String]) -> i32 {
                         )),
                     }
                 }
-                slots = topology::slots(&maps);
-                let list: Vec<String> = slots.iter().map(|(c, s)| format!("{c}.{s}")).collect();
-                r.line(format!(
-                    "  SMU slots (chiplet.slot) in order: {}",
-                    list.join(" ")
-                ));
-                if slots.len() != cores {
-                    r.problem(format!("the fuses give {} cores but CPUID gives {cores}: the mapping must not be guessed", slots.len()));
+                match coremap::build(&maps, cores) {
+                    Some(map) => {
+                        slots = map.iter().map(|s| (s.ccd, s.slot)).collect();
+                        let list: Vec<String> = map.iter().map(|s| format!("{}.{}", s.ccd, s.slot)).collect();
+                        r.line(format!("  SMU slots (chiplet.slot) in order: {}", list.join(" ")));
+                    }
+                    None => r.problem(format!(
+                        "the fuses do not add up to the {cores} cores CPUID reports: the mapping is refused, not guessed"
+                    )),
                 }
             }
             _ => r.problem("the chiplet fuses could not be read"),

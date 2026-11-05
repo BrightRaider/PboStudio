@@ -20,8 +20,13 @@ pub const WIDEST: i32 = -50;
 ///   accepts, evidence no setting can outweigh.
 /// * `applied_floor`: the value the processor actually applied when a deeper one was requested and not kept.
 ///   It pulls the range back: asking for -45 and getting -40 means the limit is -40.
-pub fn effective(model_limit: i32, user_limit: Option<i32>, read_from_hardware: &[i32], applied_floor: Option<i32>) -> i32 {
-    let mut limit = model_limit.min(STANDARD).max(WIDEST);
+pub fn effective(
+    model_limit: i32,
+    user_limit: Option<i32>,
+    read_from_hardware: &[i32],
+    applied_floor: Option<i32>,
+) -> i32 {
+    let mut limit = model_limit.clamp(WIDEST, STANDARD);
 
     if let Some(asked) = user_limit {
         limit = asked.clamp(WIDEST, STANDARD);
