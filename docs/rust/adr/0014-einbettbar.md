@@ -135,8 +135,9 @@ Gastgeber, der ein größeres Publikum erreicht, etwa Spieler. Der Grundsatz daf
   Bedarf** (Starttyp „bei Bedarf") und bleibt nach dem ersten Zugriff bis zum Neustart geladen.
   **Beobachtung des Eigentümers (2026-11-05):** Auf seinem Spielerechner laufen Treiber und Spiele ohne Beanstandung. Dort war
   PawnIO geladen, und unter anderem Riot Vanguard und Easy Anti-Cheat sind installiert. Das ist **eine Beobachtung auf einem
-  Rechner**: Welche Spiele genau und wie lange der Treiber währenddessen geladen war, ist nicht erfasst, und für andere
-  Anti-Cheat-Systeme, Versionen und Rechner sagt sie nichts. PboStudio **verspricht keine Verträglichkeit** und sagt öffentlich,
+  Rechner**: Gespielt wurden nach Angabe des Eigentümers unter anderem ARC Raiders und League of Legends. Wie lange der
+  Treiber währenddessen geladen war, ist nicht erfasst, und für andere Anti-Cheat-Systeme, Versionen und Rechner sagt sie
+  nichts. PboStudio **verspricht keine Verträglichkeit** und sagt öffentlich,
   was geprüft ist und was nicht. Wer das Modul lädt oder `pbo` startet, entscheidet das selbst. Das Modul wird nicht
   vorausgesetzt, ein Gastgeber muss es nicht immer laden.
 - **Instabilität und Abstürze** gehören zum Zweck des Programms. Die Schutzmechanismen stehen in den Invarianten (Rücklesen,
