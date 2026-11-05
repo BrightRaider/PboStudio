@@ -105,6 +105,9 @@ Vor einem langen Lauf, auf Wunsch und automatisch ab einer einstellbaren Dauer. 
   eingerichtet ist, und nichts setzt den Lauf fort. Die Prüfung nennt das beim Namen.
 - Schlafmodus und Ruhezustand, Neustart durch Windows-Updates, Speicherplatz, Temperaturreserve.
 - Das Programm richtet **Auto-Login nicht selbst ein**: Es ist eine Sicherheitseinstellung. Es weist darauf hin und erklärt es.
+- **Der Auslöser bleibt die Anmeldung.** Ein Start schon vor der Anmeldung, mit höchsten Rechten und ohne angemeldeten Nutzer,
+  wirkt zu Recht gefährlich und wird nicht voreingestellt. Wenn er überhaupt angeboten wird, dann nur nach einer
+  **ausdrücklichen Nachfrage vorher**, die die Folgen nennt, und nie als Standard.
 
 ### 2. Selbsttest: „Funktioniert es auf diesem Rechner?"
 
@@ -121,10 +124,28 @@ nicht auf Hardware geprüft sind (Zen 4, Zen 5). Der alte Wert wird in jedem Fal
 ### 3. Nur ungestörte Durchläufe zählen
 
 Ein Durchlauf gilt nur dann als bestanden, wenn er **ungestört** war. Der Lauf misst die Last anderer Prozesse und der
-anderen Kerne mit. Überschreitet sie eine Schwelle (einstellbar, Tiefe 3), oder nimmt ein fremder Thread dem geprüften
-Kern Rechenzeit, ist der Durchlauf **„gestört"**:
+anderen Kerne mit. „Fremd" heißt: alles außer dem Testprogramm, das dieses Programm gestartet hat, und dem Programm selbst.
+Der Durchlauf ist **„gestört"**, sobald **eine** dieser Bedingungen erfüllt ist (Startwerte, einstellbar in Tiefe 3):
+
+| Messgröße | Schwelle |
+|---|---|
+| fremde Rechenzeit auf dem geprüften Kern (beide Threads) | mehr als **5 %** der Dauer des Durchlaufs |
+| fremde Last aller anderen Kerne, gleitender Mittelwert über 10 s | über **15 %** |
+| ein einzelner anderer Kern, gleitender Mittelwert über 10 s | über **40 %** |
+
+*Herleitung.* Gemessen auf einem Ryzen 7 5800X3D (16 logische Prozessoren), 30 Sekunden normaler Alltag mit Browser,
+Entwicklungsumgebung und Sprachchat, im Sekundentakt: Gesamtlast im Mittel **6,0 %**, höchster Sekundenwert **15,3 %**; je
+logischem Prozessor im Mittel 1,8 bis 17,2 %, einzelne Sekunden bis 93 %. Die Schwellen liegen mit Abstand über diesem
+Alltag und gelten für **gleitende Mittelwerte**, nicht für Spitzen, damit ein kurzer Ausschlag nichts stört. Ein Spiel, das
+einzelne Kerne dauerhaft auslastet, sollte darüber liegen; **das ist nicht gemessen**, es lief kein Spiel. Es ist eine
+Messung auf einem Rechner: Die Zahlen sind Annahmen mit Abstand, keine gemessenen Grenzen. Deshalb schreibt jeder Durchlauf
+die gemessene Fremdlast in das Protokoll, damit sie mit Rückmeldungen von Testern nachgestellt werden können.
+
+Folgen eines gestörten Durchlaufs:
 
 - Er zählt weder als bestanden noch als durchgefallen, erscheint so im Verlauf des Kerns und wird wiederholt.
+- Nach **drei gestörten Durchläufen hintereinander** pausiert der Lauf, wartet, bis der Rechner frei ist, und meldet es,
+  statt Durchläufe zu verbrennen.
 - Ein **Fehler** in einem gestörten Durchlauf bleibt ein Fehler, denn er ist echt. Er wird als „unter fremder Last"
   gekennzeichnet, weil die Ursache unklar ist.
 - Tiefe 1 sagt es in einem Satz: „Der Rechner war nicht frei, dieser Durchlauf zählt nicht."
@@ -180,10 +201,11 @@ Die Zahlen (Zähler, Obergrenze, Takt der Messwerttabelle) sind offen und gehen 
 3. **Format der Plan-Datei:** TOML, weil von Hand lesbar und kommentierbar, die 1.x-Dateien sind JSON.
 4. **CoreCycler-Konfiguration lesen?** Es würde Profis den Wechsel leicht machen. Umfang ungeklärt.
 5. **Wie viel Fachsprache in Tiefe 1?** Vorschlag: „Offset" und „Kern" ja, „WHEA", „APIC", „FFT" erst ab Tiefe 2.
-6. **Start-Auslöser nach einem Absturz:** Anmeldung (heute) oder Systemstart? Ohne Auto-Login hilft nur der Systemstart,
-   das Programm läuft dann aber ohne angemeldeten Nutzer mit höchsten Rechten. Das ist zu klären, bevor es gebaut wird.
-7. **Schwelle für „gestört":** Welche Fremdlast ist noch ungestört (ein Hintergrunddienst ja, ein Spiel nein)? Braucht
-   Messungen auf echten Rechnern.
+6. ~~Start-Auslöser nach einem Absturz~~ **Entschieden: Anmeldung.** Systemstart höchstens als Angebot mit ausdrücklicher
+   Nachfrage vorher, nie als Standard. Ohne Auto-Login (das das Programm nicht einrichtet) bleibt der Rechner nach einem
+   Absturz am Anmeldebildschirm stehen. Die Bereitschaftsprüfung sagt das vorher.
+7. ~~Schwelle für „gestört"~~ **Startwerte festgelegt** (5 % / 15 % / 40 %, Herleitung oben). Zu prüfen bleibt, ob ein Spiel
+   darüber liegt, und wie die Werte auf anderen Rechnern ausfallen. Das Protokoll liefert dafür die Messwerte.
 8. **Zahlen für das Weitermachen und die Messwerttabelle** (Zähler, Obergrenze, Takt): Rückmeldung von rensus898 abwarten.
 
 ## Prüfstein
