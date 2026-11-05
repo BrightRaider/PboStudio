@@ -136,9 +136,13 @@ Der Durchlauf ist **„gestört"**, sobald **eine** dieser Bedingungen erfüllt 
 *Herleitung.* Gemessen auf einem Ryzen 7 5800X3D (16 logische Prozessoren), 30 Sekunden normaler Alltag mit Browser,
 Entwicklungsumgebung und Sprachchat, im Sekundentakt: Gesamtlast im Mittel **6,0 %**, höchster Sekundenwert **15,3 %**; je
 logischem Prozessor im Mittel 1,8 bis 17,2 %, einzelne Sekunden bis 93 %. Die Schwellen liegen mit Abstand über diesem
-Alltag und gelten für **gleitende Mittelwerte**, nicht für Spitzen, damit ein kurzer Ausschlag nichts stört. Ein Spiel, das
-einzelne Kerne dauerhaft auslastet, sollte darüber liegen; **das ist nicht gemessen**, es lief kein Spiel. Es ist eine
-Messung auf einem Rechner: Die Zahlen sind Annahmen mit Abstand, keine gemessenen Grenzen. Deshalb schreibt jeder Durchlauf
+Alltag und gelten für **gleitende Mittelwerte**, nicht für Spitzen, damit ein kurzer Ausschlag nichts stört. Ein Spiel liegt
+darüber, **gemessen mit League of Legends in einer laufenden Partie** (zweite Messung, 30 Sekunden im Sekundentakt):
+Gesamtlast im Mittel **31,4 %**, gleitendes 10-s-Mittel **29,6 bis 33,9 %**; sechs von 16 Threads über 40 % (einer dauerhaft
+bei 100 %), alle acht Kerne über 5 %. Der Durchlauf wäre damit nach **allen drei** Bedingungen gestört, und der Abstand zum
+Alltag (6,0 %) beträgt etwa das Fünffache. ARC Raiders ist nicht gemessen; nach Angabe des Eigentümers lastet es den
+Prozessor voll aus. Die Liste der Prozesse im Messfenster ist unvollständig (geschützte Prozesse und Kernelzeit fehlen): Die
+benannten Prozesse erklären etwa 15 der 31 Prozentpunkte. Es sind Messungen auf einem Rechner: Die Zahlen sind Annahmen mit Abstand, keine gemessenen Grenzen. Deshalb schreibt jeder Durchlauf
 die gemessene Fremdlast in das Protokoll, damit sie mit Rückmeldungen von Testern nachgestellt werden können.
 
 Folgen eines gestörten Durchlaufs:
@@ -204,8 +208,9 @@ Die Zahlen (Zähler, Obergrenze, Takt der Messwerttabelle) sind offen und gehen 
 6. ~~Start-Auslöser nach einem Absturz~~ **Entschieden: Anmeldung.** Systemstart höchstens als Angebot mit ausdrücklicher
    Nachfrage vorher, nie als Standard. Ohne Auto-Login (das das Programm nicht einrichtet) bleibt der Rechner nach einem
    Absturz am Anmeldebildschirm stehen. Die Bereitschaftsprüfung sagt das vorher.
-7. ~~Schwelle für „gestört"~~ **Startwerte festgelegt** (5 % / 15 % / 40 %, Herleitung oben). Zu prüfen bleibt, ob ein Spiel
-   darüber liegt, und wie die Werte auf anderen Rechnern ausfallen. Das Protokoll liefert dafür die Messwerte.
+7. ~~Schwelle für „gestört"~~ **Startwerte festgelegt** (5 % / 15 % / 40 %, Herleitung oben). Ein Spiel liegt
+   darüber (League of Legends, gemessen). Zu prüfen bleibt, wie die Werte auf anderen Rechnern ausfallen und wo leichtere
+   Last liegt, etwa Videowiedergabe oder ein Browser mit vielen Tabs. Das Protokoll liefert dafür die Messwerte.
 8. **Zahlen für das Weitermachen und die Messwerttabelle** (Zähler, Obergrenze, Takt): Rückmeldung von rensus898 abwarten.
 
 ## Prüfstein
