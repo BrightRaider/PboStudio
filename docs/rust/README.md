@@ -68,7 +68,7 @@ angeboten haben.
 
 ## Invarianten, die der Neubau halten muss
 
-Aus der Durchsicht von 1.1.2. Jede hat heute einen C#-Test und bekommt einen Testvektor (Phase 1).
+Aus der Durchsicht von 1.1.2. Jede hat heute einen C#-Test und bekommt einen Testvektor (E1).
 
 | # | Invariante | Heute geprüft durch |
 |---|---|---|
@@ -87,20 +87,32 @@ Aus der Durchsicht von 1.1.2. Jede hat heute einen C#-Test und bekommt einen Tes
 | I13 | Der Auto-Durchlauf endet (Stillstandserkennung, Abbruchkriterium). | `CampaignSimulationTests` |
 | I14 | Tiefe = Standard ∪ Beleg des Prozessors ∪ Nutzerwunsch; zurückgeholt, wenn ein Schreiben nicht hält; pro BIOS gemerkt. | `CurveOptimizerRangeTests` |
 
-## Phasen und Ausstiegskriterien
+## Etappen und Ausstiegskriterien
 
-Aufwand nur relativ (S/M/L), bewusst ohne Termine. Jede Phase endet an einem **Gate**: Besteht es nicht,
-wird angehalten und neu entschieden, nicht weitergebaut.
+Aufwand nur relativ (S/M/L), bewusst ohne Termine. Jede Etappe endet an einem **Gate**: Besteht es nicht, wird angehalten und
+neu entschieden, nicht weitergebaut. **Jede Etappe liefert etwas, das auf echter Hardware läuft und ein anderer testen kann**,
+nicht nur eine fertige Schicht. Das Riskanteste, das Hardwarewissen für Zen 4 und 5, kommt zuerst; der erste Nutzen früh.
+(Frühere Fassung dieses Plans: Phasen 0 bis 6. Die SMU-Schicht stand dort hinter dem Schnelltest, der sie braucht.)
 
-| Phase | Inhalt | Aufwand | Gate |
+| Etappe | Inhalt | Aufwand | Gate |
 |---|---|---|---|
-| **0. Prototyp** | Rust-Programm auf der 5800X3D: PawnIO öffnen, Module laden; CO aller Kerne lesen; PM-Tabelle (Temperatur/PPT); Topologie und APIC-Tabelle; Kindprozess im Job-Objekt mit Affinität starten und die Auslastung messen. | S | **G0:** gelesene Werte *identisch* zur C#-Ausgabe (CO −20/−25/−30/−30/−28/−30/−30/−30, Telemetrie, 16 APIC-Ids), Datei < 3 MB. **Nicht bestanden ⇒ Plan wird zu Weg A.** |
-| **1. Spezifikation** | Die 453 Testfälle und die Invarianten werden zu sprachneutralen Testvektoren (JSON). C# führt sie aus. UX-Spezifikation schreiben. | M | **G1:** C# besteht alle Vektoren; Lückenliste der Invarianten ohne Vektor ist leer. |
-| **2. Kern** | `pbo-core` rein (ohne Betriebssystem): Empfehlung, Auto-Durchlauf, Schätzer, Tuner, Gedächtnis, Tiefe, Runner-Zustandsmaschine mit Attrappen-Engine; Dateiformate kompatibel zu 1.x. | M | **G2:** alle Vektoren in Rust grün; ein simulierter Durchlauf endet wie in C#. |
-| **3. Windows-Schicht** | Prozess/Job/Affinität, Engines, Log-Lesen, WHEA, Topologie, Downloads, CLI. | L | **G3:** ein vollständiger Schnelltest per CLI auf der 5800X3D mit gleichem Ergebnis wie 1.x, plus Absturzprobe (Prozess beenden ⇒ korrekte Wiederaufnahme). **Ab hier ist C# 1.x nur noch Fehlerkorrekturen.** |
-| **4. SMU** | CO lesen/schreiben mit Rücklesen, PM-Tabellen pro Familie datengetrieben, Prüfstatus. | L (Risiko) | **G4:** Zen 3 geprüft (Ihr Gerät); Zen 4 durch einen Tester **oder** als „ungeprüft" ausgeliefert und so beschriftet. |
-| **5. Oberfläche** | Die drei Tabs, Kernliste, Telemetrie, Assistent. Toolkit nach [ADR-0009](adr/0009-oberflaeche.md). | L | **G5:** jemand, der das Programm nie gesehen hat, startet ohne Hilfe einen sinnvollen Lauf. |
-| **6. Verteilung** | Eine EXE, Aktualisierung, Engines als geprüfte Module, Import von `runs/`. Beta der Rust-Fassung als eigener Kanal. | M | **G6:** Update von der C#- auf die Rust-Fassung behält Einstellungen, Gedächtnis und laufenden Durchlauf. |
+| **E0 Beweis** | Rust-Prototyp auf der 5800X3D: PawnIO öffnen, Module laden; CO aller Kerne lesen; PM-Tabelle (Temperatur, PPT, TDC, EDC); Topologie und APIC-Tabelle; Kernspannung (SVI2-Telemetrie und Kern-VID); ein Kindprozess im Job-Objekt mit Affinität und gemessener Auslastung. Dazu **`pbo diag`**, nur lesend, schreibt eine Datei, die auch Tester auf Zen 4 und 5 ausführen können. | S | **G0:** gelesene Werte *identisch* zur C#-Ausgabe (CO −20/−25/−30/−30/−28/−30/−30/−30, Telemetrie, 16 APIC-Ids), Datei < 3 MB. **Nicht bestanden ⇒ Plan wird zu Weg A.** |
+| **E1 Spezifikation** | Die 453 Testfälle und die Invarianten werden zu sprachneutralen Testvektoren (JSON) in **zwei Arten**: `parity` (C# muss sie bestehen) und `new` (nur Rust: Absturzbehandlung, Protokollregel, „gestört", flache Planform). Das Bedienkonzept liegt in `spec/ux.md`. | M | **G1:** C# besteht alle `parity`-Vektoren; die Lückenliste der Invarianten ohne Vektor ist leer. |
+| **E2 Kern** | `pbo-core` rein (ohne Betriebssystem) und `pbo-app` (ohne Globals, serialisierbare Typen, [ADR-0014](adr/0014-einbettbar.md)): Plan, Empfehlung, Auto-Durchlauf, Schätzer, Tuner, Gedächtnis, Tiefe, Wiederaufnahme, Runner-Zustandsmaschine mit Attrappen; Dateiformate kompatibel zu 1.x. | M | **G2:** alle Vektoren (`parity` und `new`) in Rust grün; ein simulierter Durchlauf endet wie in C#. |
+| **E3 Windows-Schicht und Kommandozeile** | Prozess/Job/Affinität, Engines, Log-Lesen, WHEA, Dateien, **SMU für Zen 3** (CO lesen und schreiben mit Rücklesen), Tagesprotokoll, Messwerttabelle, `pbo run`, Wiederaufnahme per Aufgabe bei der Anmeldung (Betriebsart A). | L | **G3:** ein vollständiger Schnelltest per CLI auf der 5800X3D mit gleichem Ergebnis wie 1.x, plus Absturzprobe (Prozess beenden, Neustart ⇒ Wiederaufnahme mit den bewährten Werten). **Ab hier ist C# nur noch Fehlerkorrekturen.** Erste externe Beta per CLI auf Zen 4. |
+| **E4 Familien** | Zen 4 und 5 als Daten mit Prüfstatus (`families.toml`), Kernspannung und Tiefe je Familie, Selbsttest. | M (Risiko) | **G4:** Zen 3 geprüft; Zen 4 durch einen Tester **oder** als „ungeprüft" ausgeliefert und so beschriftet. |
+| **E5 Oberfläche** | egui nach `spec/ux.md` ([ADR-0009](adr/0009-oberflaeche.md)), in Scheiben: (a) Einfach, Ergebnis, BIOS-Abgleich; (b) Anpassen mit Plan, Kernliste und Testliste; (c) Experte und Kerndetails; (d) Bereitschaftsprüfung, Selbsttest, Einrichtung. Eine Vorschau je Zustand. | L | **G5:** jemand, der das Programm nie gesehen hat, startet ohne Hilfe einen sinnvollen Lauf; jeder Zustand hat eine Vorschau mit Referenzbild. |
+| **E6 Verteilung** | Eine EXE, Aktualisierung, Engines als geprüfte Module, Import von `runs/` und `engines/runs/`, Abschnitt „Sicherheit und Verträglichkeit" in der README, Beta-Kanal. Die Rust-Fassung ersetzt die C#-App. | M | **G6:** Update von der C#- auf die Rust-Fassung behält Einstellungen, Gedächtnis und laufenden Durchlauf; die Offenlegung steht in der README. |
+| **E7 Helfer** | Helferprozess mit Rechten, Pipe, mehrere Fronten, Betriebsart B ([ADR-0014](adr/0014-einbettbar.md)). | M | **G7:** eine Nacht ohne Aufsicht mit zwei provozierten Abstürzen; die Front beendet sich mitten im Lauf, der Lauf geht weiter. |
+| **E8 Modul** | Neutraler Beispielgast und die Prüfungen aus [ADR-0014](adr/0014-einbettbar.md). Der Adapter entsteht im privaten Projekt. | S bis M | **G8:** der Beispielgast lädt und steuert; Ladetest; Neustarttest. |
+
+**Reihenfolge von Oberfläche und Modul:** Die Oberfläche kommt zuerst (E5 vor E8). `pbo` ist das Referenzprogramm und das
+Testbett, und das Modul wird danach billig, weil Kern, Anwendungsschicht und Helfer dann stehen. **Verteilung vor Helfer**
+(E6 vor E7): Die Rust-Fassung kann die C#-App ersetzen, ohne dass der Helfer fertig ist; die unbeaufsichtigte Nacht läuft
+schon in E3 über die Aufgabe bei der Anmeldung. Der Helfer wird nur für das Modul gebraucht.
+
+**Vektorarten:** Ein `parity`-Vektor beschreibt, was C# heute tut und Rust gleich tun muss. Ein `new`-Vektor beschreibt
+Verhalten, das erst Rust bekommt. Ohne die Trennung würde die Forderung „C# besteht alle Vektoren" das neue Verhalten verbieten.
 
 ## Risiken
 
@@ -109,7 +121,7 @@ wird angehalten und neu entschieden, nicht weitergebaut.
 | Hardwarewissen Zen 4/5 geht verloren | falsche Telemetrie, falsche Kernzuordnung | Prototyp G0; datengetriebene Tabellen mit Herkunft; Prüfstatus sichtbar; Tester aus den Issues |
 | Regression „bestanden, ohne getestet" | der schlimmste Fehler, den das Programm haben kann | Invarianten als Vektoren *vor* dem Neubau; Hardwareprobe an Gate G3 |
 | Zwei Codebasen | doppelte Arbeit, Auseinanderlaufen | C# ab G3 eingefroren; gemeinsame Vektoren halten beide ehrlich |
-| egui hat keine fertige Kernliste mit Zahlenfeldern und keinen Graphen | neue Bausteine nötig, schwächere Barrierefreiheit | Bausteine früh in Phase 5 mit Vorschau bauen ([ADR-0009](adr/0009-oberflaeche.md)); Aussehen selbst ist schon fertig |
+| egui hat keine fertige Kernliste mit Zahlenfeldern und keinen Graphen | neue Bausteine nötig, schwächere Barrierefreiheit | Bausteine früh in E5 mit Vorschau bauen ([ADR-0009](adr/0009-oberflaeche.md)); Aussehen selbst ist schon fertig |
 | Virenscanner | Fehlalarme bei Treiber + Administrator | kleine EXE, **keine Code-Signatur** (Entscheidung des Eigentümers), Prüfsummen im Release, Einreichung bei Anbietern |
 | Lizenz | abgeleitete Daten aus GPL-Quellen | GPL-3.0 beibehalten, Herkunft vermerken ([ADR-0013](adr/0013-lizenz-und-herkunft.md)) |
 

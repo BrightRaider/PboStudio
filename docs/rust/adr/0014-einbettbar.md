@@ -43,7 +43,7 @@ des Programms:
     die Absturzbehandlung nach der Anmeldung.
 
   Die Anwendungsschicht kennt nur ein **Backend-Merkmal**. Ob dahinter ein Kanal im selben Prozess oder die Pipe zum Helfer
-  steckt, merken weder Oberfläche noch Kern. **Gebaut wird (A) zuerst** (Phasen 2 bis 5), (B) kommt in Phase 6 dazu, ohne
+  steckt, merken weder Oberfläche noch Kern. **Gebaut wird (A) zuerst** (Etappen E2 bis E6), (B) kommt in E7 dazu, ohne
   dass sich Oberfläche oder Kern ändern.
 - **Die Verdrahtung liegt in den Programmen, nicht in `pbo-app`.** `pbo-app` hängt nur von `pbo-core` und dessen Merkmalen ab.
   Das Programm `pbo` steckt `pbo-smu`, `pbo-engines`, `pbo-os` und `pbo-store` an; ein Gast steckt stattdessen den Client für
@@ -150,19 +150,18 @@ Gastgeber, der ein größeres Publikum erreicht, etwa Spieler. Der Grundsatz daf
 
 ## Prüfung
 
-Gate **G6** bekommt einen Punkt: Der Abschnitt „Sicherheit und Verträglichkeit" steht in der README, **bevor** die erste
-Rust-Fassung oder ein Modul veröffentlicht wird.
+Die Prüfungen verteilen sich auf die Gates der Etappen ([README](../README.md)):
 
-Gate **G5** bekommt fünf Punkte:
-
-- **`pbo.exe` läuft eigenständig**, in beiden Betriebsarten, ohne irgendeinen Gast. Ein CI-Lauf baut und testet den Workspace
-  **ohne** Gast.
-- **Der neutrale Beispielgast** (`examples/embed`) wird gebaut und von einem Testprogramm geladen. Es prüft: Befehle, Ereignisse
-  und Statuszeile laufen; **Zerstören beendet alle Threads**; ein Panic im Adapter wirft den Lader nicht um.
-- Ein **Neustarttest:** Der Gastgeber beendet sich mitten im Lauf (simuliert), der Test läuft im Helfer weiter, und der neue
-  Gast findet den Zustand wieder.
-- Eine **CI-Prüfung:** In `pbo-core` und `pbo-app` kein `static mut`, kein `process::exit`, keine Initialisierung globaler
-  Protokollierung.
-- Eine **Prüfung auf Durchsickern:** Vor jedem Commit sucht eine lokale Prüfung (Pre-Commit-Hook beim Eigentümer) im
-  Änderungsstand nach Namen und Pfaden, die auf einen bestimmten Gastgeber hindeuten, und bricht ab, wenn sie etwas findet.
+- **Gate G5 (Oberfläche):** `pbo.exe` läuft **eigenständig**, in Betriebsart A, ohne irgendeinen Gast. Ein CI-Lauf baut und
+  testet den Workspace **ohne** Gast. Dazu eine **CI-Prüfung:** In `pbo-core` und `pbo-app` kein `static mut`, kein
+  `process::exit`, keine Initialisierung globaler Protokollierung.
+- **Gate G6 (Verteilung):** Der Abschnitt „Sicherheit und Verträglichkeit" steht in der README, **bevor** die erste Rust-Fassung
+  oder ein Modul veröffentlicht wird.
+- **Gate G7 (Helfer):** `pbo.exe` läuft auch in Betriebsart B. Ein **Neustarttest:** Der Gastgeber beendet sich mitten im Lauf
+  (simuliert), der Test läuft im Helfer weiter, und der neue Gast findet den Zustand wieder.
+- **Gate G8 (Modul):** **Der neutrale Beispielgast** (`examples/embed`) wird gebaut und von einem Testprogramm geladen. Es
+  prüft: Befehle, Ereignisse und Statuszeile laufen; **Zerstören beendet alle Threads**; ein Panic im Adapter wirft den Lader
+  nicht um.
+- **Immer:** Eine **Prüfung auf Durchsickern.** Vor jedem Commit sucht eine lokale Prüfung (Pre-Commit-Hook beim Eigentümer)
+  im Änderungsstand nach Namen und Pfaden, die auf einen bestimmten Gastgeber hindeuten, und bricht ab, wenn sie etwas findet.
   Die **Namensliste liegt nicht im Repository**, sondern nur beim Eigentümer, denn sie wäre selbst ein Verrat.

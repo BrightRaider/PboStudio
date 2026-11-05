@@ -16,7 +16,7 @@ ließ; zwei Abbruch-Knöpfe auf einem Feld. Jeder davon wäre als Zustandsüberg
    `Wird beendet`, `Fertig`, `Angehalten`) und Übergänge sind Daten. Ungültige Übergänge (Start im Zustand `Vorbereitung`)
    sind im Typ unmöglich oder liefern einen Fehler, aber nie einen zweiten Lauf.
 2. **Oberfläche und CLI sind gleichrangige Clients.** Beide senden Befehle und lesen Zustand; keine entscheidet etwas.
-3. **Die CLI kommt zuerst** (Phase 3). Alles, was ein Fenster kann, kann die CLI: Auto-Durchlauf, Einzeltest, Werte lesen,
+3. **Die CLI kommt zuerst** (Etappe E3). Alles, was ein Fenster kann, kann die CLI: Auto-Durchlauf, Einzeltest, Werte lesen,
    BIOS-Liste, Bericht. Das macht Fehlerberichte reproduzierbar („führe `pbo auto --dry-run` aus und schicke die Ausgabe").
 4. **Die Sichtbarkeit von Bedienelementen ist eine Funktion des Zustands**, nicht Code im Fenster (`AutoPanel.Describe` in C#
    war der erste Schritt dahin und hat sofort einen doppelten Abbruch-Knopf gefunden).
