@@ -13,6 +13,8 @@
 
 pub mod coremap;
 pub mod depth;
+pub mod duration;
+pub mod logtail;
 
 /// Conversions between the voltage codes the processor reports and volts.
 pub mod voltage {

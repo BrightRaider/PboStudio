@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "area": "duration-format",
+  "kind": "parity",
+  "invariants": ["I10"],
+  "source": "tests/PboStudio.Tests/DurationFormatTests.cs",
+  "about": "Hours and minutes that keep counting past a day. The built-in 'h:mm' prints the hours component (0 to 23), so a day came out as 0:00. Input is a number of seconds; a negative span shows as zero; minutes are truncated, never rounded.",
+  "cases": [
+    { "name": "zero", "function": "hours", "input": { "seconds": 0 }, "expected": "0:00" },
+    { "name": "five minutes", "function": "hours", "input": { "seconds": 300 }, "expected": "0:05" },
+    { "name": "two hours twenty-four", "function": "hours", "input": { "seconds": 8640 }, "expected": "2:24" },
+    { "name": "just under a day", "function": "hours", "input": { "seconds": 86340 }, "expected": "23:59" },
+    { "name": "exactly a day keeps counting", "function": "hours", "input": { "seconds": 86400 }, "expected": "24:00" },
+    { "name": "a day, two hours and five minutes", "function": "hours", "input": { "seconds": 93900 }, "expected": "26:05" },
+    { "name": "more than four days", "function": "hours", "input": { "seconds": 361800 }, "expected": "100:30" },
+    { "name": "a negative span is shown as zero", "function": "hours", "input": { "seconds": -300 }, "expected": "0:00" },
+    { "name": "59 minutes 59 seconds is 0:59, not 1:00", "function": "hours", "input": { "seconds": 3599 }, "expected": "0:59" },
+
+    { "name": "nine seconds", "function": "hoursSeconds", "input": { "seconds": 9 }, "expected": "0:00:09" },
+    { "name": "one hour two minutes three seconds", "function": "hoursSeconds", "input": { "seconds": 3723 }, "expected": "1:02:03" },
+    { "name": "past a day with seconds", "function": "hoursSeconds", "input": { "seconds": 90001 }, "expected": "25:00:01" },
+    { "name": "a negative span with seconds is shown as zero", "function": "hoursSeconds", "input": { "seconds": -1 }, "expected": "0:00:00" }
+  ]
+}

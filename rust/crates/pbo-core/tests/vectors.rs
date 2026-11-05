@@ -91,6 +91,30 @@ fn pm_read(input: &Value) -> Value {
     }
 }
 
+/// Plays the steps of a log-tail case against an in-memory "file".
+fn log_tail_poll(input: &Value) -> Value {
+    let mut tail = pbo_core::logtail::LogTail::default();
+    let mut file: Option<Vec<u8>> = Some(Vec::new());
+    let mut results = Vec::new();
+
+    for step in input["steps"].as_array().unwrap() {
+        if let Some(text) = step.get("append").and_then(Value::as_str) {
+            file.get_or_insert_with(Vec::new)
+                .extend_from_slice(text.as_bytes());
+        } else if let Some(text) = step.get("set").and_then(Value::as_str) {
+            file = Some(text.as_bytes().to_vec());
+        } else if step.get("remove").is_some() {
+            file = None;
+        } else if step.get("poll").is_some() {
+            let lines = tail.poll(file.as_deref());
+            results.push(json!({ "lines": lines, "offset": tail.offset }));
+        } else {
+            panic!("unknown step {step}");
+        }
+    }
+    Value::Array(results)
+}
+
 fn slot_pair(slot: pbo_core::coremap::Slot) -> Value {
     json!([slot.ccd, slot.slot])
 }
@@ -119,6 +143,13 @@ fn run(area: &str, function: &str, input: &Value) -> Option<Value> {
                 None => Value::Null,
             }
         }
+        ("duration-format", "hours") => json!(pbo_core::duration::hours(
+            input["seconds"].as_i64().unwrap()
+        )),
+        ("duration-format", "hoursSeconds") => json!(pbo_core::duration::hours_seconds(
+            input["seconds"].as_i64().unwrap()
+        )),
+        ("log-tail", "poll") => log_tail_poll(input),
         ("smu-core-map", "fallback") => match coremap::fallback(
             int(input, "core"),
             int(input, "ccdCount"),
