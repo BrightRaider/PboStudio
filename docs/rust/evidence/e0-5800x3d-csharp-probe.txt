@@ -1,0 +1,19 @@
+CPU        : AMD Ryzen 7 5800X3D 8-Core Processor
+Codename   : Vermeer   Family: FAMILY_19H
+SMU type   : TYPE_CPU3   SMU ver: 00384E00
+Topology   : 1 CCD / 1 CCX / 8 cores / 16 threads
+
+Curve Optimizer (read-only):
+  Core  0 [ccd 0 mask 0x00000000] :  -20  (raw 0xFFFFFFEC)
+  Core  1 [ccd 0 mask 0x00100000] :  -25  (raw 0xFFFFFFE7)
+  Core  2 [ccd 0 mask 0x00200000] :  -30  (raw 0xFFFFFFE2)
+  Core  3 [ccd 0 mask 0x00300000] :  -30  (raw 0xFFFFFFE2)
+  Core  4 [ccd 0 mask 0x00400000] :  -28  (raw 0xFFFFFFE4)
+  Core  5 [ccd 0 mask 0x00500000] :  -30  (raw 0xFFFFFFE2)
+  Core  6 [ccd 0 mask 0x00600000] :  -30  (raw 0xFFFFFFE2)
+  Core  7 [ccd 0 mask 0x00700000] :  -30  (raw 0xFFFFFFE2)
+
+PBO:
+  Scalar        : 1x
+  fused limits  : -- no response --
+  FMax / boost  : 4550 MHz

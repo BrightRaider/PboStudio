@@ -1,6 +1,6 @@
 # ADR-0001: Neubau in Rust statt Aufräumen in C#
 
-- **Status:** Vorgeschlagen — wird nach Gate G0 bestätigt oder verworfen
+- **Status:** Bestätigt nach Gate G0 am 2026-11-05 ([Ergebnis](../stages/E0.md)); Rückfallweg A bleibt für spätere Gates
 - **Datum:** 2026-11-04
 
 ## Kontext

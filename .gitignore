@@ -19,3 +19,6 @@ external/ZenStates-Core/.git.upstream/
 
 # Release packaging output
 release/
+
+# Rust build output
+rust/target/

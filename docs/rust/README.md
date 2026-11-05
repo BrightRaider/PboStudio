@@ -114,6 +114,13 @@ schon in E3 über die Aufgabe bei der Anmeldung. Der Helfer wird nur für das Mo
 **Vektorarten:** Ein `parity`-Vektor beschreibt, was C# heute tut und Rust gleich tun muss. Ein `new`-Vektor beschreibt
 Verhalten, das erst Rust bekommt. Ohne die Trennung würde die Forderung „C# besteht alle Vektoren" das neue Verhalten verbieten.
 
+**Stand der Etappen**
+
+| Etappe | Stand |
+|---|---|
+| E0 Beweis | **abgeschlossen, Gate G0 bestanden am 2026-11-05** ([Ergebnis und Belege](stages/E0.md)) |
+| E1 bis E8 | offen |
+
 ## Risiken
 
 | Risiko | Wirkung | Gegenmaßnahme |

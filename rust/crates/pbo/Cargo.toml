@@ -1,0 +1,19 @@
+[package]
+name = "pbo"
+description = "PboStudio command line. Stage E0: `pbo diag`, read-only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pbo"
+path = "src/main.rs"
+
+[dependencies]
+pbo-core = { path = "../pbo-core" }
+pbo-os = { path = "../pbo-os" }
+pbo-smu = { path = "../pbo-smu" }
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+] }

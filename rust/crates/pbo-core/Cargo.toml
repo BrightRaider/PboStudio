@@ -1,0 +1,9 @@
+[package]
+name = "pbo-core"
+description = "PboStudio pure logic: no operating system, no files, no clock, no dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Nothing here, on purpose. `cargo tree -p pbo-core` must show only this crate (ADR-0003).
+[dependencies]

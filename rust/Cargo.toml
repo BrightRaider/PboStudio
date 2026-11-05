@@ -1,0 +1,31 @@
+# PboStudio in Rust. Plan and decisions: docs/rust (README, ADRs, spec/ux.md).
+#
+# Layers, arrows point down only (ADR-0003):
+#   pbo (program)  ->  pbo-smu, pbo-os  ->  pbo-core (pure: no operating system, no files, no clock)
+#
+# This is stage E0, the proof: read-only access on real hardware and nothing else.
+[workspace]
+resolver = "2"
+members = [
+    "crates/pbo-core",
+    "crates/pbo-os",
+    "crates/pbo-smu",
+    "crates/pbo",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/BrightRaider/PboStudio"
+
+[workspace.dependencies]
+windows-sys = "0.59"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+# unwind, not abort: the guards that restore parked cores and values only run when a panic unwinds (ADR-0006).
+panic = "unwind"

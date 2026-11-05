@@ -1,0 +1,59 @@
+pbo diag 0.0.1  (stage E0, read-only: nothing is written to the processor)
+Elevated: yes
+
+== Processor (CPUID)
+Name        : AMD Ryzen 7 5800X3D 8-Core Processor
+Family/model: 0x19 / 0x21, stepping 2   -> Zen 3 (Vermeer)  (checked on hardware)
+Topology    : 16 logical processors, 2 thread(s) per core, 8 cores
+
+== APIC ids (CPUID leaf 0xB, thread pinned to each processor)
+  0:0  1:1  2:2  3:3  4:4  5:5  6:6  7:7  8:8  9:9  10:10  11:11  12:12  13:13  14:14  15:15
+
+== Child process in a job object with a restricted affinity
+  child pid 22452 with 2 busy threads, limited to logical processor 2: used 1.00 cores
+  affinity holds (about one core although two threads wanted to run)
+
+== Driver (PawnIO)
+  module AMDFamily17 loaded
+  module RyzenSMU loaded
+
+== SMU and PM table
+  SMU version      : 0x00384E00
+  PM table version : 0x00380905   at DRAM 0xDAD50000
+  table size       : 0x5D0 bytes
+  table read       : 372 values
+  layout           : Zen 3 (checked on hardware)
+  temperature      : 53.1 °C   (limit 90.0 °C)
+  PPT              : 42.9 W   (limit 142.0 W)
+  TDC              : 15.3 A   (limit 95.0 A)
+  EDC              : 104.9 A   (limit 130.0 A)
+
+== Chiplets and cores (fuses over SMN)
+  fuse registers 0x5D218 and 0x5D21C, core map base 0x30081D98
+  present 0x80400000 down 0x3F  -> enable map 0b1, disable map 0b11111110, 1 chiplet(s)
+  chiplet 0: core disable map 0b00000000 -> 8 enabled cores
+  SMU slots (chiplet.slot) in order: 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7
+
+== Curve Optimizer (read from the SMU, per core)
+  message 0x7C
+  core  0 (chiplet 0, slot 0, mask 0x0): -20
+  core  1 (chiplet 0, slot 1, mask 0x100000): -25
+  core  2 (chiplet 0, slot 2, mask 0x200000): -30
+  core  3 (chiplet 0, slot 3, mask 0x300000): -30
+  core  4 (chiplet 0, slot 4, mask 0x400000): -28
+  core  5 (chiplet 0, slot 5, mask 0x500000): -30
+  core  6 (chiplet 0, slot 6, mask 0x600000): -30
+  core  7 (chiplet 0, slot 7, mask 0x700000): -30
+  all: -20 -25 -30 -30 -28 -30 -30 -30
+
+== Core voltage
+  SVI2 telemetry: core plane 0x5A010, SoC plane 0x5A00C
+  sample 0: core 1.219 V (raw 0x01350016)   SoC 1.113 V
+    per-core VID: c0: 1.212V | c1: 1.212V | c2: 1.212V | c3: 1.212V | c4: 1.212V | c5: 1.212V | c6: 1.212V | c7: 1.212V
+  sample 1: core 1.219 V (raw 0x01350016)   SoC 1.113 V
+    per-core VID: c0: 1.212V | c1: 1.212V | c2: 1.212V | c3: 1.212V | c4: 1.212V | c5: 1.212V | c6: 1.212V | c7: 1.212V
+  sample 2: core 1.156 V (raw 0x013F001A)   SoC 1.113 V
+    per-core VID: c0: 1.156V | c1: 1.156V | c2: 1.156V | c3: 1.156V | c4: 1.156V | c5: 1.156V | c6: 1.156V | c7: 1.156V
+  (the clock in the same register is the requested state, not the measured clock, and is not shown)
+
+0 problem(s). 
