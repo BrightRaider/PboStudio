@@ -79,7 +79,9 @@ des Programms:
 5. **Die Rechte liegen im Helfer.** Der Gast spricht über die Pipe mit ihm, mit denselben Nachrichten wie die Oberfläche von
    `pbo`. Der Gastgeber braucht keine Administratorrechte. Der Helfer wird erhöht gestartet (UAC) und nach einem Absturz bei
    der **Anmeldung** wieder angestoßen (`spec/ux.md`). Er besitzt **Plan und Zustand** und läuft weiter, wenn der Gastgeber
-   sich beendet oder neu startet. **Ein Neustart des Gastgebers beendet also keinen laufenden Test.**
+   sich beendet oder neu startet. **Ein Neustart des Gastgebers beendet also keinen laufenden Test.** Der Helfer nimmt **mehrere Fronten gleichzeitig** an,
+   etwa das Fenster von `pbo` und das Modul im Gastgeber. Alle sehen denselben Zustand, Befehle werden nacheinander
+   verarbeitet, und eine Front kann jederzeit wegbrechen und wiederkommen.
 6. **Der Gast arbeitet mit einem installierten PboStudio.** Der Helfer ist dann `pbo.exe --helper` aus der normalen
    Installation, der Gast liefert **keinen** Hardwarecode mit, und fehlt PboStudio, zeigt er einen Knopf zum Herunterladen. So
    landet kein GPL-Code im Aktualisierungsweg des Gastgebers.
@@ -122,7 +124,28 @@ GPL-Teil getrennt ist.
   ([ADR-0008](0008-persistenz-und-wiederaufnahme.md), `spec/ux.md`).
 - Zusatz zu [ADR-0006](0006-prozesssteuerung.md): Die Wächter (`Drop`) leben im Helfer.
 
+## Risiken und Offenlegung
+
+Das Programm ändert Spannungskurven und nutzt einen Kernel-Treiber. Das gilt für `pbo` ebenso wie für ein Modul in einem
+Gastgeber, der ein größeres Publikum erreicht, etwa Spieler. Der Grundsatz dafür lautet: **Alles wird einmal klar und
+öffentlich gesagt, und die Entscheidung liegt beim Nutzer.** Kein wiederkehrender Warnhinweis, keine Bevormundung.
+
+- **Anti-Cheat.** Nicht untersucht. Der Treiber (PawnIO, signiert, LGPL-2.1, [ADR-0005](0005-smu-zugriff.md)) ist ein
+  allgemeiner Hardwarezugriff. Ob ein bestimmtes Anti-Cheat-System ihn beanstandet, ist unbekannt. PboStudio **verspricht keine
+  Verträglichkeit** und sagt öffentlich, dass das nicht geprüft ist. Wer das Modul lädt oder `pbo` startet, entscheidet das
+  selbst. Das Modul wird nicht vorausgesetzt, ein Gastgeber muss es nicht immer laden.
+- **Instabilität und Abstürze** gehören zum Zweck des Programms. Die Schutzmechanismen stehen in den Invarianten (Rücklesen,
+  Zurücknehmen, Absturzbehandlung). Erklärt wird es einmal, im Einrichtungsassistenten und in der README, nicht bei jedem Start.
+- **Mehr Nutzer, mehr Rückfragen.** Dagegen helfen eine genaue öffentliche Dokumentation, `pbo diag` ([ADR-0012](0012-pruefstrategie.md))
+  als Datei, die man anhängt, und der sichtbare Prüfstatus je Prozessorfamilie ([ADR-0005](0005-smu-zugriff.md)).
+- **Inhalt der Offenlegung** (Abschnitt „Sicherheit und Verträglichkeit" in der README): was der Treiber ist und woher er
+  kommt, welche Rechte das Programm braucht und warum, dass Werte live geschrieben und nach einem Neustart verworfen werden,
+  was an echter Hardware geprüft ist und was nicht, und was nicht untersucht wurde (Anti-Cheat).
+
 ## Prüfung
+
+Gate **G6** bekommt einen Punkt: Der Abschnitt „Sicherheit und Verträglichkeit" steht in der README, **bevor** die erste
+Rust-Fassung oder ein Modul veröffentlicht wird.
 
 Gate **G5** bekommt fünf Punkte:
 
