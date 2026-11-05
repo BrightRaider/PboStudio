@@ -51,14 +51,18 @@ angeboten haben.
 
 ## Ziele
 
-1. **CoreCycler in schön, einfach, besser.** Die Produktentscheidungen aus 1.1 bleiben das Produkt:
-   drei Tabs (Auto / Tests / Erweitert), eine Laufzeit über dem Startknopf, Erklärtexte in Tooltips, eine
-   Empfehlung statt vierzehn Profilen. Sie werden in Phase 1 als `docs/spec/ux.md` festgehalten.
+1. **CoreCycler in schön, einfach, besser.** Ein Plan statt drei Tabs mit verstecktem Zustand, einfach für jeden und mit
+   allen Möglichkeiten für den Profi: [`spec/ux.md`](spec/ux.md). Eine Laufzeit über dem Startknopf, Erklärtexte in
+   Tooltips und eine Empfehlung als Vorbelegung bleiben aus 1.1.
 2. **„Bestanden" heißt „getestet".** Die Invarianten unten sind der eigentliche Wert.
 3. **Messbar klein.** Zielwerte, abgeleitet von dem anderen Rust-Programm des Eigentümers, nicht versprochen: EXE ≤ 10 MB,
    Arbeitsspeicher im Leerlauf ≤ 60 MB, bereit in ≤ 1 s.
 4. **Auch ohne Fenster nutzbar** (CLI) — für Tests, für Fortgeschrittene und für Fehlerberichte.
 5. **Ehrlich über Prüfstatus:** pro Prozessorfamilie sichtbar, ob sie an echter Hardware geprüft wurde.
+6. **Eigenständig zuerst, zusätzlich schnell umbaubar:** `pbo.exe` funktioniert allein, ohne jeden Gastgeber. Die
+   Anwendungsschicht ist zugleich eine Bibliothek ohne Globals, die ein Gastgeberprogramm in sein eigenes Modul (DLL)
+   einbinden kann; die Rechte liegen in einem Helferprozess. Das Repository kennt keinen bestimmten Gastgeber
+   ([ADR-0014](adr/0014-einbettbar.md)).
 
 **Nicht-Ziele:** neue Funktionen vor der Parität; Linux; Aida64 (kostenpflichtig); ein eigener Treiber.
 

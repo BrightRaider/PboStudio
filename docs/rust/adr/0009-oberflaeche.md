@@ -34,7 +34,7 @@ Der Quelltext der anderen Programme des Eigentümers ist **privat und bleibt es*
 ## Entscheidung
 
 1. **Toolkit:** egui/eframe **0.29.1** (OpenGL über `glow`), `winit` 0.30. Die Version wird festgenagelt und nur bewusst
-   gewechselt.
+   gewechselt ([ADR-0014](0014-einbettbar.md): ein Gastgeber, der den Baustein direkt einbindet, braucht dieselbe).
 2. **Schriftdarstellung:** Heller Text auf dunklem Grund kann mit dem Standard-Renderer zu kräftig oder zu dünn wirken. Ein
    angepasster egui-Renderer (fremder Code, MIT oder Apache-2.0, mit einer kleinen Änderung an der Berechnung der
    Glyphendeckung) darf im öffentlichen Repository stehen, mit dem Lizenztext des Originals und einem Vermerk zur Änderung.

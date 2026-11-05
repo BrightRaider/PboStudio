@@ -13,7 +13,8 @@ Als Anforderung bleibt: ein Klick, mit Prüfsumme.
 
 ## Entscheidung
 
-1. **Eine EXE, nichts wird entpackt.** Zielwerte (abgeleitet, nicht versprochen): ≤ 10 MB, ≤ 60 MB Arbeitsspeicher im
+1. **Eine EXE, nichts wird entpackt.** Ein Gastgeber ([ADR-0014](0014-einbettbar.md)) bindet `pbo-app` in sein eigenes Modul ein; im
+   Release von PboStudio gibt es dafür kein zusätzliches Artefakt, und `pbo.exe` braucht keinen Gast. Zielwerte (abgeleitet, nicht versprochen): ≤ 10 MB, ≤ 60 MB Arbeitsspeicher im
    Leerlauf, bereit in ≤ 1 s. Profil: `lto`, `codegen-units = 1`, `strip`. **`panic` bleibt `unwind`** ([ADR-0006](0006-prozesssteuerung.md));
    die Größe wird mit beiden Einstellungen gemessen, und die Entscheidung folgt der Messung.
 2. **Engines (Prime95, y-cruncher) sind Module:** nur über https, nur von der Herstellerdomain, jedes mit festem SHA-256 für die

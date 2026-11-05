@@ -43,6 +43,12 @@ pbo-cli       ─┴─►  pbo-app   (Anwendungsfälle, Zustandsmaschine, Befeh
 
 - Der Compiler setzt durch, was in C# Disziplin war: kein Betriebssystemaufruf im Kern.
 - Mehr Dateien am Anfang; dafür ist die Oberfläche austauschbar ([ADR-0009](0009-oberflaeche.md)).
+- **Korrektur zur Zeichnung:** `pbo-app` hängt nur von `pbo-core` und dessen Merkmalen ab. Die vier unteren Crates
+  (`pbo-engines`, `pbo-smu`, `pbo-os`, `pbo-store`) werden **in den Programmen angesteckt**, nicht in `pbo-app`. Dadurch kann
+  ein anderes Programm dieselbe Anwendungsschicht mit anderen Anschlüssen benutzen.
+- Für die Einbettung in ein Gastgeberprogramm bindet dessen Modul (DLL, im privaten Projekt) `pbo-app` als Bibliothek ein, mit
+  einem Client für den Helfer. `pbo-core` und `pbo-app` enthalten keine GPL-abgeleiteten Teile. **Das Programm `pbo` braucht
+  keinen Gast** und funktioniert eigenständig: [ADR-0014](0014-einbettbar.md).
 
 ## Prüfung
 
