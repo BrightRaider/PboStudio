@@ -17,5 +17,5 @@ pub mod device;
 pub mod rsmu;
 
 pub use amd::AmdFamily17;
-pub use device::{Error, Module};
-pub use rsmu::RyzenSmu;
+pub use device::{driver_status, Error, Module};
+pub use rsmu::{Mailbox, MailboxError, RyzenSmu};

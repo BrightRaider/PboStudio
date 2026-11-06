@@ -1,0 +1,9 @@
+[package]
+name = "pbo-app"
+description = "PboStudio application state: the plan, the words, what the window may show. No window, no hardware."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pbo-core = { path = "../pbo-core" }
