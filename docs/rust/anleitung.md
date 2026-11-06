@@ -31,7 +31,7 @@ hat und was durchgefallen ist); rechts drei Reiter.
   von Auto und der Knopf. Alles andere ist **vorgewählt, passend zu deinem Prozessor**. Wer selbst eingreifen will, klickt unten
   auf **Feineinstellung**; der Knopf verschwindet, und es erscheinen drei Zeilen (mit **Zurück** oben rechts schließt man sie wieder): **Schritt** (wie weit der Wert pro Test sinkt,
   1 bis 5 Zähler), **Sicherheit** (der Abstand, den der Kern am Ende zu dem Wert behält, der noch hielt, 1 bis 5) und **Start bei**
-  (wo die Suche bei einem Kern ohne Wert beginnt: −10, −15 oder −20; ohne Wirkung, solange jeder Kern schon einen Wert hat).
+  (wo die Suche bei einem Kern ohne Wert beginnt: −10, −15 oder −20; ohne Wirkung, solange jeder Kern schon einen Wert hat). Dazu **Nach Absturz** (*Warten* oder *Weitermachen*, siehe "Über Nacht").
   Vorgewählt sind *Schnell*, Schritt 5, Sicherheit 3 und der Start des Prozessors (−20 bei X3D, sonst −15); bei *Gründlich* ist
   der Schritt 1. Die Zeiten rechnen mit deiner Wahl. Auto läuft in drei Schritten: prüfen, was die aktuellen Werte halten; jeden
   Kern absenken, bis er nachgibt; das Ergebnis unter jeder Lastart beweisen. Es geht in **beide Richtungen**: ein Kern, der auf
@@ -120,6 +120,27 @@ Die Werte, die das Programm schreibt, gelten bis zum Neustart. Dauerhaft sind si
    stehen. **Wie die Kerne gezählt werden, kann je Mainboard anders sein**; stimmt es nicht, sind zwei Kerne vertauscht.
 
 Das UEFI nimmt Werte nur in dem Bereich an, den der Prozessor erlaubt (bei Zen 3 bis −30).
+
+## Über Nacht und ohne Fenster
+
+- **`pbo auto`** macht auf der Befehlszeile dasselbe wie Auto im Fenster: prüfen, suchen, beweisen, eine Phase nach der anderen, bis
+  die Kampagne fertig ist (`--intensity fast|normal|thorough`, dazu `--step`, `--guardband`, `--start`, `--cores`). Es muss
+  als Administrator laufen wie alle Befehle.
+- **Selbst weitermachen nach einem Absturz** ist ausgeschaltet, solange man es nicht einschaltet: im Fenster in der
+  Feineinstellung *Nach Absturz: Weitermachen*, oder einmal `pbo autostart on --continue` (beides legt die Anmeldeaufgabe an).
+  Dann geschieht nach einem Absturz Folgendes: der Rechner startet, bei der Anmeldung kommen die **bewährten Werte** zurück, das
+  Programm sagt, welcher Kern abgestürzt ist, und **nach einer Minute** macht Auto dort weiter, wo es stand. Die Minute lässt sich mit
+  `pbo resume --cancel` beenden. **Höchstens dreimal hintereinander:** ein Kern, der den Rechner immer wieder abstürzen lässt,
+  soll keine Endlosschleife auslösen; danach wartet das Programm auf dich (`pbo whea` und `pbo knowledge` zeigen, was los war).
+- Damit das Ganze nachts ohne dich geht, muss der Rechner sich nach dem Neustart **selbst anmelden** und nicht schlafen gehen:
+  `pbo ready` prüft das (Anmeldeaufgabe, automatische Anmeldung, Ruhezustand, Speicherplatz, Temperatur).
+- **Was an der Hardware noch nicht gesehen ist:** das Weitermachen nach einem *echten* Absturz. Die Teile (Werte zurück, Zähler,
+  Wartezeit, Auto ohne Fenster) sind gebaut und geprüft, aber ein echter Absturz mit Neustart steht noch aus.
+- **`pbo report`** schreibt eine Datei `pbo-report.txt` neben das Programm: Fassung, was der Prozessor hält, was das Programm sich
+  gemerkt hat, die Machine Checks der letzten 90 Tage, wie Auto gestartet wurde und das Ende des Protokolls. Sie ist für
+  Fehlermeldungen gedacht; sieh sie dir an, bevor du sie anhängst (sie nennt Prozessor und BIOS-Version).
+- Kleinigkeiten für Tests: `--pause N` (Sekunden Ruhe zwischen zwei Kernen, damit der nächste kühl startet), `--yc-tests A,B,C`
+  und `--yc-memory MB` (die Tests von y-cruncher und sein Speicher je logischem Prozessor).
 
 ## Was das Programm auf den Prozessor schreibt
 

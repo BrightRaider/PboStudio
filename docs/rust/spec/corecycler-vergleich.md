@@ -29,14 +29,21 @@ Verhalten bei einem Fehler, Ton).
 | Startwerte, Schrittweite, Wiederholung des Kerns nach Fehler | da (aktuelle Werte, grob 3 / fein 1, die Suche prüft jeden Wert) |
 | Weitermachen nach einem Absturz | da: Aufgabe bei der Anmeldung und ein Knopf; der Absturz wird dem Kern angelastet, der unter Test stand |
 | Protokolldatei | da (ein Protokoll je Tag, endet um 06:00) |
+| Pause zwischen den Kernen (`delayBetweenCores`) | da: `--pause N` Sekunden Ruhe zwischen zwei Kernen, damit der nächste kühl startet |
+| y-cruncher: freie Liste der Tests, Speicher | da: `--yc-tests A,B,C` (die Namen von y-cruncher, geprüft) und `--yc-memory MB` je logischem Prozessor |
+| Ohne Fenster laufen lassen | da: `pbo auto` fährt die drei Phasen von Auto auf der Befehlszeile, eine nach der anderen, bis die Kampagne fertig ist |
+| Weitermachen nach einem Absturz **von allein** | da, auf Wunsch: `pbo autostart on --continue` (oder im Fenster, Feineinstellung, *Nach Absturz: Weitermachen*): bei der Anmeldung kommen die bewährten Werte zurück, dann macht Auto nach einer Minute Wartezeit (die man mit `pbo resume --cancel` beendet) weiter, höchstens dreimal hintereinander |
+| Eine Datei für Fehlermeldungen | `pbo report` schreibt `pbo-report.txt`: Fassung, Werte, Gedächtnis, Machine Checks, Start von Auto, Ende des Protokolls |
 | Prüfung auf neuere Fassung | da (`pbo update`, ersetzt nie von selbst) |
 
 ## Absichtlich anders
 
 - **Aida64 und Linpack** gibt es nicht und sind nicht geplant: Prime95 und y-cruncher decken den Curve-Optimizer-Fall ab.
 - **Der Wert wird nie über 0 gesetzt** (`maxValue` darf bei CoreCycler positiv sein).
-- **Weitermachen nach einem Absturz ist ein Angebot**, kein Vorgang, der von allein anläuft; eine Wartezeit nach dem Start
-  gibt es deshalb nicht.
+- **Weitermachen nach einem Absturz ist eine Wahl** (Feineinstellung, *Nach Absturz*; Voreinstellung *Warten*): die Werte kommen
+  bei der Anmeldung in jedem Fall zurück, ein Test läuft aber nur dann von allein weiter, wenn man es eingeschaltet hat, nach einer
+  Wartezeit, die man beenden kann, und höchstens dreimal hintereinander (ein Kern, der den Rechner immer wieder abstürzen lässt,
+  soll keine Endlosschleife auslösen).
 - **Kein Eintrag im Windows-Ereignisprotokoll** und **kein Wiederherstellungspunkt**: das Protokoll steht neben dem Programm,
   und ein Wiederherstellungspunkt ist nichts, was ein Programm ungefragt anlegen sollte.
 - **Keine Einstellung der Priorität des Testprogramms**, kein Wechsel der Anhaltemethode: eine Voreinstellung, die sich bewährt hat.
@@ -46,10 +53,8 @@ Verhalten bei einem Fehler, Ton).
 ## Was noch fehlt
 
 1. **Eine Nachricht aufs Telefon** (nur die C#-Fassung kann einen Webhook anstoßen, CoreCycler hat nichts dergleichen): zurückgestellt. Der Systemton und die Taskleiste decken ab, was CoreCycler bietet.
-2. **Eine freie Algorithmenliste und frei wählbarer Speicher von y-cruncher**: die Liste ist eine Wahl zwischen zwei festen,
-   der Speicher ist 64 MiB je Thread.
-3. **Pause zwischen den Kernen** und **Verzögerung der ersten Fehlerprüfung**: Feinheiten, die ein Neustart des Testprogramms je Kern
-   ohnehin erledigt.
+2. **Aida64 und Linpack** als Testprogramme: nicht geplant (siehe oben).
+3. **Verzögerung der ersten Fehlerprüfung**: eine Feinheit, die ein Neustart des Testprogramms je Kern ohnehin erledigt.
 
 ## Was an echter Hardware gesehen ist
 
