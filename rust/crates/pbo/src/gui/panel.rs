@@ -224,6 +224,17 @@ impl App {
                     let n = [10u32, 15, 20][i];
                     self.plan.start = if n == family_start { 0 } else { n };
                 }
+                let after_crash = usize::from(self.logon_continue);
+                if let Some(i) = Self::choice_row(
+                    ui_,
+                    dark,
+                    t(Key::AutoAfterCrash),
+                    t(Key::AutoAfterCrashTip),
+                    &[t(Key::AutoWait), t(Key::AutoCarryOn)],
+                    Some(after_crash),
+                ) {
+                    self.set_continue_after_crash(i == 1);
+                }
                 ui_.spacing_mut().item_spacing.y = spacing;
             }
             if !compact {

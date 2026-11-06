@@ -113,6 +113,8 @@ struct App {
     edit: std::collections::BTreeMap<usize, i32>,
     /// Whether the logon task is installed; asked at start and after a change, not every frame.
     logon_task: bool,
+    /// The logon task carries Auto on after a crash.
+    logon_continue: bool,
     store: Store,
     shot: Option<Shot>,
     /// What was last written to `window.json`, to write again only when something changed.
@@ -218,6 +220,7 @@ impl App {
             interrupted: false,
             edit: std::collections::BTreeMap::new(),
             logon_task: false,
+            logon_continue: false,
             store,
             shot: None,
             window_saved: String::new(),
@@ -253,6 +256,7 @@ impl App {
         app.window_saved = app.window_state();
         app.interrupted = app.store.read_run_state().is_some();
         app.logon_task = crate::ready::logon_task_installed();
+        app.logon_continue = crate::ready::logon_task_continues();
         app.refresh();
         app
     }
@@ -313,7 +317,17 @@ impl App {
 
     fn command(&mut self, c: Command) {
         match runstate::apply(&self.state, c) {
-            Ok(next) => self.state = next,
+            Ok(next) => {
+                self.state = next;
+                // A run that is over (however it ended) is nothing to carry on after a crash.
+                if matches!(
+                    self.state,
+                    State::Ready | State::Finished | State::Halted(_)
+                ) && !self.is_preview()
+                {
+                    let _ = std::fs::remove_file(self.store.root.join("auto_last.txt"));
+                }
+            }
             Err(e) => self
                 .log
                 .push(format!("(ignored: {:?} in {:?})", e.command, e.from)),
@@ -483,6 +497,7 @@ impl App {
             self.setup_busy = None;
             self.engine_found = stress::find_prime95().is_some();
             self.logon_task = crate::ready::logon_task_installed();
+            self.logon_continue = crate::ready::logon_task_continues();
             let msg = if code == 0 {
                 self.t(Key::SetupDone)
             } else {

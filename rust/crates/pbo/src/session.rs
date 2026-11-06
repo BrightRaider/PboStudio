@@ -391,5 +391,7 @@ pub fn default_setup(machine: &Machine, kind: EngineKind) -> Result<Setup, Strin
         mode: pbo_core::engine::Prime95Mode::Avx2,
         seconds_per_test: 60,
         yc_set: pbo_core::engine::YcSet::default(),
+        yc_tests: None,
+        yc_memory_mb: None,
     })
 }

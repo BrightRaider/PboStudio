@@ -37,6 +37,16 @@ pub fn logon_task_installed() -> bool {
     .is_some_and(|o| o.success)
 }
 
+/// Whether the logon task also carries Auto on after a crash (it was made with `pbo autostart on --continue`).
+pub fn logon_task_continues() -> bool {
+    os::system::run(
+        "schtasks.exe",
+        &["/Query", "/TN", crate::commands::TASK_NAME, "/XML"],
+        std::time::Duration::from_secs(30),
+    )
+    .is_some_and(|o| o.success && o.stdout_text().contains("--continue"))
+}
+
 pub fn gather(run_hours: f64) -> Inputs {
     let mut inputs = Inputs {
         run_hours,

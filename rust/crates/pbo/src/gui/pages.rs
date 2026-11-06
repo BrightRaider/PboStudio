@@ -227,6 +227,30 @@ impl App {
     }
 
     /// "On every Windows start": the values as they are now become the profile, and the logon task applies it.
+    /// Whether the machine carries Auto on by itself after a crash. It is the logon task that does it, so turning it on
+    /// makes the task (with `--continue`), and turning it off makes a task that exists plain again.
+    pub(super) fn set_continue_after_crash(&mut self, on: bool) {
+        if self.is_preview() {
+            return;
+        }
+        if !on && !self.logon_task {
+            self.logon_continue = false;
+            return;
+        }
+        self.logon_continue = on;
+        let (tx, rx) = mpsc::channel();
+        self.setup_busy = Some(rx);
+        let args: Vec<String> = if on {
+            vec!["on".to_string(), "--continue".to_string()]
+        } else {
+            vec!["on".to_string()]
+        };
+        std::thread::spawn(move || {
+            let code = commands::autostart(&args);
+            let _ = tx.send(code);
+        });
+    }
+
     pub(super) fn set_every_start(&mut self, on: bool) {
         if self.is_preview() {
             return;
@@ -333,6 +357,34 @@ impl App {
         })
     }
 
+    /// Says how Auto was started, in a file that is there only while the run is: a crash leaves it behind, and that is what
+    /// lets `pbo resume --continue` carry the campaign on by itself after the machine has come back (see `autorun.rs`).
+    fn write_auto_marker(&self) {
+        if self.is_preview() || !self.has_cores() {
+            return;
+        }
+        let default_step = pbo_core::tuner::step_size(self.intensity.preselected_mode()) as u32;
+        let step = self.auto_search().step_size().unwrap_or(default_step);
+        let mut args = vec![
+            "--intensity".to_string(),
+            self.intensity.id().to_string(),
+            "--step".to_string(),
+            step.to_string(),
+            "--guardband".to_string(),
+            self.plan.guardband.to_string(),
+        ];
+        if self.plan.start > 0 {
+            args.push("--start".to_string());
+            args.push(self.plan.start.to_string());
+        }
+        if !self.plan.cores.is_empty() {
+            let list: Vec<String> = self.plan.cores.iter().map(|c| c.to_string()).collect();
+            args.push("--cores".to_string());
+            args.push(list.join(","));
+        }
+        let _ = std::fs::write(self.store.root.join("auto_last.txt"), args.join("\n"));
+    }
+
     /// The next step of the campaign as a plan: the profile of that step, on the cores it names.
     pub(super) fn start_auto(&mut self) {
         let Some(view) = self.campaign_view() else {
@@ -362,6 +414,7 @@ impl App {
         };
         // The run view calls the phase its step.
         self.next_phase = view.phase.max(1) as u32;
+        self.write_auto_marker();
         self.start_with(plan);
     }
 

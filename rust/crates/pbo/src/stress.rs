@@ -101,6 +101,10 @@ pub struct Setup {
     pub seconds_per_test: u32,
     /// Which algorithms y-cruncher runs.
     pub yc_set: engine::YcSet,
+    /// y-cruncher's tests of the person's own choosing (their tags); none: the set above.
+    pub yc_tests: Option<Vec<String>>,
+    /// The memory y-cruncher gets for each logical processor, in MiB; none: 64.
+    pub yc_memory_mb: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,12 +196,27 @@ impl Stress {
                 // The settings go in a file, because only there can y-cruncher be told which logical processors to run
                 // on; without it, it starts a thread for each of the machine's and they take turns on the one it may use.
                 let config = dir.join(format!("stress-{}.cfg", std::process::id()));
+                // The person's own list of tests and memory, or the set that was chosen and 64 MiB for each thread.
+                let custom: Vec<&str> = setup
+                    .yc_tests
+                    .as_ref()
+                    .map(|t| t.iter().map(String::as_str).collect())
+                    .unwrap_or_default();
+                let algorithms: &[&str] = if custom.is_empty() {
+                    setup.yc_set.algorithms()
+                } else {
+                    &custom
+                };
+                let memory = setup
+                    .yc_memory_mb
+                    .map_or(engine::YCRUNCHER_MEMORY_PER_THREAD, |m| u64::from(m) << 20);
                 fs::write(
                     &config,
-                    engine::ycruncher_config(
+                    engine::ycruncher_config_with(
                         logical,
                         setup.seconds_per_test,
-                        setup.yc_set.algorithms(),
+                        algorithms,
+                        memory,
                     )
                     .as_bytes(),
                 )
@@ -328,6 +347,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 60,
             yc_set: engine::YcSet::default(),
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
         let results = work_root.join("core7").join("results.txt");
@@ -384,6 +405,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 3,
             yc_set: engine::YcSet::FastDiscovery,
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
         let log = work_root
@@ -430,6 +453,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 60,
             yc_set: engine::YcSet::default(),
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &logical_list).expect("start");
         let began = Instant::now();

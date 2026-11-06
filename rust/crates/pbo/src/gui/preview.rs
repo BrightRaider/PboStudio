@@ -107,7 +107,16 @@ impl App {
         let ended = matches!(self.state, State::Finished | State::Halted(_));
 
         if frames == 3 {
-            self.plan.cores = vec![1];
+            // The cores to run on: `PBO_LIVE_AUTO_CORES=0,1,4`, else core 1 alone.
+            self.plan.cores = std::env::var("PBO_LIVE_AUTO_CORES")
+                .ok()
+                .map(|v| {
+                    v.split(',')
+                        .filter_map(|c| c.trim().parse::<usize>().ok())
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| vec![1]);
             self.intensity = Intensity::Fast;
             println!("auto: starting run 1 on core 1, fast");
             self.start_auto();
@@ -117,8 +126,12 @@ impl App {
             }
             return;
         }
-        if began.elapsed() > Duration::from_secs(45 * 60) && !final_done {
-            println!("auto: the 45 minutes are up, stopping");
+        let minutes: u64 = std::env::var("PBO_LIVE_AUTO_MINUTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(45);
+        if began.elapsed() > Duration::from_secs(minutes * 60) && !final_done {
+            println!("auto: the {minutes} minutes are up, stopping");
             self.stop_run();
             if let Some(s) = &mut self.shot {
                 s.auto_final_requested = true;
@@ -140,7 +153,7 @@ impl App {
             self.command(Command::Dismiss);
             self.refresh();
             let next = self.campaign_view();
-            let more = starts < 2
+            let more = starts < 3
                 && next
                     .as_ref()
                     .is_some_and(|v| v.step.action != pbo_core::campaign::Action::OpenSetup);
@@ -350,6 +363,7 @@ impl App {
             interrupted: name == "interrupted",
             edit: std::collections::BTreeMap::new(),
             logon_task: false,
+            logon_continue: false,
             readiness: if name == "advanced" {
                 use pbo_core::readiness::{Check, Item, Level};
                 Some(vec![
