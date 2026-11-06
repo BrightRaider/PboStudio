@@ -59,8 +59,8 @@ Verhalten bei einem Fehler, Ton).
 ## Was an echter Hardware gesehen ist
 
 Gesehen an Kern 7 der 5800X3D ([Beleg](../evidence/e5-5800x3d-load-changes.txt)): die **Pausen** und die **Schübe** (mit Prime95 und mit
-y-cruncher), der eigene FFT-Bereich in der Einstellungsdatei, und seit der Reparatur des Prime95-Starts **„Auto" im Fenster** (an
-Kern 1, ohne Eingriff, beide Phasen). **Nicht belegt:** der Ton (ob er zu hören war, ist offen), das Verhalten bei einem
+y-cruncher), der eigene FFT-Bereich in der Einstellungsdatei, und seit der Reparatur des Prime95-Starts **„Auto" im Fenster**: an
+Kern 1 (beide Phasen) und an Kern 0, 1 und 4 über **alle drei Phasen** (63 Minuten, ohne Eingriff, die Zeit stimmte mit der angezeigten überein). **Nicht belegt:** der Ton (ob er zu hören war, ist offen), das Verhalten bei einem
 **echten** Fehler (die Erkennung ist mit dem echten Prime95 und einer eingefügten Fehlerzeile geprüft, nicht mit einem echten
 Fehler; Kern 0 hielt −30 zwei Minuten, mit Prime95 und mit y-cruncher, ohne Fehler) und ein Lauf über alle acht Kerne.
 Gebaut und getestet sind alle (Zustandslogik,

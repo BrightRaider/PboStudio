@@ -1,4 +1,4 @@
-# Anleitung: PboStudio 1.2.0-beta.1 (Rust)
+# Anleitung: PboStudio 1.2.0-beta.2 (Rust)
 
 Für den, der das Programm benutzt. Wie es gebaut ist und was geprüft wurde, steht in [README.md](README.md); jeder Befehl
 mit seinen Schaltern in [`rust/README.md`](../../rust/README.md).

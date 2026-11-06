@@ -75,7 +75,12 @@ impl App {
             t(Key::CampaignInProgress)
         };
         ui_.horizontal(|ui_| {
-            ui_.label(egui::RichText::new(title).size(19.0).strong().color(p.ok));
+            ui_.label(
+                egui::RichText::new(title)
+                    .size(if tight { 16.0 } else { 19.0 })
+                    .strong()
+                    .color(p.ok),
+            );
             // The fine-tuning is opened at the bottom and closed here, where it does not take a line of its own.
             if self.auto_more {
                 ui_.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui_| {
@@ -138,7 +143,7 @@ impl App {
                         ui_,
                         dark,
                         on,
-                        egui::Vec2::new(tile_w, if tight { 52.0 } else { 80.0 }),
+                        egui::Vec2::new(tile_w, if tight { 44.0 } else { 80.0 }),
                         |ui_| {
                             ui_.label(egui::RichText::new(title).strong().color(if on {
                                 p.accent
@@ -276,7 +281,7 @@ impl App {
             dark,
             &items,
             if tight {
-                34.0
+                31.0
             } else if compact {
                 38.0
             } else {

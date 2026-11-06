@@ -115,7 +115,7 @@ texts! {
     AutoStartNoEffect => ("No effect now: every core already holds a value.", "Jetzt ohne Wirkung: alle Kerne haben schon einen Wert."),
     AutoMore => ("Fine-tuning", "Feineinstellung"),
     AutoLess => ("Back", "Zurück"),
-    AutoAfterCrash => ("After a crash", "Nach Absturz"),
+    AutoAfterCrash => ("Crash", "Absturz"),
     AutoWait => ("Wait", "Warten"),
     AutoCarryOn => ("Carry on", "Weitermachen"),
     AutoAfterCrashTip => ("Carry on: after a crash the computer comes back, puts the proven values back and carries Auto on by itself after a countdown of a minute (stop it with: pbo resume --cancel), at most three times in a row. It uses the logon task.", "Weitermachen: nach einem Absturz kommt der Rechner zurück, stellt die bewährten Werte wieder her und macht nach einer Minute Wartezeit mit Auto von selbst weiter (anhalten mit: pbo resume --cancel), höchstens dreimal hintereinander. Es nutzt die Anmeldeaufgabe."),

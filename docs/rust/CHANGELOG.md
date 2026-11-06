@@ -2,10 +2,26 @@
 
 Kept apart from the root `CHANGELOG.md`: the C# release workflow uses that whole file as its release text, and nothing of the Rust version has been released.
 
-## 1.2.0-beta.1 — not released
+## 1.2.0-beta.2 — not released
+
+What has been added since 1.2.0-beta.1 (the first prerelease).
+
+### Added
+
+- **Auto without a window and after a crash:** `pbo auto` runs the campaign of the window's Auto on the command line. After a crash, `pbo resume --continue` (the logon task made with `pbo autostart on --continue`, or the window's Fine-tuning, *After a crash: Carry on*) puts the proven values back and carries Auto on after a countdown of a minute that `pbo resume --cancel` stops, at most three times in a row. Off by default.
+- **Smaller things:** `--pause N` between two cores, y-cruncher's tests of one's own (`--yc-tests`) and its memory (`--yc-memory`), and `pbo report`, one file to attach to an issue.
+- **`pbo update` looks at the releases of this program only** (tags `rust-v...`); the C# program's own releases are not offered.
+- **Auto was run through all three phases on three cores of a 5800X3D** (about an hour, no error, no machine check, the time shown beforehand was the time it took), see `docs/rust/evidence`.
+
+### Not verified
+
+- Carrying Auto on after a real crash and restart (the parts are tested, a real crash is not).
+- Everything under "Not verified" of 1.2.0-beta.1 that is not named above: a real core failure, Zen 4 and Zen 5, a run over all eight cores.
+
+## 1.2.0-beta.1 — released as a prerelease
 
 The Rust rebuild (`docs/rust`, `rust/`). One `pbo.exe` is the window and the command line; it takes over what a 1.x
-install kept (`pbo import`). Built and tested locally; nothing here has been published.
+install kept (`pbo import`). The first prerelease.
 
 ### Added
 
@@ -24,8 +40,6 @@ install kept (`pbo import`). Built and tested locally; nothing here has been pub
 - **A helper process with the rights** over a pipe, so that a window without them can drive a run, and an example guest that
   embeds the program's core (`rust/examples/embed`).
 - Language-neutral test vectors (`spec/vectors`) that the C# and the Rust program both have to pass.
-- **Auto without a window and after a crash:** `pbo auto` runs the campaign of the window's Auto on the command line. After a crash, `pbo resume --continue` (the logon task made with `pbo autostart on --continue`, or the window's Fine-tuning, *After a crash: Carry on*) puts the proven values back and carries Auto on after a countdown of a minute that `pbo resume --cancel` stops, at most three times in a row. Off by default.
-- **Smaller things:** `--pause N` between two cores, y-cruncher's tests of one's own (`--yc-tests`) and its memory (`--yc-memory`), and `pbo report`, one file to attach to an issue.
 
 - **Auto is chosen beforehand, out of sight:** Start is all there is to do; the level of thoroughness, how far each step goes (1 to 5 counts, `--step N` on the command line), how much safety is kept at the end (1 to 5) and where the search of a core that holds nothing begins (-10, -15 or -20, `--start N`). The selection is what the program judges efficient for the processor (quick, step 5, safety 3, start -20 on an X3D and -15 on the others); a button, Fine-tuning, opens them (and goes away; Back, at the top right, closes them again) for whoever wants to change one; the times shown follow them. The BIOS list says how to enter the values in the UEFI and shows sign and magnitude for each core, and a finished run offers it.
 - **A window that is a preview writes nothing**: a scripted click in `pbo gui-preview` no longer creates the logon task, saves a profile, forgets the memory, installs a program or writes a value.

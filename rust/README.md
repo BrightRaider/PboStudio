@@ -27,7 +27,7 @@ Run as administrator: the processor registers are only reachable that way.
 | `pbo helper [--pipe NAME]`, `pbo helper-call NAME MESSAGE` | the part with the rights, served over a pipe to a window or module without them; one message, one answer |
 | `pbo hash FILE...`, `pbo verify FILE SHA256`, `pbo version` | SHA-256 of files and of this program; there is no code signature, so the checksum is how a release is told from a copy |
 | `pbo setup status\|prime95\|ycruncher\|all` | puts the test programs into `engines` next to the program: https from the vendor's own domain only, and the archive must have the SHA-256 this version was made with (`--from ARCHIVE` installs offline, `--accept-unverified` is your explicit choice) |
-| `pbo update [--beta]` | says whether a newer release exists (stable, or beta too); it only looks, and never replaces the program |
+| `pbo update [--beta]` | says whether a newer release exists (stable, or beta too); it only looks, and never replaces the program ; the releases of this program are the ones tagged `rust-v...`, the C# program has its own |
 | `pbo setup pawnio` | starts the PawnIO driver installer (Windows asks for permission) after the same checks as the test programs: SHA-256 of this version's installer, a fresh private folder for a download, nothing started that does not match |
 | `pbo estimate [--cores ..] [--intensity fast\|normal\|thorough]` | how long the campaign still has to run at that thoroughness (balanced by default), phase by phase, calculated from what each core holds and may reach |
 | `pbo ready [--hours N]` | "Ready for the night?": the logon task, automatic sign-in, the sleep timer, free disk space, temperature headroom; changes nothing, says what is missing |
@@ -106,5 +106,5 @@ cargo build --release
 ```
 
 gives `target\release\pbo.exe`, one file. Publish it with its checksum (`pbo hash pbo.exe` writes the line `sha256sum` checks) and say in the release notes
-that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0-beta.1` is the first public
+that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0-beta.2` is the first public
 build); `pbo version` prints it with the checksum of the running file. A release with `-beta` in its tag is a pre-release, which is what `pbo update --beta` looks for.

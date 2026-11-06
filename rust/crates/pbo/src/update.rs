@@ -10,7 +10,12 @@ use serde_json::Value;
 
 const RELEASES_URL: &str = "https://api.github.com/repos/BrightRaider/PboStudio/releases";
 
-/// The releases in the answer of the API: tag, whether it is a pre-release or a draft, and the page to read it on.
+/// The tag prefix of this program's releases. The C# program has releases of its own on the same page, tagged `v1.1.3` and so on;
+/// they are not this program's to offer, and a plain `v` tag here would also start the C# release workflow.
+const TAG_PREFIX: &str = "rust-";
+
+/// The releases of this program in the answer of the API: tag (without the prefix), whether it is a pre-release or a draft,
+/// and the page to read it on.
 pub fn parse_releases(json: &str) -> Result<Vec<(Release, String)>, String> {
     let doc: Value =
         serde_json::from_str(json).map_err(|e| format!("the answer is not JSON: {e}"))?;
@@ -22,7 +27,10 @@ pub fn parse_releases(json: &str) -> Result<Vec<(Release, String)>, String> {
         .filter_map(|r| {
             Some((
                 Release {
-                    tag: r["tag_name"].as_str()?.to_string(),
+                    tag: r["tag_name"]
+                        .as_str()?
+                        .strip_prefix(TAG_PREFIX)?
+                        .to_string(),
                     prerelease: r["prerelease"].as_bool().unwrap_or(false),
                     draft: r["draft"].as_bool().unwrap_or(false),
                 },
@@ -95,7 +103,7 @@ pub fn run(args: &[String]) -> i32 {
                 .iter()
                 .find(|(r, _)| r.tag == tag)
                 .map_or("", |(_, p)| p.as_str());
-            println!("pbo {current} is installed; {tag} is available: {page}");
+            println!("pbo {current} is installed; {TAG_PREFIX}{tag} is available: {page}");
             println!("Download it there and compare its checksum: pbo verify FILE SHA256");
             0
         }
@@ -118,18 +126,36 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = r#"[
-      {"tag_name":"v1.2.0-beta.1","prerelease":true,"draft":false,"html_url":"https://github.com/x/y/releases/tag/v1.2.0-beta.1"},
+      {"tag_name":"rust-v1.2.0-beta.2","prerelease":true,"draft":false,"html_url":"https://github.com/x/y/releases/tag/rust-v1.2.0-beta.2"},
+      {"tag_name":"rust-v1.1.9","prerelease":false,"draft":false,"html_url":"https://github.com/x/y/releases/tag/rust-v1.1.9"},
       {"tag_name":"v1.1.3","prerelease":false,"draft":false,"html_url":"https://github.com/x/y/releases/tag/v1.1.3"},
-      {"tag_name":"v9.9.9","draft":true},
+      {"tag_name":"rust-v9.9.9","draft":true},
       {"name":"no tag here"}
     ]"#;
 
     #[test]
-    fn the_api_answer_is_read_and_what_has_no_tag_is_left_out() {
+    fn the_api_answer_is_read_and_only_the_releases_of_this_program_are_kept() {
         let r = parse_releases(SAMPLE).unwrap();
+        // The C# release (`v1.1.3`) and the entry without a tag are left out.
         assert_eq!(r.len(), 3);
+        assert_eq!(r[0].0.tag, "v1.2.0-beta.2");
         assert!(r[0].0.prerelease && !r[1].0.prerelease && r[2].0.draft);
-        assert!(r[1].1.ends_with("v1.1.3"));
+        assert!(r[1].1.ends_with("rust-v1.1.9"));
+        assert!(r.iter().all(|(rel, _)| !rel.tag.contains("rust")));
+    }
+
+    #[test]
+    fn a_rust_beta_is_offered_on_the_beta_channel_only_and_the_c_sharp_release_never() {
+        let r = parse_releases(SAMPLE).unwrap();
+        let list: Vec<Release> = r.iter().map(|(rel, _)| rel.clone()).collect();
+        assert_eq!(
+            version::pick_update("1.2.0-beta.1", &list, Channel::Beta),
+            Some("v1.2.0-beta.2".to_string())
+        );
+        assert_eq!(
+            version::pick_update("1.2.0-beta.1", &list, Channel::Stable),
+            None
+        );
     }
 
     #[test]
