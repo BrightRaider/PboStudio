@@ -1,0 +1,9 @@
+[package]
+name = "pbo-ui"
+description = "PboStudio look: colours, type, cards and rows for egui. Depends on nothing of the application."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+egui = { version = "=0.29.1", default-features = false }

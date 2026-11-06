@@ -1,0 +1,39 @@
+# E3: write path on a Ryzen 7 5800X3D (Zen 3, Vermeer), 2026-11-05
+# pbo selftest, pbo selftest --step, pbo status: run elevated, release build
+
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 47.8 °C
+PPT            : 37.8 W
+TDC / EDC      : 11.3 A / 95.2 A
+Core voltage   : 1.219 V
+Per-core VID   : 1.219 1.219 1.219 1.219 1.219 1.219 1.219 1.219
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+core  0: held -20, wrote -20, read back -20  ok
+core  1: held -25, wrote -25, read back -25  ok
+core  2: held -30, wrote -30, read back -30  ok
+core  3: held -30, wrote -30, read back -30  ok
+core  4: held -28, wrote -28, read back -28  ok
+core  5: held -30, wrote -30, read back -30  ok
+core  6: held -30, wrote -30, read back -30  ok
+core  7: held -30, wrote -30, read back -30  ok
+The write path works on this processor.
+
+----- selftest --step -----
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+core  0: held -20, moved to -19, restored -20  ok
+core  1: held -25, moved to -24, restored -25  ok
+core  2: held -30, moved to -29, restored -30  ok
+core  3: held -30, moved to -29, restored -30  ok
+core  4: held -28, moved to -27, restored -28  ok
+core  5: held -30, moved to -29, restored -30  ok
+core  6: held -30, moved to -29, restored -30  ok
+core  7: held -30, moved to -29, restored -30  ok
+The write path works on this processor.
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 46.5 °C
+PPT            : 34.5 W
+TDC / EDC      : 8.6 A / 93.9 A
+Core voltage   : 1.212 V
+Per-core VID   : 1.212 1.212 1.212 1.212 1.212 1.212 1.212 1.212

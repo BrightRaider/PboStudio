@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "area": "log-day",
+  "kind": "new",
+  "invariants": ["I8"],
+  "source": "docs/rust/adr/0008-persistenz-und-wiederaufnahme.md (point 7), issue 3",
+  "about": "Which day's log a moment belongs to. One log per day; a night belongs to the day it began, so the log day ends at 06:00 and not at midnight. Nothing is ever cut at midnight.",
+  "cases": [
+    { "name": "03:00 on the 6th is still the 5th", "function": "logDay", "input": { "date": [2026, 11, 6], "hour": 3, "boundary": 6 }, "expected": [2026, 11, 5] },
+    { "name": "05:59 is still the night", "function": "logDay", "input": { "date": [2026, 11, 6], "hour": 5, "boundary": 6 }, "expected": [2026, 11, 5] },
+    { "name": "06:00 is the new day", "function": "logDay", "input": { "date": [2026, 11, 6], "hour": 6, "boundary": 6 }, "expected": [2026, 11, 6] },
+    { "name": "evening is its own day", "function": "logDay", "input": { "date": [2026, 11, 6], "hour": 23, "boundary": 6 }, "expected": [2026, 11, 6] },
+    { "name": "the night after the first of a month", "function": "logDay", "input": { "date": [2026, 3, 1], "hour": 2, "boundary": 6 }, "expected": [2026, 2, 28] },
+    { "name": "leap year", "function": "logDay", "input": { "date": [2028, 3, 1], "hour": 2, "boundary": 6 }, "expected": [2028, 2, 29] },
+    { "name": "new year's night", "function": "logDay", "input": { "date": [2027, 1, 1], "hour": 1, "boundary": 6 }, "expected": [2026, 12, 31] },
+    { "name": "a boundary of zero is the calendar day", "function": "logDay", "input": { "date": [2026, 11, 6], "hour": 0, "boundary": 0 }, "expected": [2026, 11, 6] },
+    { "name": "first file of a day", "function": "fileName", "input": { "date": [2026, 11, 5], "part": 1 }, "expected": "pbo_2026-11-05.log" },
+    { "name": "second file of a very large day", "function": "fileName", "input": { "date": [2026, 11, 5], "part": 2 }, "expected": "pbo_2026-11-05_2.log" },
+    { "name": "the part to write to is the first with room", "function": "partFor", "input": { "sizes": [100, 50], "limit": 100 }, "expected": 2 },
+    { "name": "no file yet is part one", "function": "partFor", "input": { "sizes": [], "limit": 100 }, "expected": 1 },
+    { "name": "all full starts the next", "function": "partFor", "input": { "sizes": [100, 100], "limit": 100 }, "expected": 3 },
+    { "name": "a line carries the time and the run", "function": "line", "input": { "hour": 3, "minute": 4, "second": 5, "run": "a1b2", "text": "core 0 ok" }, "expected": "03:04:05 [a1b2] core 0 ok" }
+  ]
+}

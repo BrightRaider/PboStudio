@@ -22,3 +22,9 @@ release/
 
 # Rust build output
 rust/target/
+
+# Window previews (pbo gui-preview): about 2.7 MB each, uncompressed; regenerate them, do not commit them.
+/docs/rust/previews/
+
+# Local release folder of the Rust program (pbo.exe and its checksum)
+/rust/dist/

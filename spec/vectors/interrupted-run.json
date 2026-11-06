@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "area": "interrupted-run",
+  "kind": "parity",
+  "invariants": ["I9"],
+  "source": "tests/PboStudio.Tests/InterruptedRunTests.cs",
+  "about": "A run that ends abnormally leaves its state file: a crash, but also a kill from the task manager, a crash of this program, or a window closed mid-run. It is a crash only if the computer started again after the state was last written. Otherwise the program was closed and nothing about the core is known to have failed. 'bootOffsetSeconds' is when Windows started, relative to the moment the state was last written; 'hasState' says whether a state file exists at all.",
+  "cases": [
+    { "name": "no state file means nothing was interrupted", "function": "classify",
+      "input": { "hasState": false, "bootOffsetSeconds": 0 }, "expected": null },
+    { "name": "a computer that restarted after the run is a crash", "function": "classify",
+      "input": { "hasState": true, "bootOffsetSeconds": 300 }, "expected": { "systemRestarted": true } },
+    { "name": "a computer that never restarted means the program was closed", "function": "classify",
+      "input": { "hasState": true, "bootOffsetSeconds": -43200 }, "expected": { "systemRestarted": false } },
+    { "name": "a restart one second after the last write is still a crash", "function": "classify",
+      "input": { "hasState": true, "bootOffsetSeconds": 1 }, "expected": { "systemRestarted": true } },
+    { "name": "a boot just before the last write is not a crash", "function": "classify",
+      "input": { "hasState": true, "bootOffsetSeconds": -1 }, "expected": { "systemRestarted": false } }
+  ]
+}

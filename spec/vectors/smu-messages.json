@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "area": "smu-messages",
+  "kind": "parity",
+  "invariants": ["I1", "I14"],
+  "source": "external/ZenStates-Core/SMUSettings (Zen3Settings, Zen4Settings, Zen5Settings)",
+  "about": "Which SMU message reads a core's Curve Optimizer value and which sets it, per generation. Zen 3 reads with the value it inherits from Zen 2, Zen 4 and Zen 5 desktop with their own; reading with another generation's message returns nonsense. Only the Zen 3 numbers are checked on hardware here.",
+  "cases": [
+    { "name": "zen 3 reads with 0x7C", "function": "getMargin", "input": { "generation": "Zen3" }, "expected": 124 },
+    { "name": "zen 4 reads with 0xD5", "function": "getMargin", "input": { "generation": "Zen4" }, "expected": 213 },
+    { "name": "zen 5 desktop reads with 0xD5", "function": "getMargin", "input": { "generation": "Zen5" }, "expected": 213 },
+    { "name": "zen 3 sets through MP1 with 0x35", "function": "setMargin", "input": { "generation": "Zen3" }, "expected": 53 },
+    { "name": "zen 4 sets through MP1 with 0x35", "function": "setMargin", "input": { "generation": "Zen4" }, "expected": 53 },
+    { "name": "zen 5 desktop sets through MP1 with 0x35", "function": "setMargin", "input": { "generation": "Zen5" }, "expected": 53 }
+  ]
+}

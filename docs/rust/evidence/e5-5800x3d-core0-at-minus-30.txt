@@ -1,0 +1,110 @@
+# Core 0 at -30 on the 5800X3D, 2026-11-06: set to -30 and tuned from there (Prime95 AVX2 smallest FFT 60 s, then y-cruncher 60 s, pauses every 30 s).
+# Elevated; the program ran from its own copy. Every value was put back and read back at the end. No error came, no WHEA event.
+
+﻿
+=== status before  [13:03:35]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 44.8 °C
+PPT            : 33.4 W
+TDC / EDC      : 8.0 A / 77.9 A
+Core voltage   : 1.163 V
+Per-core VID   : 1.169 1.169 1.169 1.169 1.169 1.169 1.169 1.163
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== set core 0 to -30  [13:03:35]  pbo set 0 -30
+core 0: now -30
+
+--- exit code 
+
+=== status with core 0 at -30  [13:03:35]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -30 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 44.6 °C
+PPT            : 37.5 W
+TDC / EDC      : 8.6 A / 93.5 A
+Core voltage   : 0.944 V
+Per-core VID   : 0.944 0.944 0.944 0.944 0.944 0.944 0.944 0.944
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+VALUES NOW: -30 -25 -30 -30 -28 -30 -30 -30
+
+=== tune core 0 from -30  [13:03:36]  pbo tune --cores 0 --seconds 60 --mode avx2 --fft Smallest --then ycruncher:avx2:Smallest
+Log: <work folder>\runs\logs\pbo_2026-11-06.log
+Tuning cores [0]: 60 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+core  0: held at -30 (0 full sweeps)
+core  0: locked at -27
+Result: 0:-27
+
+--- exit code 
+
+=== status after the tune  [13:05:38]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -27 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 51.9 °C
+PPT            : 38.2 W
+TDC / EDC      : 11.7 A / 95.6 A
+Core voltage   : 1.169 V
+Per-core VID   : 1.169 1.169 1.169 1.169 1.169 1.169 1.169 1.169
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+VALUES AFTER THE TUNE: -27 -25 -30 -30 -28 -30 -30 -30
+
+=== knowledge  [13:05:38]  pbo knowledge
+BIOS version it was gathered under: 1.S3
+core  0: best that held  -30   worst that failed    -
+
+--- exit code 
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -30 -25 -30 -30 -28 -30 -30 -30
+
+13:03:36 [1106130336] ---- start ----
+13:03:36 [1106130336] Tuning cores [0]: 60 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+13:03:36 [1106130336] core 0: Prime95 on logical [0] at -30 for 60 s
+13:03:36 [1106130336] core 0: load changes: periodic:30:1
+13:04:36 [1106130336] core 0: engine used 94 % of the core
+13:04:36 [1106130336] core 0: y-cruncher on logical [0] at -30 for 60 s
+13:04:36 [1106130336] core 0: load changes: periodic:30:1
+13:05:37 [1106130336] core 0: engine used 93 % of the core
+13:05:37 [1106130336] core  0: held at -30 (0 full sweeps)
+13:05:37 [1106130336] core  0: locked at -27
+13:05:38 [1106130336] Result: 0:-27
+13:05:38 [1106130336] tune ended
+
+=== hardware error events (WHEA-Logger) since the start
+none (Es wurden keine Ereignisse gefunden, die den angegebenen Auswahlkriterien entsprechen.)
+
+=== restore core 0 to -20  [13:05:38]  pbo set 0 -20
+core 0: now -20
+
+--- exit code 
+
+=== status final  [13:05:38]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 47.6 °C
+PPT            : 35.2 W
+TDC / EDC      : 9.2 A / 92.0 A
+Core voltage   : 0.938 V
+Per-core VID   : 0.938 0.938 0.938 0.938 0.938 0.938 0.938 0.938
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [13:05:38]

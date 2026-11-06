@@ -1,0 +1,55 @@
+{
+  "schema": 1,
+  "area": "download-policy",
+  "kind": "parity",
+  "invariants": ["I8"],
+  "source": "tests/PboStudio.Tests/DownloadPolicyTests.cs",
+  "about": "What the program will fetch and run. It runs as administrator and starts what it downloads, so only https, and only on the vendor's own domain: the registrable root is the last two labels of the host. A link found on a page is not trusted because the page named it. Hashing is not part of these vectors; it needs a hash function and belongs to the operating system layer.",
+  "cases": [
+    { "name": "https on the vendor's cdn host", "function": "isAllowed",
+      "input": { "url": "https://cdn.numberworld.org/y-cruncher-downloads/y-cruncher%20v0.8.7.9547b.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": true },
+    { "name": "https on the vendor's www host", "function": "isAllowed",
+      "input": { "url": "https://www.numberworld.org/y-cruncher/y-cruncher%20v0.8.7.9547b.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": true },
+    { "name": "https on another host of the same owner", "function": "isAllowed",
+      "input": { "url": "https://downloads.numberworld.org/x.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": true },
+    { "name": "https with an explicit port on the vendor's domain", "function": "isAllowed",
+      "input": { "url": "https://cdn.numberworld.org:8443/x.zip", "allowedHosts": ["cdn.numberworld.org"] }, "expected": true },
+
+    { "name": "plain http is refused even on the right domain", "function": "isAllowed",
+      "input": { "url": "http://www.numberworld.org/y-cruncher/y-cruncher%20v0.8.7.9547b.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "plain http on the cdn host is refused", "function": "isAllowed",
+      "input": { "url": "http://cdn.numberworld.org/x.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "ftp is refused", "function": "isAllowed",
+      "input": { "url": "ftp://www.numberworld.org/x.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+
+    { "name": "somebody else's domain is refused", "function": "isAllowed",
+      "input": { "url": "https://evil.example.com/y-cruncher.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "the vendor's name as a prefix of another domain is refused", "function": "isAllowed",
+      "input": { "url": "https://numberworld.org.evil.com/y-cruncher.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "the vendor's name as the end of another word is refused", "function": "isAllowed",
+      "input": { "url": "https://evilnumberworld.org/y-cruncher.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "a different vendor's domain is refused", "function": "isAllowed",
+      "input": { "url": "https://www.mersenne.org/y-cruncher.zip", "allowedHosts": ["cdn.numberworld.org", "www.numberworld.org"] }, "expected": false },
+    { "name": "user information in front of an evil host does not borrow the vendor's name", "function": "isAllowed",
+      "input": { "url": "https://cdn.numberworld.org@evil.example.com/x.zip", "allowedHosts": ["cdn.numberworld.org"] }, "expected": false },
+
+    { "name": "each vendor's domain is its own (allowed)", "function": "isAllowed",
+      "input": { "url": "https://download.mersenne.ca/gimps/v30/30.8/p95v308b17.win64.zip", "allowedHosts": ["www.mersenne.org", "download.mersenne.ca"] }, "expected": true },
+    { "name": "each vendor's domain is its own (refused)", "function": "isAllowed",
+      "input": { "url": "https://cdn.numberworld.org/x.zip", "allowedHosts": ["www.mersenne.org", "download.mersenne.ca"] }, "expected": false },
+
+    { "name": "something that is not a url is refused", "function": "isAllowed",
+      "input": { "url": "not a url", "allowedHosts": ["cdn.numberworld.org"] }, "expected": false },
+    { "name": "an empty string is refused", "function": "isAllowed",
+      "input": { "url": "", "allowedHosts": ["cdn.numberworld.org"] }, "expected": false },
+    { "name": "a scheme-relative address is refused", "function": "isAllowed",
+      "input": { "url": "//www.numberworld.org/x.zip", "allowedHosts": ["cdn.numberworld.org"] }, "expected": false },
+
+    { "name": "the root of a cdn host", "function": "registrableRoot", "input": { "host": "cdn.numberworld.org" }, "expected": "numberworld.org" },
+    { "name": "the root of a bare domain", "function": "registrableRoot", "input": { "host": "numberworld.org" }, "expected": "numberworld.org" },
+    { "name": "the root ignores case and a trailing dot", "function": "registrableRoot", "input": { "host": "WWW.Mersenne.ORG." }, "expected": "mersenne.org" },
+    { "name": "a single label is its own root", "function": "registrableRoot", "input": { "host": "localhost" }, "expected": "localhost" },
+
+    { "name": "the pinned installer hash", "function": "pinnedInstallerSha256", "input": {}, "expected": "1f519a22e47187f70a1379a48ca604981c4fcf694f4e65b734aaa74a9fba3032" }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "area": "engine-output",
+  "kind": "new",
+  "invariants": ["I2", "I4"],
+  "source": "src/PboStudio.Core/Prime95Engine.cs and YCruncherEngine.cs (the markers are private there, so this is the first place they are pinned)",
+  "about": "Which lines of engine output are a failure. Prime95 writes passes and failures into the same file, y-cruncher prints a settings banner containing the word Error, and the job object makes y-cruncher announce each refused processor. A pass is excluded first; only phrases that occur on failure count.",
+  "cases": [
+    { "name": "prime95 pass carries its size", "function": "prime95", "input": { "line": "Self-test 8960K passed!" }, "expected": { "kind": "passedFft", "fft": 8960 } },
+    { "name": "prime95 pass in any case and spacing", "function": "prime95", "input": { "line": "self-test  12K  PASSED" }, "expected": { "kind": "passedFft", "fft": 12 } },
+    { "name": "a pass without a size is still a pass", "function": "prime95", "input": { "line": "Torture test passed." }, "expected": { "kind": "passed" } },
+    { "name": "round-off is a failure", "function": "prime95", "input": { "line": "  FATAL ERROR: Rounding was 0.5, expected less than 0.4  " }, "expected": { "kind": "failure", "text": "FATAL ERROR: Rounding was 0.5, expected less than 0.4" } },
+    { "name": "a failed self-test is a failure", "function": "prime95", "input": { "line": "Self-test 1024K self-test failed" }, "expected": { "kind": "failure", "text": "Self-test 1024K self-test failed" } },
+    { "name": "hardware failure is a failure", "function": "prime95", "input": { "line": "Hardware failure detected, consult stress.txt file." }, "expected": { "kind": "failure", "text": "Hardware failure detected, consult stress.txt file." } },
+    { "name": "a progress line is nothing", "function": "prime95", "input": { "line": "[Work thread Jan 1 12:00] Torture Test completed 1 tests in 1 minutes" }, "expected": { "kind": "other" } },
+    { "name": "the word self-test alone is not a failure", "function": "prime95", "input": { "line": "Starting self-test on 4K FFT" }, "expected": { "kind": "other" } },
+    { "name": "ycruncher banner is not a failure", "function": "ycruncher", "input": { "line": "Stop on Error: Enabled" }, "expected": { "kind": "other" } },
+    { "name": "ycruncher affinity refusal is the confinement working", "function": "ycruncher", "input": { "line": "Failed to set core affinity: access denied" }, "expected": { "kind": "other" } },
+    { "name": "ycruncher mismatch is a failure", "function": "ycruncher", "input": { "line": "Error: result mismatch in VT3" }, "expected": { "kind": "failure", "text": "Error: result mismatch in VT3" } },
+    { "name": "ycruncher pass line is a pass", "function": "ycruncher", "input": { "line": "Test passed in 12.3 seconds" }, "expected": { "kind": "passed" } },
+    { "name": "ycruncher FAILED is a failure", "function": "ycruncher", "input": { "line": "VT3 FAILED" }, "expected": { "kind": "failure", "text": "VT3 FAILED" } },
+    { "name": "prime95 cycles: a repeat of a size closes one sweep", "function": "prime95Cycles", "input": { "sizes": [4, 5, 6, 4, 5, 6, 4] }, "expected": 2 },
+    { "name": "prime95 cycles: no repeat, no sweep", "function": "prime95Cycles", "input": { "sizes": [4, 5, 6] }, "expected": 0 },
+    { "name": "ycruncher cycles: the running pass is not finished", "function": "ycruncherCycles", "input": { "headers": 3 }, "expected": 2 },
+    { "name": "ycruncher cycles: none seen", "function": "ycruncherCycles", "input": { "headers": 0 }, "expected": 0 }
+  ]
+}

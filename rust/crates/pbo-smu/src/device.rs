@@ -50,6 +50,30 @@ fn hresult(code: u32) -> i32 {
     }
 }
 
+/// Whether the driver is there and this program may open it, without loading anything.
+pub fn driver_status() -> Result<(), Error> {
+    let path: Vec<u16> = r"\\?\GLOBALROOT\Device\PawnIO"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe {
+        CreateFileW(
+            path.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            0,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+        return Err(Error::DriverUnavailable(unsafe { GetLastError() }));
+    }
+    unsafe { CloseHandle(handle) };
+    Ok(())
+}
+
 /// One loaded module, on its own handle. Dropping it closes the handle and unloads the module.
 pub struct Module {
     handle: HANDLE,

@@ -11,6 +11,33 @@
 
 #![forbid(unsafe_code)]
 
+pub mod apic;
+pub mod auto;
+pub mod campaign;
+pub mod coremap;
+pub mod depth;
+pub mod download;
+pub mod duration;
+pub mod engine;
+pub mod estimate;
+pub mod families;
+pub mod interrupted;
+pub mod knowledge;
+pub mod logday;
+pub mod logtail;
+pub mod onerror;
+pub mod order;
+pub mod profile;
+pub mod profiles;
+pub mod quality;
+pub mod readiness;
+pub mod runstate;
+pub mod search;
+pub mod transient;
+pub mod tuner;
+pub mod version;
+pub mod whea;
+
 /// Conversions between the voltage codes the processor reports and volts.
 pub mod voltage {
     /// SVI2 (Zen 2 and Zen 3): `1.55 V - code * 6.25 mV`.
@@ -66,13 +93,19 @@ pub mod pstate {
 
 /// Curve Optimizer reads.
 pub mod margin {
-    /// The SMU message that reads a core's Curve Optimizer margin. Verified on Zen 3 (Ryzen 7 5800X3D);
-    /// the Zen 4 table in the library inherits the same value and nobody has checked it on hardware.
-    pub const MSG_GET_MARGIN: u32 = 0x7C;
-
     /// The margin the SMU returns, as a signed number. Negative values come back as two's complement.
     pub fn decode(raw: u32) -> i32 {
         raw as i32
+    }
+
+    /// The low 16 bits of the set message argument: the margin as two's complement.
+    pub fn psm_arg(margin: i32) -> u32 {
+        (margin as u32) & 0xFFFF
+    }
+
+    /// The whole argument of the set message: the core in bits 31:20, the margin in the low 16 bits.
+    pub fn set_argument(core_mask: u32, margin: i32) -> u32 {
+        (core_mask & 0xFFF0_0000) | psm_arg(margin)
     }
 
     /// The core mask the SMU addresses a core by. From Zen 3 on (family above 17h) it is the chiplet in
@@ -203,6 +236,13 @@ pub mod pm {
         pub edc_now: Option<f32>,
         pub temp_limit: Option<f32>,
         pub temp_now: Option<f32>,
+    }
+
+    impl Snapshot {
+        /// Whether the table gave a power limit at all (the C# `HasLimits`).
+        pub fn has_limits(&self) -> bool {
+            self.ppt_limit.is_some_and(|v| v > 0.0)
+        }
     }
 
     impl Layout {
@@ -341,20 +381,6 @@ pub mod topology {
     /// Enabled cores in one chiplet from its core disable map (a set bit is a disabled core).
     pub fn enabled_cores(core_disable_map: u32) -> u32 {
         8 - (core_disable_map & 0xFF).count_ones()
-    }
-
-    /// The chiplet and slot of each enabled core, in order. This is the SMU's addressing: a slot is the
-    /// position among all eight, so a disabled core leaves a gap.
-    pub fn slots(core_disable_maps: &[u32]) -> Vec<(u32, u32)> {
-        let mut out = Vec::new();
-        for (ccd, map) in core_disable_maps.iter().enumerate() {
-            for slot in 0..8 {
-                if map & (1 << slot) == 0 {
-                    out.push((ccd as u32, slot));
-                }
-            }
-        }
-        out
     }
 }
 
@@ -519,23 +545,8 @@ mod tests {
     }
 
     #[test]
-    fn disabled_cores_leave_a_gap_in_the_slots() {
-        // A 6-core chiplet with slots 6 and 7 fused off, and a full one.
-        let slots = topology::slots(&[0b1100_0000, 0]);
-        assert_eq!(slots.len(), 14);
-        assert_eq!(slots[5], (0, 5));
-        assert_eq!(slots[6], (1, 0));
+    fn enabled_cores_counts_the_slots_that_are_not_fused_off() {
         assert_eq!(topology::enabled_cores(0b1100_0000), 6);
         assert_eq!(topology::enabled_cores(0), 8);
-    }
-
-    #[test]
-    fn a_fused_off_middle_core_is_skipped_not_renumbered() {
-        // Slot 2 disabled: the third core lives in slot 3, which is what the SMU is addressed by.
-        let slots = topology::slots(&[0b0000_0100]);
-        assert_eq!(
-            slots.iter().map(|s| s.1).collect::<Vec<_>>(),
-            vec![0, 1, 3, 4, 5, 6, 7]
-        );
     }
 }

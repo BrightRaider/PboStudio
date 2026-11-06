@@ -8,19 +8,24 @@
 resolver = "2"
 members = [
     "crates/pbo-core",
+    "crates/pbo-app",
+    "crates/pbo-ui",
+    "examples/embed",
     "crates/pbo-os",
     "crates/pbo-smu",
     "crates/pbo",
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "1.2.0-beta.1"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/BrightRaider/PboStudio"
 
 [workspace.dependencies]
 windows-sys = "0.59"
+serde_json = "1"
+sha2 = "0.10"
 
 [profile.release]
 opt-level = "s"

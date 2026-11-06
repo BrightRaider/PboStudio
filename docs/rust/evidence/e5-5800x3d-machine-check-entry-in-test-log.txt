@@ -1,0 +1,52 @@
+# A machine check entry in a test log of its own, while core 4 of the 5800X3D was under test, 2026-11-06.
+# PBO_TEST_EVENTLOG=PboStudioTest|PboStudioTest adds the test log to what the program reads (next to the real WHEA source, never instead of it).
+# The entry (event id 19, warning, 'Synthetic test entry ... Not a hardware error') was written by hand 12 s into run 1; the real System log was not touched and the test log was removed afterwards.
+# The processor was not changed (core 4 at the value it holds, -28). The program ran from its own copy, so its memory file is not the owner's.
+
+﻿VALUES BEFORE: -20 -25 -30 -30 -28 -30 -30 -30
+test log created: PboStudioTest
+
+=== run 1: core 4 under test, a machine check entry appears after 12 s  [13:28:00]
+entry written at 13:28:12
+Log: <work folder>\runs\logs\pbo_2026-11-06.log
+Testing cores [4] at the values they hold, 40 s each, with Prime95. Nothing is changed on the processor.
+core  4: FAILED at -28: machine check 19 that names no processor, counted against core 4 (the only one loaded)
+
+--- exit code 1
+
+=== run 2: the old entry is still in the log, the run is newer  [13:28:21]
+Log: <work folder>\runs\logs\pbo_2026-11-06.log
+Testing cores [4] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+core  4: held at -28 (0 full sweeps)
+
+--- exit code 0
+
+=== memory after the runs
+BIOS version it was gathered under: 1.S3
+core  4: best that held  -28   worst that failed  -28
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+13:28:00 [1106132800] ---- start ----
+13:28:00 [1106132800] Testing cores [4] at the values they hold, 40 s each, with Prime95. Nothing is changed on the processor.
+13:28:00 [1106132800] core 4: Prime95 on logical [8] at -28 for 40 s
+13:28:00 [1106132800] core 4: load changes: periodic:30:1
+13:28:21 [1106132800] WHEA 19 (warning) at 2026-11-06T12:28:12.6238637Z: processor APIC id ?, core not known
+13:28:21 [1106132800] core  4: FAILED at -28: machine check 19 that names no processor, counted against core 4 (the only one loaded)
+13:28:21 [1106132800] run ended: failures
+13:28:21 [1106132821] ---- start ----
+13:28:21 [1106132821] Testing cores [4] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+13:28:21 [1106132821] core 4: Prime95 on logical [8] at -28 for 20 s
+13:28:21 [1106132821] core 4: load changes: periodic:30:1
+13:28:42 [1106132821] core 4: engine used 100 % of the core
+13:28:42 [1106132821] core  4: held at -28 (0 full sweeps)
+13:28:42 [1106132821] run ended: all cores passed
+
+test log removed: gone
+VALUES AFTER: -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: values unchanged
+DONE [13:28:42]

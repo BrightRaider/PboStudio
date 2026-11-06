@@ -1,0 +1,18 @@
+[package]
+name = "pbo-embed-example"
+description = "A neutral example guest: a loadable module with its own C function table and JSON messages (ADR-0014)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pbo-app = { path = "../../crates/pbo-app" }
+pbo-core = { path = "../../crates/pbo-core" }
+
+[dev-dependencies]
+libloading = "0.8"
+pbo-os = { path = "../../crates/pbo-os" }

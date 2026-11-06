@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "area": "apic-topology",
+  "kind": "parity",
+  "invariants": ["I4"],
+  "source": "tests/PboStudio.Tests/ApicTopologyTests.cs",
+  "about": "A machine check names the processor by APIC id. With a measured map (apic id to logical processor) the core is exact; without one the id is taken as the logical processor's number. An id nobody owns blames no core. 'cores' lists physical cores: {count, threadsPerCore} means core N owns logical processors N*t .. N*t+t-1. 'map' is null (no map), {identity: n} (apic id = logical processor, n of them) or {pairs: [[apic, logical], ...]}.",
+  "cases": [
+    { "name": "without a map the old assumption holds on the verified part (apic 9 is core 4)", "function": "coreForApicId",
+      "input": { "apicId": 9, "cores": { "count": 8, "threadsPerCore": 2 }, "map": null }, "expected": 4 },
+    { "name": "without a map apic 0 is core 0", "function": "coreForApicId",
+      "input": { "apicId": 0, "cores": { "count": 8, "threadsPerCore": 2 }, "map": null }, "expected": 0 },
+    { "name": "an identity map gives the same answer as no map (apic 9)", "function": "coreForApicId",
+      "input": { "apicId": 9, "cores": { "count": 8, "threadsPerCore": 2 }, "map": { "identity": 16 } }, "expected": 4 },
+    { "name": "an identity map gives the same answer as no map (apic 15)", "function": "coreForApicId",
+      "input": { "apicId": 15, "cores": { "count": 8, "threadsPerCore": 2 }, "map": { "identity": 16 } }, "expected": 7 },
+
+    { "name": "a gap in the ids: the old rule credits apic 16 to core 8", "function": "coreForApicId",
+      "input": { "apicId": 16, "cores": { "count": 12, "threadsPerCore": 2 }, "map": null }, "expected": 8 },
+    { "name": "a gap in the ids: the measured map says apic 16 is core 6", "function": "coreForApicId",
+      "input": { "apicId": 16, "cores": { "count": 12, "threadsPerCore": 2 },
+        "map": { "pairs": [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,6],[7,7],[8,8],[9,9],[10,10],[11,11],[16,12],[17,13],[18,14],[19,15],[20,16],[21,17],[22,18],[23,19],[24,20],[25,21],[26,22],[27,23]] } },
+      "expected": 6 },
+    { "name": "both siblings of a core resolve to it (apic 17)", "function": "coreForApicId",
+      "input": { "apicId": 17, "cores": { "count": 12, "threadsPerCore": 2 },
+        "map": { "pairs": [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,6],[7,7],[8,8],[9,9],[10,10],[11,11],[16,12],[17,13],[18,14],[19,15],[20,16],[21,17],[22,18],[23,19],[24,20],[25,21],[26,22],[27,23]] } },
+      "expected": 6 },
+    { "name": "an id in the gap belongs to no processor so it blames no core", "function": "coreForApicId",
+      "input": { "apicId": 13, "cores": { "count": 12, "threadsPerCore": 2 },
+        "map": { "pairs": [[0,0],[1,1],[2,2],[3,3],[4,4],[5,5],[6,6],[7,7],[8,8],[9,9],[10,10],[11,11],[16,12],[17,13],[18,14],[19,15],[20,16],[21,17],[22,18],[23,19],[24,20],[25,21],[26,22],[27,23]] } },
+      "expected": null },
+    { "name": "an id outside every core blames no core", "function": "coreForApicId",
+      "input": { "apicId": 500, "cores": { "count": 12, "threadsPerCore": 2 }, "map": null }, "expected": null }
+  ]
+}

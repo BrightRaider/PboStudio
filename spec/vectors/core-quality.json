@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "area": "core-quality",
+  "kind": "parity",
+  "invariants": ["I12"],
+  "source": "src/PboStudio.Core/CoreQualityService.cs",
+  "about": "Which cores the processor itself rates highest, from its own CPPC values. Without readings there is no ranking at all, never an invented one; a zero is a failed read, not a low score; ties go to the lower core.",
+  "cases": [
+    { "name": "no readings, no ranking", "function": "getCoreQualities",
+      "input": { "coreCount": 3, "cppc": null },
+      "expected": { "0": { "rank": "Standard", "cppc": 0 }, "1": { "rank": "Standard", "cppc": 0 }, "2": { "rank": "Standard", "cppc": 0 } } },
+    { "name": "the two highest are gold and silver, ties to the lower core", "function": "getCoreQualities",
+      "input": { "coreCount": 4, "cppc": [200, 230, 230, 210] },
+      "expected": { "0": { "rank": "Standard", "cppc": 200 }, "1": { "rank": "GoldStar", "cppc": 230 }, "2": { "rank": "SilverStar", "cppc": 230 }, "3": { "rank": "Standard", "cppc": 210 } } },
+    { "name": "a failed read is not a low score, and equal values rank nobody", "function": "getCoreQualities",
+      "input": { "coreCount": 3, "cppc": [0, 200, 200] },
+      "expected": { "0": { "rank": "Standard", "cppc": 0 }, "1": { "rank": "Standard", "cppc": 200 }, "2": { "rank": "Standard", "cppc": 200 } } },
+    { "name": "one reading is too few to rank", "function": "getCoreQualities",
+      "input": { "coreCount": 4, "cppc": [0, 0, 300, 0] },
+      "expected": { "0": { "rank": "Standard", "cppc": 0 }, "1": { "rank": "Standard", "cppc": 0 }, "2": { "rank": "Standard", "cppc": 300 }, "3": { "rank": "Standard", "cppc": 0 } } },
+    { "name": "a list shorter than the core count", "function": "getCoreQualities",
+      "input": { "coreCount": 4, "cppc": [250, 100] },
+      "expected": { "0": { "rank": "GoldStar", "cppc": 250 }, "1": { "rank": "SilverStar", "cppc": 100 }, "2": { "rank": "Standard", "cppc": 0 }, "3": { "rank": "Standard", "cppc": 0 } } },
+    { "name": "every core the same", "function": "getCoreQualities",
+      "input": { "coreCount": 2, "cppc": [255, 255] },
+      "expected": { "0": { "rank": "Standard", "cppc": 255 }, "1": { "rank": "Standard", "cppc": 255 } } }
+  ]
+}
