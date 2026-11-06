@@ -1,0 +1,75 @@
+name: Rust
+
+# The Rust rebuild (docs/rust). It builds and tests without any host program: the example guest in rust/examples/embed
+# is a neutral stand-in, and nothing here knows a particular host (ADR-0014).
+on:
+  push:
+    branches: [master]
+    paths: ['rust/**', 'spec/**', 'tests/PboStudio.Tests/Vectors/**', '.github/workflows/rust.yml']
+  pull_request:
+    paths: ['rust/**', 'spec/**', 'tests/PboStudio.Tests/Vectors/**', '.github/workflows/rust.yml']
+  workflow_dispatch:
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rust
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests (the language-neutral vectors run here too)
+        run: cargo test --workspace
+
+      # ADR-0003: the pure core has no dependencies at all.
+      - name: pbo-core has no dependencies
+        shell: bash
+        run: |
+          lines=$(cargo tree -p pbo-core -e normal | wc -l)
+          if [ "$lines" -ne 1 ]; then cargo tree -p pbo-core -e normal; echo "pbo-core grew a dependency"; exit 1; fi
+
+      # ADR-0014: what a host may embed has no process-wide state and never ends the process.
+      - name: No globals in pbo-core and pbo-app
+        shell: bash
+        run: |
+          if grep -rnE 'static mut|process::exit|env_logger|tracing_subscriber' crates/pbo-core/src crates/pbo-app/src | grep -v '^[^:]*:[0-9]*:\s*//'; then
+            echo "pbo-core and pbo-app must not use static mut, process::exit or set up logging"; exit 1
+          fi
+
+      - name: Release build
+        run: cargo build --release
+
+      - name: Checksum of the program
+        shell: pwsh
+        run: |
+          ./target/release/pbo.exe version
+          Get-FileHash ./target/release/pbo.exe -Algorithm SHA256 | Format-List
+
+  vectors-csharp:
+    # The same vectors, run by the program that exists today. Parity vectors must hold in both languages.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Vector tests
+        run: dotnet test tests/PboStudio.Tests/PboStudio.Tests.csproj -c Release --nologo --filter "FullyQualifiedName~Vector"
