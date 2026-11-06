@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "area": "fft-range",
+  "kind": "new",
+  "invariants": ["I5"],
+  "source": "rust/crates/pbo-core/src/engine.rs (the presets are those of 1.x; a range of one's own is new)",
+  "about": "The FFT sizes Prime95 tests, in K. A preset is a name, a range of one's own is written MIN-MAX. The smallest size is 4 and the largest 65536, and the smallest must not be above the largest. 'range' gives the sizes, 'text' the form written to plan files and the command line.",
+  "cases": [
+    { "name": "a preset gives its range", "function": "range", "input": { "text": "Heavy" }, "expected": [4, 1344] },
+    { "name": "the smallest preset", "function": "range", "input": { "text": "Smallest" }, "expected": [4, 21] },
+    { "name": "a range of one's own", "function": "range", "input": { "text": "36-248" }, "expected": [36, 248] },
+    { "name": "spaces around the numbers do not matter", "function": "range", "input": { "text": " 36 - 248 " }, "expected": [36, 248] },
+    { "name": "the smallest and the largest size are allowed", "function": "range", "input": { "text": "4-65536" }, "expected": [4, 65536] },
+    { "name": "out of order is nothing", "function": "range", "input": { "text": "248-36" }, "expected": null },
+    { "name": "below the smallest size is nothing", "function": "range", "input": { "text": "2-100" }, "expected": null },
+    { "name": "above the largest size is nothing", "function": "range", "input": { "text": "4-70000" }, "expected": null },
+    { "name": "words that are no preset are nothing", "function": "range", "input": { "text": "Gigantic" }, "expected": null },
+    { "name": "a preset is written by its name", "function": "text", "input": { "text": "Large" }, "expected": "Large" },
+    { "name": "a range of one's own is written MIN-MAX", "function": "text", "input": { "text": " 100 - 2000 " }, "expected": "100-2000" }
+  ]
+}

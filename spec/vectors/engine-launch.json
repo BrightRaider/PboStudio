@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "area": "engine-launch",
+  "kind": "new",
+  "invariants": ["I4", "I5"],
+  "source": "src/PboStudio.Core/Prime95Engine.cs (BuildConfig) and YCruncherEngine.cs (Start, FindBinaryFor)",
+  "about": "What each engine is started with. Prime95 gets one worker with one core per test (NumWorkers, CoresPerTest, NumCores), and must not bind its threads itself (EnableSetAffinity=0), or it spreads over cores, or never gets going inside the one processor it is confined to, and a single-core test means nothing: with the settings of 1.x it reported no finished FFT size in seven minutes, with these it does within seconds. y-cruncher is started with a settings file that names the logical processors it runs on (its stress verb cannot): from the command line it starts a thread for every logical processor of the machine, which take turns on the one it is confined to; its logfile switch has to precede the verb.",
+  "cases": [
+    { "name": "prime95 avx2 smallest, one thread", "function": "prime95Config",
+      "input": { "mode": "Avx2", "fft": "Smallest", "memoryMb": 0, "threads": 1 },
+      "expected": "StressTester=1\r\nUsePrimenet=0\r\nV24OptionsConverted=1\r\nWGUID_version=2\r\nErrorCheck=1\r\nSumInputsErrorCheck=1\r\nCpuSupportsAVX=1\r\nCpuSupportsAVX2=1\r\nCpuSupportsFMA3=1\r\nCpuSupportsAVX512F=0\r\nMinTortureFFT=4\r\nMaxTortureFFT=21\r\nTortureMem=0\r\nTortureTime=1\r\nTortureThreads=1\r\nTortureHyperthreading=0\r\nNumWorkers=1\r\nCoresPerTest=1\r\nNumCores=1\r\nEnableSetAffinity=0\r\nEnableSetPriority=0\r\nV30OptionsConverted=1\r\nExitOnX=1\r\nResultsFileTimestampInterval=60\r\n" },
+    { "name": "prime95 sse switches the vector units off", "function": "prime95Config",
+      "input": { "mode": "Sse", "fft": "Heavy", "memoryMb": 0, "threads": 2 },
+      "expected": "StressTester=1\r\nUsePrimenet=0\r\nV24OptionsConverted=1\r\nWGUID_version=2\r\nErrorCheck=1\r\nSumInputsErrorCheck=1\r\nCpuSupportsAVX=0\r\nCpuSupportsAVX2=0\r\nCpuSupportsFMA3=0\r\nCpuSupportsAVX512F=0\r\nMinTortureFFT=4\r\nMaxTortureFFT=1344\r\nTortureMem=0\r\nTortureTime=1\r\nTortureThreads=2\r\nTortureHyperthreading=0\r\nNumWorkers=1\r\nCoresPerTest=1\r\nNumCores=2\r\nEnableSetAffinity=0\r\nEnableSetPriority=0\r\nV30OptionsConverted=1\r\nExitOnX=1\r\nResultsFileTimestampInterval=60\r\n" },
+    { "name": "fft preset ranges", "function": "fftRange", "input": { "fft": "HeavyShort" }, "expected": [4, 160] },
+    { "name": "fft preset moderate", "function": "fftRange", "input": { "fft": "Moderate" }, "expected": [1344, 4096] },
+    { "name": "ycruncher puts the logfile before the verb and takes its settings from a file", "function": "ycruncherArguments",
+      "input": { "log": "C:/work/out.txt", "config": "C:/work/stress.cfg" },
+      "expected": "logfile:\"C:/work/out.txt\" config \"C:/work/stress.cfg\"" },
+    { "name": "ycruncher settings name one logical processor and its share of memory", "function": "ycruncherConfig",
+      "input": { "logical": [2], "seconds": 60, "algorithms": ["SFTv4", "VT3"] },
+      "expected": "{\r\n    Action : \"StressTest\"\r\n    StressTest : {\r\n        AllocateLocally : \"true\"\r\n        LogicalCores : [2]\r\n        TotalMemory : 67108864\r\n        SecondsPerTest : 60\r\n        SecondsTotal : 0\r\n        StopOnError : \"true\"\r\n        Tests : [\r\n            \"SFTv4\"\r\n            \"VT3\"\r\n        ]\r\n    }\r\n}\r\n" },
+    { "name": "ycruncher settings with two threads of a core double the memory", "function": "ycruncherConfig",
+      "input": { "logical": [4, 5], "seconds": 30, "algorithms": ["FFTv4"] },
+      "expected": "{\r\n    Action : \"StressTest\"\r\n    StressTest : {\r\n        AllocateLocally : \"true\"\r\n        LogicalCores : [4 5]\r\n        TotalMemory : 134217728\r\n        SecondsPerTest : 30\r\n        SecondsTotal : 0\r\n        StopOnError : \"true\"\r\n        Tests : [\r\n            \"FFTv4\"\r\n        ]\r\n    }\r\n}\r\n" },
+    { "name": "zen 3 prefers the zen 2 binary", "function": "ycruncherPrefixes", "input": { "generation": 3 }, "expected": ["19-ZN2", "17-ZN1"] },
+    { "name": "zen 5 prefers its own then older", "function": "ycruncherPrefixes", "input": { "generation": 5 }, "expected": ["24-ZN5", "22-ZN4", "19-ZN2"] },
+    { "name": "unknown falls back to the oldest instruction sets", "function": "ycruncherPrefixes", "input": { "generation": 0 }, "expected": ["13-HSW", "11-SNB", "00-x86"] }
+  ]
+}

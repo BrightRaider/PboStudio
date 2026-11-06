@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "area": "margin-encoding",
+  "kind": "parity",
+  "invariants": ["I1"],
+  "source": "external/ZenStates-Core/Utils.cs (MakePsmMarginArg) and SMUCommands/SetPsmMarginSingleCore.cs",
+  "about": "How a Curve Optimizer value is written into the one 32-bit argument of the set message: the low 16 bits hold the value as two's complement, bits 31:20 hold the core. A wrong bit here moves a different core's margin, so this is pinned in both languages.",
+  "cases": [
+    { "name": "zero", "function": "psmMarginArg", "input": { "margin": 0 }, "expected": 0 },
+    { "name": "plus one", "function": "psmMarginArg", "input": { "margin": 1 }, "expected": 1 },
+    { "name": "minus one is all sixteen bits", "function": "psmMarginArg", "input": { "margin": -1 }, "expected": 65535 },
+    { "name": "minus 20", "function": "psmMarginArg", "input": { "margin": -20 }, "expected": 65516 },
+    { "name": "minus 30", "function": "psmMarginArg", "input": { "margin": -30 }, "expected": 65506 },
+    { "name": "minus 50", "function": "psmMarginArg", "input": { "margin": -50 }, "expected": 65486 },
+    { "name": "plus 30", "function": "psmMarginArg", "input": { "margin": 30 }, "expected": 30 },
+    { "name": "the core goes in the high bits, the value in the low", "function": "setArgument", "input": { "coreMask": 1048576, "margin": -20 }, "expected": 1114092 },
+    { "name": "second chiplet, third core", "function": "setArgument", "input": { "coreMask": 270532608, "margin": -30 }, "expected": 270598114 },
+    { "name": "reserved bits of the mask are dropped", "function": "setArgument", "input": { "coreMask": 1048575, "margin": 5 }, "expected": 5 }
+  ]
+}

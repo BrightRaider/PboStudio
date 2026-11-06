@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "area": "core-order",
+  "kind": "new",
+  "invariants": ["I5"],
+  "source": "rust/crates/pbo-core/src/order.rs (the alternating order is the one 1.x calls Alternate)",
+  "about": "The order the chosen cores are tested in. 'sequential' keeps the order given. 'alternate' takes the first half and the second half in turn (with an odd count the first half is the longer), so neighbouring cores are never tested back to back. It works on the cores that were chosen, not on their numbers. A shuffle depends on a seed and is checked as a property in the unit tests, not here.",
+  "cases": [
+    { "name": "sequential keeps the order", "function": "arrange", "input": { "order": "sequential", "cores": [2, 5, 7] }, "expected": [2, 5, 7] },
+    { "name": "alternating, eight cores", "function": "arrange", "input": { "order": "alternate", "cores": [0, 1, 2, 3, 4, 5, 6, 7] }, "expected": [0, 4, 1, 5, 2, 6, 3, 7] },
+    { "name": "alternating, an odd count", "function": "arrange", "input": { "order": "alternate", "cores": [0, 1, 2, 3, 4] }, "expected": [0, 3, 1, 4, 2] },
+    { "name": "alternating, sixteen cores", "function": "arrange", "input": { "order": "alternate", "cores": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] }, "expected": [0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15] },
+    { "name": "alternating works on the chosen cores", "function": "arrange", "input": { "order": "alternate", "cores": [1, 3, 4, 6] }, "expected": [1, 4, 3, 6] },
+    { "name": "pairs hand the load from every core to every other", "function": "arrange", "input": { "order": "pairs", "cores": [0, 1, 2] }, "expected": [0, 1, 0, 2, 1, 0, 1, 2, 2, 0, 2, 1] },
+    { "name": "pairs of one core are that core", "function": "arrange", "input": { "order": "pairs", "cores": [4] }, "expected": [4] },
+    { "name": "one core is one core", "function": "arrange", "input": { "order": "alternate", "cores": [3] }, "expected": [3] },
+    { "name": "no cores, no order", "function": "arrange", "input": { "order": "alternate", "cores": [] }, "expected": [] },
+
+    { "name": "a name is read whatever its case", "function": "parse", "input": { "id": " Alternate " }, "expected": "alternate" },
+    { "name": "an unknown name is nothing", "function": "parse", "input": { "id": "sideways" }, "expected": null }
+  ]
+}

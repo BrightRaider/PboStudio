@@ -91,6 +91,65 @@ fn pm_read(input: &Value) -> Value {
     }
 }
 
+fn parse_knowledge(v: &Value) -> pbo_core::knowledge::Knowledge {
+    v.as_object()
+        .unwrap()
+        .iter()
+        .map(|(core, k)| {
+            (
+                core.parse::<u32>().unwrap(),
+                pbo_core::knowledge::CoreKnowledge {
+                    best_passed: int_or_none(k, "bestPassed"),
+                    worst_failed: int_or_none(k, "worstFailed"),
+                },
+            )
+        })
+        .collect()
+}
+
+fn dump_knowledge(k: &pbo_core::knowledge::Knowledge) -> Value {
+    Value::Object(
+        k.iter()
+            .map(|(core, k)| {
+                (
+                    core.to_string(),
+                    json!({ "bestPassed": k.best_passed, "worstFailed": k.worst_failed }),
+                )
+            })
+            .collect(),
+    )
+}
+
+fn parse_margins(v: &Value) -> std::collections::BTreeMap<u32, i32> {
+    v.as_object()
+        .unwrap()
+        .iter()
+        .map(|(core, m)| (core.parse::<u32>().unwrap(), m.as_i64().unwrap() as i32))
+        .collect()
+}
+
+fn core_list(v: &Value) -> Vec<u32> {
+    v.as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_u64().unwrap() as u32)
+        .collect()
+}
+
+fn tuner_mode(input: &Value) -> pbo_core::tuner::Mode {
+    match input["mode"].as_str().unwrap() {
+        "coarse" => pbo_core::tuner::Mode::Coarse,
+        "fine" => pbo_core::tuner::Mode::Fine,
+        other => match other
+            .strip_prefix("steps:")
+            .and_then(|n| n.parse::<i32>().ok())
+        {
+            Some(n) => pbo_core::tuner::Mode::Steps(n),
+            None => panic!("unknown mode {other}"),
+        },
+    }
+}
+
 /// Plays the steps of a log-tail case against an in-memory "file".
 fn log_tail_poll(input: &Value) -> Value {
     let mut tail = pbo_core::logtail::LogTail::default();
@@ -121,7 +180,7 @@ fn slot_pair(slot: pbo_core::coremap::Slot) -> Value {
 
 /// Runs one case. `None` means this function is not implemented here.
 fn run(area: &str, function: &str, input: &Value) -> Option<Value> {
-    use pbo_core::{coremap, depth, pm};
+    use pbo_core::{coremap, depth, engine, logday, pm};
     Some(match (area, function) {
         ("pm-table-layout", "layoutFor") => {
             match pm::layout_for(input["version"].as_u64().unwrap() as u32) {
@@ -149,7 +208,208 @@ fn run(area: &str, function: &str, input: &Value) -> Option<Value> {
         ("duration-format", "hoursSeconds") => json!(pbo_core::duration::hours_seconds(
             input["seconds"].as_i64().unwrap()
         )),
+        ("auto-tuner" | "search-steps", "stepSize") => {
+            json!(pbo_core::tuner::step_size(tuner_mode(input)))
+        }
+        ("auto-tuner", "applyGuardband") => json!(pbo_core::tuner::apply_guardband(
+            int(input, "lastKnownGood"),
+            int(input, "guardband")
+        )),
+        ("auto-tuner" | "search-steps", "nextStep") => {
+            let s = &input["state"];
+            let state = pbo_core::tuner::CoreState {
+                last_known_good: int_or_none(s, "lastKnownGood"),
+                ascending: s["ascending"].as_bool().unwrap(),
+            };
+            let r = pbo_core::tuner::next_step(
+                int(input, "margin"),
+                input["passed"].as_bool().unwrap(),
+                tuner_mode(input),
+                int(input, "maxLimit"),
+                state,
+                int(input, "guardband"),
+            );
+            json!({
+                "nextMargin": r.next_margin,
+                "locked": r.locked,
+                "passed": r.passed,
+                "state": { "lastKnownGood": r.state.last_known_good, "ascending": r.state.ascending }
+            })
+        }
+        ("auto-tuner" | "search-steps", "worstCaseSlots") => {
+            json!(pbo_core::tuner::worst_case_slots(
+                int(input, "margin"),
+                int(input, "maxLimit"),
+                tuner_mode(input),
+                int(input, "maxPasses"),
+                input["canClimb"].as_bool().unwrap()
+            ))
+        }
+        ("core-knowledge", "floorFor") => {
+            let k = pbo_core::knowledge::CoreKnowledge {
+                best_passed: int_or_none(input, "bestPassed"),
+                worst_failed: int_or_none(input, "worstFailed"),
+            };
+            json!(k.floor_for(int(input, "chipLimit")))
+        }
+        ("core-knowledge", "isKnownBad") => {
+            let k = pbo_core::knowledge::CoreKnowledge {
+                best_passed: None,
+                worst_failed: int_or_none(input, "worstFailed"),
+            };
+            json!(k.is_known_bad(int(input, "margin")))
+        }
+        ("core-knowledge", "record") => {
+            use pbo_core::knowledge::{record_failure, record_pass};
+            let mut k = pbo_core::knowledge::Knowledge::new();
+            for r in input["results"].as_array().unwrap() {
+                if let Some(p) = r.get("pass") {
+                    record_pass(
+                        &mut k,
+                        p[0].as_u64().unwrap() as u32,
+                        p[1].as_i64().unwrap() as i32,
+                    );
+                } else if let Some(f) = r.get("fail") {
+                    record_failure(
+                        &mut k,
+                        f[0].as_u64().unwrap() as u32,
+                        f[1].as_i64().unwrap() as i32,
+                    );
+                } else {
+                    panic!("unknown result {r}");
+                }
+            }
+            dump_knowledge(&k)
+        }
+        ("core-knowledge", "coresWithKnownBad") => json!(
+            pbo_core::knowledge::cores_with_known_bad(&parse_knowledge(&input["knowledge"]))
+        ),
+        ("campaign", "recommend") => {
+            let s = pbo_core::campaign::recommend(
+                &core_list(&input["cores"]),
+                &parse_margins(&input["margins"]),
+                &parse_knowledge(&input["knowledge"]),
+                int(input, "chipLimit"),
+                input["driverReady"].as_bool().unwrap(),
+                input["engineReady"].as_bool().unwrap(),
+                int(input, "guardband"),
+            );
+            json!({
+                "stage": s.stage.name(),
+                "profile": s.profile.name(),
+                "useAutoTuner": s.use_auto_tuner,
+                "cores": s.cores,
+                "action": if s.action == pbo_core::campaign::Action::OpenSetup { "OpenSetup" } else { "ConfigureRun" },
+                "showProfile": s.show_profile
+            })
+        }
+        ("campaign", "phaseNumberOf") => json!(pbo_core::campaign::Stage::from_name(
+            input["stage"].as_str().unwrap()
+        )
+        .unwrap()
+        .phase_number()),
+        ("campaign", "signature") => json!(pbo_core::campaign::signature(
+            pbo_core::campaign::Stage::from_name(input["stage"].as_str().unwrap()).unwrap(),
+            &core_list(&input["cores"]),
+            &parse_margins(&input["margins"])
+        )),
+        ("campaign", "backOffTo") => {
+            let k = pbo_core::knowledge::CoreKnowledge {
+                best_passed: int_or_none(input, "bestPassed"),
+                worst_failed: int_or_none(input, "worstFailed"),
+            };
+            json!(pbo_core::campaign::back_off_to(
+                &k,
+                int(input, "chipLimit"),
+                int(input, "guardband")
+            ))
+        }
+        ("campaign", "decide") => {
+            use pbo_core::campaign::{decide, Action, NextStep, Profile, Stage, State};
+            let s = &input["state"];
+            let state = State {
+                last_stage: Stage::from_name(s["lastStage"].as_str().unwrap()),
+                runs_done: s["runsDone"].as_u64().unwrap() as u32,
+                last_signature: s["lastSignature"].as_str().unwrap().to_string(),
+            };
+            let st = &input["step"];
+            let step = NextStep {
+                profile: Profile::HeavyFfts,
+                stage: Stage::from_name(st["stage"].as_str().unwrap()).unwrap(),
+                use_auto_tuner: false,
+                cores: core_list(&st["cores"]),
+                action: if st["action"] == "OpenSetup" {
+                    Action::OpenSetup
+                } else {
+                    Action::ConfigureRun
+                },
+                show_profile: true,
+            };
+            let d = decide(
+                &state,
+                &step,
+                &parse_margins(&input["margins"]),
+                input["lastRunClean"].as_bool().unwrap(),
+            );
+            json!({ "verdict": d.verdict.name(), "phaseNumber": d.phase_number })
+        }
         ("log-tail", "poll") => log_tail_poll(input),
+        ("download-policy", "isAllowed") => {
+            let hosts: Vec<&str> = input["allowedHosts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| h.as_str().unwrap())
+                .collect();
+            json!(pbo_core::download::is_allowed(
+                input["url"].as_str().unwrap(),
+                &hosts
+            ))
+        }
+        ("download-policy", "registrableRoot") => json!(pbo_core::download::registrable_root(
+            input["host"].as_str().unwrap()
+        )),
+        ("download-policy", "pinnedInstallerSha256") => {
+            json!(pbo_core::download::PAWNIO_INSTALLER_SHA256)
+        }
+        ("interrupted-run", "classify") => {
+            let written = input["hasState"].as_bool().unwrap().then_some(1_000_000i64);
+            let started = 1_000_000 + input["bootOffsetSeconds"].as_i64().unwrap();
+            match pbo_core::interrupted::system_restarted(written, started) {
+                Some(restarted) => json!({ "systemRestarted": restarted }),
+                None => Value::Null,
+            }
+        }
+        ("apic-topology", "coreForApicId") => {
+            use pbo_core::apic::{core_for_apic_id, Core};
+            let count = input["cores"]["count"].as_i64().unwrap() as i32;
+            let t = input["cores"]["threadsPerCore"].as_i64().unwrap() as i32;
+            let cores: Vec<Core> = (0..count)
+                .map(|n| Core {
+                    index: n as usize,
+                    logical_processors: (n * t..n * t + t).collect(),
+                })
+                .collect();
+            let map: Option<std::collections::HashMap<i32, i32>> = match &input["map"] {
+                Value::Null => None,
+                m if m.get("identity").is_some() => {
+                    let n = m["identity"].as_i64().unwrap() as i32;
+                    Some((0..n).map(|x| (x, x)).collect())
+                }
+                m => Some(
+                    m["pairs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|p| (p[0].as_i64().unwrap() as i32, p[1].as_i64().unwrap() as i32))
+                        .collect(),
+                ),
+            };
+            match core_for_apic_id(int(input, "apicId"), &cores, map.as_ref()) {
+                Some(i) => json!(i),
+                None => Value::Null,
+            }
+        }
         ("smu-core-map", "fallback") => match coremap::fallback(
             int(input, "core"),
             int(input, "ccdCount"),
@@ -158,6 +418,306 @@ fn run(area: &str, function: &str, input: &Value) -> Option<Value> {
             Some(s) => slot_pair(s),
             None => Value::Null,
         },
+        ("engine-output", "prime95") => {
+            engine_line(engine::classify_prime95(input["line"].as_str().unwrap()))
+        }
+        ("engine-output", "ycruncher") => {
+            engine_line(engine::classify_ycruncher(input["line"].as_str().unwrap()))
+        }
+        ("engine-output", "prime95Cycles") => {
+            let mut cycles = engine::Prime95Cycles::default();
+            for k in ints(input, "sizes") {
+                cycles.feed(&engine::Line::PassedFft(k as u32));
+            }
+            json!(cycles.completed)
+        }
+        ("engine-output", "ycruncherCycles") => {
+            json!(engine::ycruncher_cycles(int(input, "headers") as u32))
+        }
+        ("engine-launch", "prime95Config") => {
+            let mode = match input["mode"].as_str().unwrap() {
+                "Sse" => engine::Prime95Mode::Sse,
+                "Avx" => engine::Prime95Mode::Avx,
+                "Avx2" => engine::Prime95Mode::Avx2,
+                "Avx512" => engine::Prime95Mode::Avx512,
+                other => panic!("unknown mode {other}"),
+            };
+            let fft = engine::FftPreset::from_name(input["fft"].as_str().unwrap()).unwrap();
+            json!(engine::prime95_config(
+                mode,
+                fft,
+                int(input, "memoryMb") as u32,
+                int(input, "threads") as u32
+            ))
+        }
+        ("engine-launch", "fftRange") => {
+            let (lo, hi) = engine::FftPreset::from_name(input["fft"].as_str().unwrap())
+                .unwrap()
+                .range();
+            json!([lo, hi])
+        }
+        ("engine-launch", "ycruncherConfig") => {
+            let algorithms: Vec<&str> = input["algorithms"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| a.as_str().unwrap())
+                .collect();
+            json!(engine::ycruncher_config(
+                &ints(input, "logical")
+                    .iter()
+                    .map(|l| *l as usize)
+                    .collect::<Vec<_>>(),
+                int(input, "seconds") as u32,
+                &algorithms
+            ))
+        }
+        ("engine-launch", "ycruncherArguments") => {
+            json!(engine::ycruncher_arguments(
+                input["log"].as_str().unwrap(),
+                input["config"].as_str().unwrap()
+            ))
+        }
+        ("engine-launch", "ycruncherPrefixes") => {
+            json!(engine::ycruncher_preferred_prefixes(
+                int(input, "generation") as u32
+            ))
+        }
+        ("log-day", "logDay") => {
+            let d = date_of(input);
+            let day = logday::log_day(d, int(input, "hour") as u32, int(input, "boundary") as u32);
+            json!([day.year, day.month, day.day])
+        }
+        ("log-day", "fileName") => {
+            json!(logday::file_name(date_of(input), int(input, "part") as u32))
+        }
+        ("log-day", "partFor") => {
+            let sizes: Vec<u64> = ints(input, "sizes").iter().map(|s| *s as u64).collect();
+            json!(logday::part_for(&sizes, int(input, "limit") as u64))
+        }
+        ("log-day", "line") => json!(logday::line(
+            int(input, "hour") as u32,
+            int(input, "minute") as u32,
+            int(input, "second") as u32,
+            input["run"].as_str().unwrap(),
+            input["text"].as_str().unwrap()
+        )),
+        ("core-order", "arrange") => {
+            let order =
+                pbo_core::order::CoreOrder::from_id(input["order"].as_str().unwrap()).unwrap();
+            let cores: Vec<usize> = input["cores"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| c.as_u64().unwrap() as usize)
+                .collect();
+            json!(pbo_core::order::arrange(order, &cores, 1))
+        }
+        ("on-error", "policy") => {
+            let on_error =
+                pbo_core::onerror::OnError::from_id(input["onError"].as_str().unwrap()).unwrap();
+            let mut policy = pbo_core::onerror::ErrorPolicy::new(on_error);
+            for c in input["failed"].as_array().unwrap() {
+                policy.failed(c.as_u64().unwrap() as usize);
+            }
+            let order: Vec<usize> = input["order"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| c.as_u64().unwrap() as usize)
+                .collect();
+            json!({ "stop": policy.stop_requested(), "remaining": policy.remaining(&order) })
+        }
+        ("on-error", "parse") => {
+            match pbo_core::onerror::OnError::from_id(input["id"].as_str().unwrap()) {
+                Some(o) => json!(o.id()),
+                None => Value::Null,
+            }
+        }
+        ("fft-range", "range") => {
+            match pbo_core::engine::FftPreset::from_name(input["text"].as_str().unwrap()) {
+                Some(f) => json!([f.range().0, f.range().1]),
+                None => Value::Null,
+            }
+        }
+        ("fft-range", "text") => {
+            json!(
+                pbo_core::engine::FftPreset::from_name(input["text"].as_str().unwrap())
+                    .unwrap()
+                    .to_text()
+            )
+        }
+        ("core-order", "parse") => {
+            match pbo_core::order::CoreOrder::from_id(input["id"].as_str().unwrap()) {
+                Some(o) => json!(o.id()),
+                None => Value::Null,
+            }
+        }
+        ("transient-mode", "dutyCycle") => {
+            let t =
+                pbo_core::transient::Transient::from_text(input["text"].as_str().unwrap()).unwrap();
+            json!(t.duty_cycle())
+        }
+        ("transient-mode", "normalise") => {
+            match pbo_core::transient::Transient::from_text(input["text"].as_str().unwrap()) {
+                Some(t) => json!(t.to_text()),
+                None => Value::Null,
+            }
+        }
+        ("transient-mode", "ofProfile") => {
+            let p = pbo_core::profiles::by_id(input["id"].as_str().unwrap()).unwrap();
+            json!(p.transient_mode().to_text())
+        }
+        ("auto-intensity", "minutes") => {
+            let i =
+                pbo_core::auto::Intensity::from_id(input["intensity"].as_str().unwrap()).unwrap();
+            json!(i.minutes(int(input, "phase")))
+        }
+        ("auto-intensity", "searchMode") => {
+            let i =
+                pbo_core::auto::Intensity::from_id(input["intensity"].as_str().unwrap()).unwrap();
+            json!(match i.search_mode() {
+                pbo_core::tuner::Mode::Coarse => "Coarse",
+                pbo_core::tuner::Mode::Fine => "Fine",
+                pbo_core::tuner::Mode::Steps(_) => "Steps",
+            })
+        }
+        ("auto-intensity", "parse") => {
+            match pbo_core::auto::Intensity::from_id(input["id"].as_str().unwrap()) {
+                Some(i) => json!(i.id()),
+                None => Value::Null,
+            }
+        }
+        ("auto-intensity", "estimate") => {
+            let i =
+                pbo_core::auto::Intensity::from_id(input["intensity"].as_str().unwrap()).unwrap();
+            let e = pbo_core::auto::estimate(
+                i,
+                &core_list(&input["cores"]),
+                &parse_margins(&input["margins"]),
+                &parse_knowledge(&input["knowledge"]),
+                int(input, "chipLimit"),
+                int(input, "guardband"),
+                int(input, "fromPhase"),
+            );
+            json!({
+                "total": e.total_minutes,
+                "perPhase": e.per_phase.iter().map(|(p, m)| json!([p, m])).collect::<Vec<_>>(),
+            })
+        }
+        ("campaign-estimate", "estimate") => {
+            let profiles: std::collections::BTreeMap<String, pbo_core::estimate::PhaseProfile> =
+                input["profiles"]
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .map(|(name, v)| {
+                        let a = v.as_array().unwrap();
+                        (
+                            name.clone(),
+                            pbo_core::estimate::PhaseProfile {
+                                minutes_per_core: a[0].as_u64().unwrap() as u32,
+                                iterations: a[1].as_u64().unwrap() as u32,
+                                legs: a[2].as_u64().unwrap() as u32,
+                            },
+                        )
+                    })
+                    .collect();
+            let e = pbo_core::estimate::estimate(
+                &profiles,
+                &core_list(&input["cores"]),
+                &parse_margins(&input["margins"]),
+                &parse_knowledge(&input["knowledge"]),
+                int(input, "chipLimit"),
+                int(input, "guardband"),
+                int(input, "fromPhase"),
+            );
+            json!({
+                "total": e.total_minutes,
+                "perPhase": e.per_phase.iter().map(|(p, m)| json!([p, m])).collect::<Vec<_>>(),
+            })
+        }
+        ("core-quality", "getCoreQualities") => {
+            let cppc: Option<Vec<i32>> = input["cppc"]
+                .as_array()
+                .map(|a| a.iter().map(|x| x.as_i64().unwrap() as i32).collect());
+            let q = pbo_core::quality::core_qualities(
+                input["coreCount"].as_u64().unwrap() as usize,
+                cppc.as_deref(),
+            );
+            Value::Object(
+                q.iter()
+                    .map(|q| {
+                        (
+                            q.core.to_string(),
+                            json!({ "rank": q.rank.name(), "cppc": q.cppc }),
+                        )
+                    })
+                    .collect(),
+            )
+        }
+        ("test-profiles", "ids") => json!(pbo_core::profiles::all()
+            .iter()
+            .map(|p| p.id)
+            .collect::<Vec<_>>()),
+        ("test-profiles", "profile") => {
+            use pbo_core::profiles::{Order, Transient};
+            let p = pbo_core::profiles::by_id(input["id"].as_str().unwrap()).unwrap();
+            json!({
+                "minutesPerCore": p.minutes_per_core,
+                "iterations": p.iterations,
+                "threads": p.threads,
+                "order": match p.order { Order::Sequential => "Sequential", Order::Alternate => "Alternate" },
+                "suspendEverySeconds": p.suspend_every_seconds,
+                "suspendForSeconds": p.suspend_for_seconds,
+                "transient": match p.transient { Transient::Periodic => "Periodic", Transient::MicroBurst => "MicroBurst" },
+                "essential": p.essential,
+                "legs": p.legs.iter().map(|l| json!([l.engine.name(), l.mode.name(), l.fft.name()])).collect::<Vec<_>>(),
+            })
+        }
+        ("smu-messages", "getMargin") | ("smu-messages", "setMargin") => {
+            use pbo_core::families::{self, Generation};
+            let generation = match input["generation"].as_str().unwrap() {
+                "Zen3" => Generation::Zen3,
+                "Zen4" => Generation::Zen4,
+                "Zen5" => Generation::Zen5,
+                other => panic!("unknown generation {other}"),
+            };
+            let message = if function == "getMargin" {
+                families::get_margin_message(generation)
+            } else {
+                families::set_margin_message_mp1(generation)
+            };
+            json!(message.unwrap())
+        }
+        ("saved-profile", "check") => {
+            let margins: std::collections::BTreeMap<i32, i32> = input["margins"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.parse().unwrap(), v.as_i64().unwrap() as i32))
+                .collect();
+            let c = pbo_core::profile::check(
+                input["profileCpu"].as_str().unwrap(),
+                &margins,
+                input["currentCpu"].as_str().unwrap(),
+                int(input, "coreCount"),
+                int(input, "deepest"),
+                int(input, "shallowest"),
+            );
+            json!({
+                "margins": c.margins.iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>(),
+                "problems": c.problems,
+                "wrongProcessor": c.wrong_processor,
+            })
+        }
+        ("margin-encoding", "psmMarginArg") => {
+            json!(pbo_core::margin::psm_arg(int(input, "margin")))
+        }
+        ("margin-encoding", "setArgument") => json!(pbo_core::margin::set_argument(
+            int(input, "coreMask") as u32,
+            int(input, "margin")
+        )),
         ("curve-optimizer-range", "effective") => {
             json!(depth::effective(
                 int(input, "modelLimit"),
@@ -263,4 +823,23 @@ fn every_vector_holds_in_rust() {
         "the areas Rust does not run yet changed: update PENDING on purpose"
     );
     println!("{ran} vector cases ran in Rust; pending areas: {pending:?}");
+}
+
+fn engine_line(line: pbo_core::engine::Line) -> Value {
+    use pbo_core::engine::Line;
+    match line {
+        Line::PassedFft(k) => json!({ "kind": "passedFft", "fft": k }),
+        Line::Passed => json!({ "kind": "passed" }),
+        Line::Failure(text) => json!({ "kind": "failure", "text": text }),
+        Line::Other => json!({ "kind": "other" }),
+    }
+}
+
+fn date_of(input: &Value) -> pbo_core::logday::Date {
+    let a = input["date"].as_array().unwrap();
+    pbo_core::logday::Date {
+        year: a[0].as_i64().unwrap() as i32,
+        month: a[1].as_u64().unwrap() as u32,
+        day: a[2].as_u64().unwrap() as u32,
+    }
 }

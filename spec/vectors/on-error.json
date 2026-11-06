@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "area": "on-error",
+  "kind": "new",
+  "invariants": ["I5"],
+  "source": "rust/crates/pbo-core/src/onerror.rs (the default is what 1.x does: a failed core is left out of the later rounds)",
+  "about": "What a test of the held values does when a core fails. 'continue' tests every core every round, 'skip' (the default) leaves a failed core out of the later rounds, 'stop' ends the whole run at the first error. 'policy' takes the cores that failed, in order, and says whether the run stops and which of the cores of an order are still to be tested. A search is not covered: failing is how a search finds the edge.",
+  "cases": [
+    { "name": "skip leaves the failed core out", "function": "policy", "input": { "onError": "skip", "failed": [3], "order": [1, 3, 5] }, "expected": { "stop": false, "remaining": [1, 5] } },
+    { "name": "skip with several failures", "function": "policy", "input": { "onError": "skip", "failed": [5, 1], "order": [1, 3, 5, 7] }, "expected": { "stop": false, "remaining": [3, 7] } },
+    { "name": "continue keeps every core", "function": "policy", "input": { "onError": "continue", "failed": [3], "order": [1, 3, 5] }, "expected": { "stop": false, "remaining": [1, 3, 5] } },
+    { "name": "stop ends the run at the first error", "function": "policy", "input": { "onError": "stop", "failed": [0], "order": [0, 1, 2] }, "expected": { "stop": true, "remaining": [0, 1, 2] } },
+    { "name": "no failure, no change", "function": "policy", "input": { "onError": "skip", "failed": [], "order": [0, 1] }, "expected": { "stop": false, "remaining": [0, 1] } },
+    { "name": "a name is read whatever its case", "function": "parse", "input": { "id": " Skip " }, "expected": "skip" },
+    { "name": "an unknown name is nothing", "function": "parse", "input": { "id": "ignore" }, "expected": null }
+  ]
+}

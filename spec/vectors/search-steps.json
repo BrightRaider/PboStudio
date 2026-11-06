@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "area": "search-steps",
+  "kind": "new",
+  "invariants": ["I1"],
+  "source": "rust/crates/pbo-core/src/tuner.rs (Mode::Steps)",
+  "about": "A step of the person's own choosing for the per-core search, 1 to 6 counts at a time. 3 and 1 are what 'coarse' and 'fine' have always meant; anything else is new. A step above the largest is the largest, one below one is one. The logic of a pass and of a failure is the one of auto-tuner, with this step.",
+  "cases": [
+    { "name": "a step of two", "function": "stepSize", "input": { "mode": "steps:2" }, "expected": 2 },
+    { "name": "a step of six is the largest", "function": "stepSize", "input": { "mode": "steps:6" }, "expected": 6 },
+    { "name": "a step above the largest is the largest", "function": "stepSize", "input": { "mode": "steps:9" }, "expected": 6 },
+    { "name": "a step below one is one", "function": "stepSize", "input": { "mode": "steps:0" }, "expected": 1 },
+    { "name": "a pass inside the range steps down by two", "function": "nextStep",
+      "input": { "margin": -10, "passed": true, "mode": "steps:2", "maxLimit": -30, "state": { "lastKnownGood": null, "ascending": false }, "guardband": 3 },
+      "expected": { "nextMargin": -12, "locked": false, "passed": true, "state": { "lastKnownGood": -10, "ascending": false } } },
+    { "name": "the last step stops at the limit, not past it", "function": "nextStep",
+      "input": { "margin": -29, "passed": true, "mode": "steps:2", "maxLimit": -30, "state": { "lastKnownGood": null, "ascending": false }, "guardband": 3 },
+      "expected": { "nextMargin": -30, "locked": false, "passed": true, "state": { "lastKnownGood": -29, "ascending": false } } },
+    { "name": "a failure with nothing proven climbs two", "function": "nextStep",
+      "input": { "margin": -12, "passed": false, "mode": "steps:2", "maxLimit": -30, "state": { "lastKnownGood": null, "ascending": false }, "guardband": 3 },
+      "expected": { "nextMargin": -10, "locked": false, "passed": false, "state": { "lastKnownGood": null, "ascending": true } } },
+    { "name": "the worst case for a step of five: the climb from scratch is longer than the descent", "function": "worstCaseSlots",
+      "input": { "margin": -20, "maxLimit": -30, "mode": "steps:5", "maxPasses": 999, "canClimb": true }, "expected": 5 }
+  ]
+}

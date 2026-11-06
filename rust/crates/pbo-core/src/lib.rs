@@ -11,10 +11,32 @@
 
 #![forbid(unsafe_code)]
 
+pub mod apic;
+pub mod auto;
+pub mod campaign;
 pub mod coremap;
 pub mod depth;
+pub mod download;
 pub mod duration;
+pub mod engine;
+pub mod estimate;
+pub mod families;
+pub mod interrupted;
+pub mod knowledge;
+pub mod logday;
 pub mod logtail;
+pub mod onerror;
+pub mod order;
+pub mod profile;
+pub mod profiles;
+pub mod quality;
+pub mod readiness;
+pub mod runstate;
+pub mod search;
+pub mod transient;
+pub mod tuner;
+pub mod version;
+pub mod whea;
 
 /// Conversions between the voltage codes the processor reports and volts.
 pub mod voltage {
@@ -71,13 +93,19 @@ pub mod pstate {
 
 /// Curve Optimizer reads.
 pub mod margin {
-    /// The SMU message that reads a core's Curve Optimizer margin. Verified on Zen 3 (Ryzen 7 5800X3D);
-    /// the Zen 4 table in the library inherits the same value and nobody has checked it on hardware.
-    pub const MSG_GET_MARGIN: u32 = 0x7C;
-
     /// The margin the SMU returns, as a signed number. Negative values come back as two's complement.
     pub fn decode(raw: u32) -> i32 {
         raw as i32
+    }
+
+    /// The low 16 bits of the set message argument: the margin as two's complement.
+    pub fn psm_arg(margin: i32) -> u32 {
+        (margin as u32) & 0xFFFF
+    }
+
+    /// The whole argument of the set message: the core in bits 31:20, the margin in the low 16 bits.
+    pub fn set_argument(core_mask: u32, margin: i32) -> u32 {
+        (core_mask & 0xFFF0_0000) | psm_arg(margin)
     }
 
     /// The core mask the SMU addresses a core by. From Zen 3 on (family above 17h) it is the chiplet in

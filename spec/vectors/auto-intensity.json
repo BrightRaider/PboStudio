@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "area": "auto-intensity",
+  "kind": "new",
+  "invariants": ["I13"],
+  "source": "rust/crates/pbo-core/src/auto.rs",
+  "about": "How hard Auto works: three intensities (fast, normal, thorough) and what each costs. One test is one engine on one core; a step with several engines runs all of them. 'minutes' is how long one test runs in a campaign phase (1 validates what is set, 2 is the search, one test per step, 3 confirms), 'searchMode' how far one step of the search goes, 'estimate' the worst-case minutes of the whole campaign from a phase on. The three totals of the eight-core case are the numbers the documentation quotes: 320, 560 and 1424 minutes (5:20, 9:20 and 23:44 hours).",
+  "cases": [
+    { "name": "fast validates for two minutes a step", "function": "minutes", "input": { "intensity": "fast", "phase": 1 }, "expected": 2 },
+    { "name": "fast searches for three minutes a step", "function": "minutes", "input": { "intensity": "fast", "phase": 2 }, "expected": 3 },
+    { "name": "normal confirms for six minutes a step", "function": "minutes", "input": { "intensity": "normal", "phase": 3 }, "expected": 6 },
+    { "name": "thorough searches for six minutes a step", "function": "minutes", "input": { "intensity": "thorough", "phase": 2 }, "expected": 6 },
+    { "name": "thorough confirms for ten minutes a step", "function": "minutes", "input": { "intensity": "thorough", "phase": 3 }, "expected": 10 },
+
+    { "name": "fast steps three counts at a time", "function": "searchMode", "input": { "intensity": "fast" }, "expected": "Coarse" },
+    { "name": "normal steps three counts at a time", "function": "searchMode", "input": { "intensity": "normal" }, "expected": "Coarse" },
+    { "name": "thorough steps one count at a time", "function": "searchMode", "input": { "intensity": "thorough" }, "expected": "Fine" },
+
+    { "name": "a name is read, whatever its case and spaces", "function": "parse", "input": { "id": " Thorough " }, "expected": "thorough" },
+    { "name": "an unknown name is nothing", "function": "parse", "input": { "id": "slow" }, "expected": null },
+
+    { "name": "eight cores at -10, fast", "function": "estimate",
+      "input": { "intensity": "fast", "cores": [0, 1, 2, 3, 4, 5, 6, 7], "margins": { "0": -10, "1": -10, "2": -10, "3": -10, "4": -10, "5": -10, "6": -10, "7": -10 }, "knowledge": {}, "chipLimit": -30, "guardband": 3, "fromPhase": 1 },
+      "expected": { "total": 320, "perPhase": [[1, 32], [2, 192], [3, 96]] } },
+    { "name": "eight cores at -10, normal", "function": "estimate",
+      "input": { "intensity": "normal", "cores": [0, 1, 2, 3, 4, 5, 6, 7], "margins": { "0": -10, "1": -10, "2": -10, "3": -10, "4": -10, "5": -10, "6": -10, "7": -10 }, "knowledge": {}, "chipLimit": -30, "guardband": 3, "fromPhase": 1 },
+      "expected": { "total": 560, "perPhase": [[1, 48], [2, 320], [3, 192]] } },
+    { "name": "eight cores at -10, thorough", "function": "estimate",
+      "input": { "intensity": "thorough", "cores": [0, 1, 2, 3, 4, 5, 6, 7], "margins": { "0": -10, "1": -10, "2": -10, "3": -10, "4": -10, "5": -10, "6": -10, "7": -10 }, "knowledge": {}, "chipLimit": -30, "guardband": 3, "fromPhase": 1 },
+      "expected": { "total": 1424, "perPhase": [[1, 96], [2, 1008], [3, 320]] } },
+    { "name": "from the second phase on, the first is not counted", "function": "estimate",
+      "input": { "intensity": "normal", "cores": [0, 1], "margins": { "0": -10, "1": -10 }, "knowledge": {}, "chipLimit": -30, "guardband": 3, "fromPhase": 2 },
+      "expected": { "total": 128, "perPhase": [[2, 80], [3, 48]] } },
+    { "name": "a core held below its failure is searched back up, fast", "function": "estimate",
+      "input": { "intensity": "fast", "cores": [0], "margins": { "0": -28 }, "knowledge": { "0": { "bestPassed": null, "worstFailed": -27 } }, "chipLimit": -30, "guardband": 0, "fromPhase": 2 },
+      "expected": { "total": 45, "perPhase": [[2, 33], [3, 12]] } }
+  ]
+}
