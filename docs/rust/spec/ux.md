@@ -199,8 +199,8 @@ Die Zahlen (Zähler, Obergrenze, Takt der Messwerttabelle) sind offen und gehen 
 
 ## Offene Fragen
 
-1. **Reihenfolge der Tests:** alle Tests nacheinander auf einem Kern, dann der nächste Kern (so arbeitet CoreCycler), oder
-   jeder Test über alle Kerne? Vorschlag: pro Kern, als Option umschaltbar.
+1. ~~Reihenfolge der Tests~~ **Entschieden: je Kern alle Schritte, dann der nächste Kern** (so arbeitet CoreCycler); die
+   Reihenfolge der Kerne ist umschaltbar (fortlaufend, abwechselnd, zufällig). Vergleich: [corecycler-vergleich.md](corecycler-vergleich.md).
 2. **Auto als Reiter oder als Zustand des Plans?** Vorschlag: kein Reiter, der Plan zeigt „Empfehlung" als Zustand.
 3. **Format der Plan-Datei:** TOML, weil von Hand lesbar und kommentierbar, die 1.x-Dateien sind JSON.
 4. **CoreCycler-Konfiguration lesen?** Es würde Profis den Wechsel leicht machen. Umfang ungeklärt.

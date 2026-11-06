@@ -1,0 +1,256 @@
+Hardware check of the Rust build 1.2.0-beta.1 on an AMD Ryzen 7 5800X3D (Zen 3, BIOS 1.S3), 2026-11-05, evening.
+Two elevated sessions, each run from its own copy of the program with its own memory (runs\), so the memory the window uses was not touched.
+Before and after both sessions every core held -20 -25 -30 -30 -28 -30 -30 -30; the values the checks changed were put back with 'pbo set' and read back.
+
+== Session 1: write path, two engines per test, two rounds, a search whose only slot is the chip limit ==
+﻿
+=== status before  [22:58:10]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 66.5 °C
+PPT            : 78.1 W
+TDC / EDC      : 38.9 A / 124.9 A
+Core voltage   : 1.206 V
+--- exit code 0
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== selftest (write path, all cores)  [22:58:10]  pbo selftest
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+core  0: held -20, wrote -20, read back -20  ok
+core  1: held -25, wrote -25, read back -25  ok
+core  2: held -30, wrote -30, read back -30  ok
+core  3: held -30, wrote -30, read back -30  ok
+core  4: held -28, wrote -28, read back -28  ok
+core  5: held -30, wrote -30, read back -30  ok
+core  6: held -30, wrote -30, read back -30  ok
+core  7: held -30, wrote -30, read back -30  ok
+The write path works on this processor.
+--- exit code 0
+
+=== estimate normal  [22:58:10]  pbo estimate --intensity normal
+phase 1: 0:48  (RecommendedCombo)
+phase 2: 1:30  (HeavyFfts)
+phase 3: 3:12  (Overnight)
+total:   5:30  at most, for 8 core(s), normal
+--- exit code 0
+
+=== estimate thorough  [22:58:11]  pbo estimate --intensity thorough
+phase 1: 1:36  (RecommendedCombo)
+phase 2: 4:42  (HeavyFfts)
+phase 3: 5:20  (Overnight)
+total:   11:38  at most, for 8 core(s), thorough
+--- exit code 0
+
+=== run: two steps, two rounds on core 7  [22:58:11]  pbo run --cores 7 --seconds 12 --then ycruncher:avx2:Smallest --rounds 2
+Testing cores [7] at the values they hold, 12 s each, with Prime95. Nothing is changed on the processor.
+round 1 of 2
+core  7: held at -30 (0 full sweeps)
+round 2 of 2
+core  7: held at -30 (0 full sweeps)
+--- exit code 0
+
+=== status after run  [22:59:00]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 71.4 °C
+PPT            : 46.8 W
+TDC / EDC      : 18.8 A / 107.9 A
+Core voltage   : 1.175 V
+--- exit code 0
+VALUES AFTER RUN: -20 -25 -30 -30 -28 -30 -30 -30
+
+SEEDED MEMORY: { "7": { "BestPassed": null, "WorstFailed": -44 } }
+
+=== tune: two steps, coarse, core 7  [22:59:00]  pbo tune --cores 7 --seconds 12 --then ycruncher:avx2:Smallest
+Tuning cores [7]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+core  7: held at -30 (0 full sweeps)
+core  7: locked at -27
+Result: 7:-27
+--- exit code 0
+
+=== status after tune  [22:59:25]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -27
+Temperature    : 70.9 °C
+PPT            : 49.7 W
+TDC / EDC      : 20.9 A / 108.9 A
+Core voltage   : 1.219 V
+--- exit code 0
+
+=== knowledge after tune  [22:59:25]  pbo knowledge
+BIOS version it was gathered under: 1.S3
+core  7: best that held  -30   worst that failed  -44
+--- exit code 0
+
+=== restore core 7 to -30  [22:59:25]  pbo set 7 -30
+core 7: now -30
+--- exit code 0
+
+=== status final  [22:59:25]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 49.6 °C
+PPT            : 40.9 W
+TDC / EDC      : 13.7 A / 102.2 A
+Core voltage   : 0.944 V
+--- exit code 0
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [22:59:25]
+
+== Program log of session 1 (telemetry lines left out) ==
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+22:58:11 [1105225811] ---- start ----
+22:58:11 [1105225811] Testing cores [7] at the values they hold, 12 s each, with Prime95. Nothing is changed on the processor.
+22:58:11 [1105225811] round 1 of 2
+22:58:11 [1105225811] core 7: Prime95 on logical [14] at -30 for 12 s
+22:58:23 [1105225811] core 7: engine used 99 % of the core
+22:58:23 [1105225811] core 7: y-cruncher on logical [14] at -30 for 12 s
+22:58:35 [1105225811] core 7: engine used 100 % of the core
+22:58:35 [1105225811] core  7: held at -30 (0 full sweeps)
+22:58:35 [1105225811] round 2 of 2
+22:58:35 [1105225811] core 7: Prime95 on logical [14] at -30 for 12 s
+22:58:47 [1105225811] core 7: engine used 99 % of the core
+22:58:47 [1105225811] core 7: y-cruncher on logical [14] at -30 for 12 s
+22:59:00 [1105225811] core 7: engine used 100 % of the core
+22:59:00 [1105225811] core  7: held at -30 (0 full sweeps)
+22:59:00 [1105225811] run ended: all cores passed
+22:59:00 [1105225900] ---- start ----
+22:59:00 [1105225900] Tuning cores [7]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+22:59:00 [1105225900] core 7: Prime95 on logical [14] at -30 for 12 s
+22:59:12 [1105225900] core 7: engine used 100 % of the core
+22:59:12 [1105225900] core 7: y-cruncher on logical [14] at -30 for 12 s
+22:59:25 [1105225900] core 7: engine used 100 % of the core
+22:59:25 [1105225900] core  7: held at -30 (0 full sweeps)
+22:59:25 [1105225900] core  7: locked at -27
+22:59:25 [1105225900] Result: 7:-27
+22:59:25 [1105225900] tune ended
+
+== Session 2: a search over three values with two engines each (core 1), and the way back up (core 2) ==
+Core 2 holds -30; its memory says -27 failed. Auto has to take it back up, and the search does: it tests -26, the first value above the failure, and locks three counts above that.
+﻿
+=== status before  [23:00:12]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 49.3 °C
+PPT            : 38.9 W
+TDC / EDC      : 12.1 A / 99.8 A
+Core voltage   : 1.200 V
+--- exit code 0
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+SEEDED MEMORY: { "1": { "BestPassed": null, "WorstFailed": -32 }, "2": { "BestPassed": null, "WorstFailed": -27 } }
+
+=== tune core 1: several steps, two engines  [23:00:13]  pbo tune --cores 1 --seconds 12 --then ycruncher:avx2:Smallest
+Tuning cores [1]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+core  1: held at -25 (0 full sweeps)
+core  1: held at -28 (0 full sweeps)
+core  1: held at -30 (0 full sweeps)
+core  1: locked at -27
+Result: 1:-27
+--- exit code 0
+
+=== status after core 1  [23:01:26]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -27 -30 -30 -28 -30 -30 -30
+Temperature    : 65.3 °C
+PPT            : 41.6 W
+TDC / EDC      : 14.8 A / 99.3 A
+Core voltage   : 0.944 V
+--- exit code 0
+VALUES AFTER CORE 1: -20 -27 -30 -30 -28 -30 -30 -30
+
+=== tune core 2: it holds a value it failed at, the search goes back up  [23:01:27]  pbo tune --cores 2 --seconds 12 --then ycruncher:avx2:Smallest
+Tuning cores [2]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+core  2: held at -26 (0 full sweeps)
+core  2: locked at -23
+Result: 2:-23
+--- exit code 0
+
+=== status after core 2  [23:01:51]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -27 -23 -30 -28 -30 -30 -30
+Temperature    : 73.7 °C
+PPT            : 48.7 W
+TDC / EDC      : 19.1 A / 113.5 A
+Core voltage   : 0.956 V
+--- exit code 0
+VALUES AFTER CORE 2: -20 -27 -23 -30 -28 -30 -30 -30
+
+=== knowledge  [23:01:52]  pbo knowledge
+BIOS version it was gathered under: 1.S3
+core  1: best that held  -30   worst that failed  -32
+core  2: best that held  -26   worst that failed  -27
+--- exit code 0
+
+=== estimate normal  [23:01:52]  pbo estimate --intensity normal --cores 1,2
+phase 1: 0:12  (RecommendedCombo)
+phase 2: 0:00  (HeavyFfts)
+phase 3: 0:48  (Overnight)
+total:   1:00  at most, for 2 core(s), normal
+--- exit code 0
+
+=== restore core 1 to -25  [23:01:52]  pbo set 1 -25
+core 1: now -25
+--- exit code 0
+
+=== restore core 2 to -30  [23:01:52]  pbo set 2 -30
+core 2: now -30
+--- exit code 0
+
+=== status final  [23:01:52]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 44.2 °C
+PPT            : 31.8 W
+TDC / EDC      : 7.0 A / 89.0 A
+Core voltage   : 1.200 V
+--- exit code 0
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [23:01:52]
+
+== Program log of session 2 (telemetry lines left out) ==
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+23:00:13 [1105230013] ---- start ----
+23:00:13 [1105230013] Tuning cores [1]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+23:00:13 [1105230013] core 1: Prime95 on logical [2] at -25 for 12 s
+23:00:25 [1105230013] core 1: engine used 99 % of the core
+23:00:25 [1105230013] core 1: y-cruncher on logical [2] at -25 for 12 s
+23:00:37 [1105230013] core 1: engine used 100 % of the core
+23:00:37 [1105230013] core  1: held at -25 (0 full sweeps)
+23:00:37 [1105230013] core 1: Prime95 on logical [2] at -28 for 12 s
+23:00:49 [1105230013] core 1: engine used 100 % of the core
+23:00:49 [1105230013] core 1: y-cruncher on logical [2] at -28 for 12 s
+23:01:02 [1105230013] core 1: engine used 99 % of the core
+23:01:02 [1105230013] core  1: held at -28 (0 full sweeps)
+23:01:02 [1105230013] core 1: Prime95 on logical [2] at -30 for 12 s
+23:01:14 [1105230013] core 1: engine used 99 % of the core
+23:01:14 [1105230013] core 1: y-cruncher on logical [2] at -30 for 12 s
+23:01:26 [1105230013] core 1: engine used 100 % of the core
+23:01:26 [1105230013] core  1: held at -30 (0 full sweeps)
+23:01:26 [1105230013] core  1: locked at -27
+23:01:26 [1105230013] Result: 1:-27
+23:01:26 [1105230013] tune ended
+23:01:27 [1105230127] ---- start ----
+23:01:27 [1105230127] Tuning cores [2]: 12 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+23:01:27 [1105230127] core 2: Prime95 on logical [4] at -26 for 12 s
+23:01:39 [1105230127] core 2: engine used 99 % of the core
+23:01:39 [1105230127] core 2: y-cruncher on logical [4] at -26 for 12 s
+23:01:51 [1105230127] core 2: engine used 99 % of the core
+23:01:51 [1105230127] core  2: held at -26 (0 full sweeps)
+23:01:51 [1105230127] core  2: locked at -23
+23:01:51 [1105230127] Result: 2:-23
+23:01:51 [1105230127] tune ended

@@ -1,0 +1,20 @@
+Check of the window in mode B (no administrator rights, a helper with them) on an AMD Ryzen 7 5800X3D, 2026-11-05, evening.
+
+Setup: the helper was started elevated on the pipe "window" (pbo helper --pipe window) from its own copy of the program, so its
+memory (runs\) was not the one the window uses. The window ran in the same folder without rights. The picture of the window
+was taken with `pbo gui-preview live`, `live-run` and `live click=X,Y ...`, which use the real constructor: the window finds the
+helper on its pipe, reads through it, and the clicks go through the window's own input.
+
+1. Reading. The window showed the processor, all 8 cores with their values (-20 -25 -30 -30 -28 -30 -30 -30), the limits of the
+   monitoring table (90 degrees C, 142 W, 95 A, 130 A), the core voltage and the effective clock of every core (3.6 to 4.4 GHz).
+2. A run through the window. `live-run` started a 12 s test of core 4 with Prime95 through the helper. At 6 s of 12 s the window
+   showed "Testing core 4", the value under test (-28), the progress bar (00:06 / 00:12), the row of core 4 lit and breathing, the
+   steppers disabled, and the Stop button. The run ended by itself and recorded a pass for core 4 (-28) in the helper's memory.
+3. Writing through the helper. Clicks on the up arrow of core 6 (-30 to -29, marked as not yet applied) and on "Apply live": the
+   helper wrote -29, the window said "Values applied", and the helper's status read back -29 for core 6 and the rest unchanged.
+4. Putting back. `set core 6 -30` through the helper answered held -30, stuck. The values after: -20 -25 -30 -30 -28 -30 -30 -30,
+   the same as before.
+5. The helper was asked to shut down, did, and the pipe was gone afterwards.
+
+Not seen: the window outliving a run when it is closed in the middle of one (that part was checked earlier without the window,
+with `pbo helper-watch`).

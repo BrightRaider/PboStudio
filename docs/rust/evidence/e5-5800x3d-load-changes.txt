@@ -1,0 +1,105 @@
+Hardware check of the Rust build 1.2.0-beta.1 (with load changes, core order, auto time, sound) on an AMD Ryzen 7 5800X3D, 2026-11-05, late evening.
+Two elevated sessions on core 7 only, from their own copy of the program with its own memory (runs\). Tests at the value the core holds; nothing was written to the processor. Every core held -20 -25 -30 -30 -28 -30 -30 -30 before and after.
+
+== Session 1: pauses, bursts with two engines, auto with a range of one's own (killed after 300 s), a short run with the sound on ==
+﻿ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+
+
+=== pauses every 5 s, 20 s, Prime95  [23:36:21]  pbo run --cores 7 --seconds 20 --transient periodic:5:1 --quiet
+Testing cores [7] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+core  7: held at -30 (0 full sweeps)
+
+--- exit code , 21 s
+
+=== bursts, Prime95 then y-cruncher, 20 s each  [23:36:41]  pbo run --cores 7 --seconds 20 --transient bursts --then ycruncher:avx2:Smallest --quiet
+Testing cores [7] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+core  7: held at -30 (0 full sweeps)
+
+--- exit code , 41 s
+
+=== auto, Prime95 with the range 4-21 K  [23:37:22]  pbo run --cores 7 --seconds auto --fft 4-21 --transient periodic:5:1 --quiet
+NOT FINISHED after 300 s: killed
+Testing cores [7] at the values they hold, one run through the work list each, with Prime95. Nothing is changed on the processor.
+
+--- exit code , 300 s
+
+=== short run with sound (the end sound)  [23:42:22]  pbo run --cores 7 --seconds 10 --transient off
+The last run (started 2026-11-05T22:37:22.827Z) did not end, but the computer did not restart: the program was closed. Nothing is held against core 7.
+Testing cores [7] at the values they hold, 10 s each, with Prime95. Nothing is changed on the processor.
+core  7: held at -30 (0 full sweeps)
+
+--- exit code , 11 s
+
+=== .\runs\engine-work\core7\prime.txt
+StressTester=1
+MinTortureFFT=4
+MaxTortureFFT=21
+NumWorkers=1
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are unchanged
+DONE [23:42:33]
+
+== Program log of session 1 (telemetry lines left out) ==
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+23:36:21 [1105233621] ---- start ----
+23:36:21 [1105233621] Testing cores [7] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+23:36:21 [1105233621] core 7: Prime95 on logical [14] at -30 for 20 s
+23:36:21 [1105233621] core 7: load changes: periodic:5:1
+23:36:41 [1105233621] core 7: engine used 99 % of the core
+23:36:41 [1105233621] core  7: held at -30 (0 full sweeps)
+23:36:41 [1105233621] run ended: all cores passed
+23:36:41 [1105233641] ---- start ----
+23:36:41 [1105233641] Testing cores [7] at the values they hold, 20 s each, with Prime95. Nothing is changed on the processor.
+23:36:41 [1105233641] core 7: Prime95 on logical [14] at -30 for 20 s
+23:36:41 [1105233641] core 7: load changes: bursts
+23:37:02 [1105233641] core 7: engine used 99 % of the core
+23:37:02 [1105233641] core 7: y-cruncher on logical [14] at -30 for 20 s
+23:37:02 [1105233641] core 7: load changes: bursts
+23:37:22 [1105233641] core 7: engine used 100 % of the core
+23:37:22 [1105233641] core  7: held at -30 (0 full sweeps)
+23:37:22 [1105233641] run ended: all cores passed
+23:37:22 [1105233722] ---- start ----
+23:37:22 [1105233722] Testing cores [7] at the values they hold, one run through the work list each, with Prime95. Nothing is changed on the processor.
+23:37:22 [1105233722] core 7: Prime95 on logical [14] at -30 for one run through the work list (60 min at most)
+23:37:22 [1105233722] core 7: load changes: periodic:5:1
+23:42:22 [1105234222] ---- start ----
+23:42:22 [1105234222] The last run (started 2026-11-05T22:37:22.827Z) did not end, but the computer did not restart: the program was closed. Nothing is held against core 7.
+23:42:22 [1105234222] Testing cores [7] at the values they hold, 10 s each, with Prime95. Nothing is changed on the processor.
+23:42:22 [1105234222] core 7: Prime95 on logical [14] at -30 for 10 s
+23:42:33 [1105234222] core 7: engine used 98 % of the core
+23:42:33 [1105234222] core  7: held at -30 (0 full sweeps)
+23:42:33 [1105234222] run ended: all cores passed
+
+== Session 2: auto with the range 4-5 K and pauses (killed after 420 s) ==
+﻿ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+
+
+=== auto, Prime95 with the range 4-5 K and pauses  [23:43:08]  pbo run --cores 7 --seconds auto --fft 4-5 --transient periodic:5:1 --quiet
+NOT FINISHED after 420 s: killed
+Testing cores [7] at the values they hold, one run through the work list each, with Prime95. Nothing is changed on the processor.
+
+--- exit code , 420 s
+
+=== .\runs\engine-work\core7\prime.txt
+StressTester=1
+MinTortureFFT=4
+MaxTortureFFT=5
+NumWorkers=1
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are unchanged
+DONE [23:50:09]
+
+== Prime95 started by hand with the same prime.txt, range 4-5 K, console output captured, 420 s ==
+No results.txt was written and nothing was printed: Prime95 reported no finished FFT size in seven minutes, so the end of an 'auto' time never came by itself.

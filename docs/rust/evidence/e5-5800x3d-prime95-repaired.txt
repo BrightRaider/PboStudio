@@ -1,0 +1,29 @@
+Check of the repaired Prime95 start on core 7 of an AMD Ryzen 7 5800X3D, 2026-11-06. Elevated, tests at the value the core holds, nothing written to the processor; every core held -20 -25 -30 -30 -28 -30 -30 -30 before and after.
+The cause that was repaired: Prime95 was given its work folder as -W"folder" with quotation marks, took the quote as part of the name, did not find the folder and ran on the settings in its own folder (all cores, no results); now -W folder without quotes, plus NumCores, EnableSetAffinity=0 and EnableSetPriority=0.
+
+﻿ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== usual settings: Smallest, AVX2, pauses, 30 s  [12:04:10]  pbo run --cores 7 --seconds 30 --quiet
+Testing cores [7] at the values they hold, 30 s each, with Prime95. Nothing is changed on the processor.
+core  7: held at -30 (0 full sweeps)
+
+--- ended after 32 s
+no results.txt
+
+=== auto, range 4-5 K, no pauses  [12:04:42]  pbo run --cores 7 --seconds auto --fft 4-5 --transient off --quiet
+Testing cores [7] at the values they hold, one run through the work list each, with Prime95. Nothing is changed on the processor.
+core  7: held at -30 (1 full sweeps)
+
+--- ended after 149 s
+results.txt of the engine:
+[Fri Nov  6 12:05:30 2026]
+Self-test 4K passed!
+Self-test 5K passed!
+[Fri Nov  6 12:07:11 2026]
+Self-test 4K passed!
+
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are unchanged
+DONE [12:07:11]

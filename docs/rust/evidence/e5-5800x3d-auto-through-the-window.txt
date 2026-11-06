@@ -1,0 +1,69 @@
+Auto through the real window on core 1 of an AMD Ryzen 7 5800X3D (holds -25, may go to -30), fast intensity, 2026-11-06. Elevated, from its own copy of the program with its own memory. The scenario is 'pbo gui-preview live-auto': the window starts Auto the way a click on Start does, dismisses a finished phase the way a click on Done does, and starts the next one.
+Phase 1 (check what the values hold): Prime95, then y-cruncher, 120 s each, with a pause of a second every 30 s. Phase 2 (search): 180 s a step, coarse, -25, -28, -30, locked at -27. The check then put core 1 back to -25 and read every core back.
+
+﻿ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+=== auto through the window, core 1, fast  [12:18:45]
+auto: starting run 1 on core 1, fast
+Testing cores [1] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+order of the cores: [1]
+auto: picture in the middle of the run
+core  1: held at -25 (0 full sweeps)
+auto: run 1 ended: Finished
+auto: starting run 2: stage Some(Narrow)
+Tuning cores [1]: 180 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+order of the cores: [1]
+core  1: held at -25 (0 full sweeps)
+core  1: held at -28 (0 full sweeps)
+core  1: held at -30 (0 full sweeps)
+core  1: locked at -27
+Result: 1:-27
+auto: run 2 ended: Finished
+auto: nothing more to start, final picture
+
+--- the window ended [12:31:50]
+VALUES AFTER THE RUN: -20 -27 -30 -30 -28 -30 -30 -30
+BIOS version it was gathered under: 1.S3
+core  1: best that held  -30   worst that failed    -
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+12:18:45 [1106121845] ---- start ----
+12:18:45 [1106121845] Testing cores [1] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+12:18:45 [1106121845] order of the cores: [1]
+12:18:45 [1106121845] core 1: Prime95 on logical [2] at -25 for 120 s
+12:18:45 [1106121845] core 1: load changes: periodic:30:1
+12:20:46 [1106121845] core 1: engine used 99 % of the core
+12:20:46 [1106121845] core 1: y-cruncher on logical [2] at -25 for 120 s
+12:20:46 [1106121845] core 1: load changes: periodic:30:1
+12:22:47 [1106121845] core 1: engine used 99 % of the core
+12:22:47 [1106121845] core  1: held at -25 (0 full sweeps)
+12:22:47 [1106121845] run ended: all cores passed
+12:22:47 [1106122247] ---- start ----
+12:22:47 [1106122247] Tuning cores [1]: 180 s per test, coarse steps, headroom 3 step(s), range -30 to 0.
+12:22:47 [1106122247] order of the cores: [1]
+12:22:47 [1106122247] core 1: Prime95 on logical [2] at -25 for 180 s
+12:22:47 [1106122247] core 1: load changes: periodic:30:1
+12:25:48 [1106122247] core 1: engine used 100 % of the core
+12:25:48 [1106122247] core  1: held at -25 (0 full sweeps)
+12:25:48 [1106122247] core 1: Prime95 on logical [2] at -28 for 180 s
+12:25:48 [1106122247] core 1: load changes: periodic:30:1
+12:28:49 [1106122247] core 1: engine used 100 % of the core
+12:28:49 [1106122247] core  1: held at -28 (0 full sweeps)
+12:28:49 [1106122247] core 1: Prime95 on logical [2] at -30 for 180 s
+12:28:49 [1106122247] core 1: load changes: periodic:30:1
+12:31:49 [1106122247] core 1: engine used 100 % of the core
+12:31:50 [1106122247] core  1: held at -30 (0 full sweeps)
+12:31:50 [1106122247] core  1: locked at -27
+12:31:50 [1106122247] Result: 1:-27
+12:31:50 [1106122247] tune ended
+restoring core 1 to -25
+core 1: now -25
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [12:31:50]

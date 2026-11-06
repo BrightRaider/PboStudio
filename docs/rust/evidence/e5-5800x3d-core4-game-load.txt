@@ -1,0 +1,201 @@
+# Core 4 on the 5800X3D, 2026-11-06 (it crashed in League of Legends / TFT at its held value -28). Elevated; the program ran from its own copy.
+# Loads that swing like a game does: bursts of load (300 ms on, 100 ms off), Prime95 SSE smallest FFT 90 s (light, highest boost), Prime95 AVX2 90 s, y-cruncher 90 s.
+# Part 1: the held value -28. Part 2: core 4 at -30. No error in either, no WHEA event. Every value was put back and read back.
+# (In part 1 the check script printed 'AN ERROR WAS REPORTED (exit code )': that is the script failing to read the exit code, the program's own log says
+#  'run ended: all cores passed'. The script was fixed and part 2 was run on its own.)
+
+######## PART 1: held value -28
+
+﻿
+=== status before  [13:08:03]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 42.0 °C
+PPT            : 32.1 W
+TDC / EDC      : 6.7 A / 85.0 A
+Core voltage   : 1.163 V
+Per-core VID   : 1.113 1.113 1.113 1.113 1.113 1.113 1.113 1.113
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== A: core 4 at its held value (-28)  [13:08:04]  pbo run --cores 4 --seconds 90 --mode sse --fft Smallest --transient bursts --on-error stop --quiet --then prime95:avx2:Smallest+ycruncher:avx2:Smallest
+Log: <work folder>\runs\logs\pbo_2026-11-06.log
+Testing cores [4] at the values they hold, 90 s each, with Prime95. Nothing is changed on the processor.
+core  4: held at -28 (0 full sweeps)
+
+--- exit code 
+STAGE A: AN ERROR WAS REPORTED (exit code )
+
+=== status after  [13:12:35]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 54.0 °C
+PPT            : 41.0 W
+TDC / EDC      : 14.1 A / 99.7 A
+Core voltage   : 0.938 V
+Per-core VID   : 0.938 0.938 0.938 0.938 0.938 0.938 0.938 0.938
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+VALUES AFTER: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== knowledge  [13:12:36]  pbo knowledge
+BIOS version it was gathered under: 1.S3
+core  4: best that held  -28   worst that failed    -
+
+--- exit code 
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+13:08:04 [1106130804] ---- start ----
+13:08:04 [1106130804] Testing cores [4] at the values they hold, 90 s each, with Prime95. Nothing is changed on the processor.
+13:08:04 [1106130804] core 4: Prime95 on logical [8] at -28 for 90 s
+13:08:04 [1106130804] core 4: load changes: bursts
+13:09:34 [1106130804] core 4: engine used 100 % of the core
+13:09:34 [1106130804] core 4: Prime95 on logical [8] at -28 for 90 s
+13:09:34 [1106130804] core 4: load changes: bursts
+13:11:05 [1106130804] core 4: engine used 100 % of the core
+13:11:05 [1106130804] core 4: y-cruncher on logical [8] at -28 for 90 s
+13:11:05 [1106130804] core 4: load changes: bursts
+13:12:35 [1106130804] core 4: engine used 100 % of the core
+13:12:35 [1106130804] core  4: held at -28 (0 full sweeps)
+13:12:35 [1106130804] run ended: all cores passed
+
+=== hardware error events (WHEA-Logger) since the start
+none (Es wurden keine Ereignisse gefunden, die den angegebenen Auswahlkriterien entsprechen.)
+
+=== status final  [13:12:36]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 44.5 °C
+PPT            : 37.1 W
+TDC / EDC      : 10.7 A / 91.9 A
+Core voltage   : 0.919 V
+Per-core VID   : 1.163 1.163 1.163 1.163 1.163 1.163 1.163 1.163
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [13:12:36]
+
+######## PART 2: -30
+
+﻿
+=== status before  [13:15:27]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 41.4 °C
+PPT            : 31.7 W
+TDC / EDC      : 6.5 A / 86.9 A
+Core voltage   : 1.169 V
+Per-core VID   : 1.175 1.175 1.175 1.175 1.175 1.175 1.175 1.175
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 0
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+
+=== set core 4 to -30  [13:15:27]  pbo set 4 -30
+core 4: now -30
+
+--- exit code 0
+
+=== status with core 4 at -30  [13:15:27]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -30 -30 -30 -30
+Temperature    : 47.2 °C
+PPT            : 36.4 W
+TDC / EDC      : 10.2 A / 98.3 A
+Core voltage   : 0.925 V
+Per-core VID   : 1.175 1.175 1.175 1.175 1.175 1.175 1.175 1.175
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 0
+VALUES NOW: -20 -25 -30 -30 -30 -30 -30 -30
+
+=== B: core 4 at -30  [13:15:28]  pbo run --cores 4 --seconds 90 --mode sse --fft Smallest --transient bursts --on-error stop --quiet --then prime95:avx2:Smallest+ycruncher:avx2:Smallest
+Log: <work folder>\runs\logs\pbo_2026-11-06.log
+Testing cores [4] at the values they hold, 90 s each, with Prime95. Nothing is changed on the processor.
+core  4: held at -30 (0 full sweeps)
+
+--- exit code 0
+STAGE B: no error
+
+=== status after  [13:19:59]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -30 -30 -30 -30
+Temperature    : 51.5 °C
+PPT            : 36.9 W
+TDC / EDC      : 10.8 A / 95.7 A
+Core voltage   : 0.919 V
+Per-core VID   : 1.125 1.125 1.125 1.125 1.125 1.125 1.125 1.125
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 0
+VALUES AFTER: -20 -25 -30 -30 -30 -30 -30 -30
+
+=== knowledge  [13:20:00]  pbo knowledge
+BIOS version it was gathered under: 1.S3
+core  4: best that held  -30   worst that failed    -
+
+--- exit code 0
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -30 -30 -30 -30
+
+13:15:28 [1106131528] ---- start ----
+13:15:28 [1106131528] Testing cores [4] at the values they hold, 90 s each, with Prime95. Nothing is changed on the processor.
+13:15:28 [1106131528] core 4: Prime95 on logical [8] at -30 for 90 s
+13:15:28 [1106131528] core 4: load changes: bursts
+13:16:58 [1106131528] core 4: engine used 100 % of the core
+13:16:58 [1106131528] core 4: Prime95 on logical [8] at -30 for 90 s
+13:16:58 [1106131528] core 4: load changes: bursts
+13:18:29 [1106131528] core 4: engine used 100 % of the core
+13:18:29 [1106131528] core 4: y-cruncher on logical [8] at -30 for 90 s
+13:18:29 [1106131528] core 4: load changes: bursts
+13:19:59 [1106131528] core 4: engine used 100 % of the core
+13:19:59 [1106131528] core  4: held at -30 (0 full sweeps)
+13:19:59 [1106131528] run ended: all cores passed
+
+=== hardware error events (WHEA-Logger) since the start
+none (Es wurden keine Ereignisse gefunden, die den angegebenen Auswahlkriterien entsprechen.)
+
+=== restore core 4 to -28  [13:20:00]  pbo set 4 -28
+core 4: now -28
+
+--- exit code 0
+
+=== status final  [13:20:00]  pbo status
+AMD Ryzen 7 5800X3D 8-Core Processor  (Zen 3 (Vermeer), checked on hardware)
+Curve Optimizer: -20 -25 -30 -30 -28 -30 -30 -30
+Temperature    : 46.5 °C
+PPT            : 35.6 W
+TDC / EDC      : 9.6 A / 92.0 A
+Core voltage   : 0.938 V
+Per-core VID   : 0.919 0.919 0.919 0.919 0.919 0.919 0.919 0.919
+CPPC ranking   : 0 1 2 3 4 5 6 7
+CPPC raw        : 0 0 0 0 0 0 0 0
+
+--- exit code 0
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [13:20:00]
