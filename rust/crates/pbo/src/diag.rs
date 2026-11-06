@@ -278,20 +278,21 @@ pub fn run(args: &[String]) -> i32 {
 
     if let (Some(smu), true) = (&smu, !slots.is_empty()) {
         r.section("Curve Optimizer (read from the SMU, per core)");
-        if id.family == 0x19 {
+        if let Some(message) =
+            pbo_core::families::get_margin_message(pbo_core::families::lookup(id).generation)
+        {
             r.line(format!(
-                "  message {:#X}{}",
-                margin::MSG_GET_MARGIN,
+                "  message {message:#X}{}",
                 if verified {
                     ""
                 } else {
-                    "   (inherited from the Zen 3 table, NOT checked for this family)"
+                    "   (the library's number for this generation, NOT checked on hardware)"
                 }
             ));
             let mut values = Vec::new();
             for (n, (ccd, slot)) in slots.iter().enumerate() {
                 let mask = margin::core_mask(id.family, *ccd, *slot);
-                match smu.send_command(margin::MSG_GET_MARGIN, [mask, 0, 0, 0, 0, 0]) {
+                match smu.send_command(message, [mask, 0, 0, 0, 0, 0]) {
                     Ok(answer) => {
                         let m = margin::decode(answer[0]);
                         values.push(m.to_string());
@@ -309,6 +310,35 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
 
+    // The effective clock: APERF and MPERF on each core over a short interval, times the rate MPERF counts at.
+    if let Some(amd) = &amd {
+        r.section("Clock (APERF / MPERF)");
+        let tsc = os::tsc_mhz();
+        r.line(format!("  time stamp counter: {tsc:.0} MHz (measured)"));
+        let read = |core: usize| {
+            let l = core * tpc as usize;
+            Some((
+                amd.read_msr_on(l, 0xC000_00E8)?,
+                amd.read_msr_on(l, 0xC000_00E7)?,
+            ))
+        };
+        let before: Vec<_> = (0..cores).map(read).collect();
+        std::thread::sleep(Duration::from_millis(200));
+        let after: Vec<_> = (0..cores).map(read).collect();
+        let mut parts = Vec::new();
+        for (core, (b, a)) in before.iter().zip(&after).enumerate() {
+            match (b, a) {
+                (Some((ab, mb)), Some((aa, ma))) if ma > mb => {
+                    let mhz = tsc * (aa.wrapping_sub(*ab)) as f64 / (ma.wrapping_sub(*mb)) as f64;
+                    parts.push(format!("c{core}: {mhz:.0}"));
+                }
+                _ => parts.push(format!("c{core}: n/a")),
+            }
+        }
+        r.line(format!("  effective MHz: {}", parts.join(" | ")));
+        r.line("  (n/a means the driver module does not let this program read those registers)");
+    }
+
     // Core voltage: the SVI2 telemetry plane over SMN, and each core's own VID from the P-state MSR.
     if let Some(amd) = &amd {
         r.section("Core voltage");
@@ -318,7 +348,11 @@ pub fn run(args: &[String]) -> i32 {
         };
         match planes {
             Some((core_plane, soc_plane)) => {
-                r.line(format!("  SVI2 telemetry: core plane {}, SoC plane {}", hex(core_plane.into()), hex(soc_plane.into())));
+                r.line(format!(
+                    "  SVI2 telemetry: core plane {}, SoC plane {}",
+                    hex(core_plane.into()),
+                    hex(soc_plane.into())
+                ));
                 for sample in 0..3 {
                     let line = match (amd.read_smn(core_plane), amd.read_smn(soc_plane)) {
                         (Some(c), Some(s)) => format!(
@@ -346,9 +380,37 @@ pub fn run(args: &[String]) -> i32 {
                 }
                 r.line("  (the clock in the same register is the requested state, not the measured clock, and is not shown)");
             }
-            None => r.line(
-                "  n/a: the library has no known telemetry address for this family (Zen 4 is marked unknown, Zen 5 is missing).\n  This is the part testers can help with.",
-            ),
+            None => {
+                r.line("  No telemetry address is known for this family (the library marks Zen 4 unknown and has none for Zen 5).");
+                if pbo_core::families::lookup(id).vcore
+                    == pbo_core::families::Vcore::Svi3PerCoreOnly
+                {
+                    // The per-core VID register is architectural, so it is read and decoded with the SVI3 formula.
+                    // That formula has not been checked against a measurement on this family: it is labelled so.
+                    r.line("  Each core's own VID, MSR C001_0293 decoded with the SVI3 formula (NOT checked on hardware):");
+                    for sample in 0..3 {
+                        let mut parts = Vec::new();
+                        for core in 0..cores {
+                            match amd.read_msr_on(core * tpc as usize, pstate::MSR) {
+                                Some(v) => {
+                                    let s = pstate::Status::decode(v as u32);
+                                    parts.push(format!(
+                                        "c{core}: {:.3}V (raw vid {})",
+                                        voltage::svi3(s.vid),
+                                        s.vid
+                                    ));
+                                }
+                                None => parts.push(format!("c{core}: n/a")),
+                            }
+                        }
+                        r.line(format!("    sample {sample}: {}", parts.join(" | ")));
+                        std::thread::sleep(Duration::from_millis(500));
+                    }
+                    r.line("  Please compare these with what another tool shows at the same moment and report both in the issue.");
+                } else {
+                    r.line("  This is the part testers can help with.");
+                }
+            }
         }
     }
 
