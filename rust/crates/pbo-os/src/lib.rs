@@ -436,9 +436,47 @@ pub fn local_machine_string(key: &str, name: &str) -> Option<String> {
 }
 
 static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// How many tests are going on in this process (see [`Busy`]).
+static BUSY: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-unsafe extern "system" fn on_ctrl(_kind: u32) -> i32 {
+/// Held for as long as a test is going on, so that closing the console waits for it to put the values back.
+pub struct Busy(());
+
+impl Busy {
+    pub fn new() -> Busy {
+        BUSY.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Busy(())
+    }
+}
+
+impl Default for Busy {
+    fn default() -> Busy {
+        Busy::new()
+    }
+}
+
+impl Drop for Busy {
+    fn drop(&mut self) {
+        BUSY.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+unsafe extern "system" fn on_ctrl(kind: u32) -> i32 {
+    use windows_sys::Win32::System::Console::{
+        CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT,
+    };
     CANCELLED.store(true, std::sync::atomic::Ordering::SeqCst);
+    // Closing the console (or logging off) ends the process as soon as this returns, and a test that was going on would
+    // leave its core at the value under test. Windows gives about five seconds: wait for the test to stop its engine and
+    // put the value back, which takes a second or two.
+    if kind == CTRL_CLOSE_EVENT || kind == CTRL_LOGOFF_EVENT || kind == CTRL_SHUTDOWN_EVENT {
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(4500);
+        while BUSY.load(std::sync::atomic::Ordering::SeqCst) > 0
+            && std::time::Instant::now() < until
+        {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
     1
 }
 
@@ -510,12 +548,134 @@ pub fn short_path(path: &Path) -> Option<String> {
 }
 
 pub fn hide_own_console() {
-    use windows_sys::Win32::System::Console::{FreeConsole, GetConsoleProcessList};
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, GetFileType, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_TYPE_DISK,
+        FILE_TYPE_PIPE, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::Console::{
+        FreeConsole, GetConsoleProcessList, GetStdHandle, SetStdHandle, STD_ERROR_HANDLE,
+        STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    };
     let mut list = [0u32; 2];
     let attached = unsafe { GetConsoleProcessList(list.as_mut_ptr(), 2) };
-    if attached == 1 {
-        unsafe { FreeConsole() };
+    if attached != 1 {
+        return;
     }
+    unsafe {
+        // Standard handles that were redirected to a file or a pipe are the caller's and stay.
+        let was_console = |which| {
+            let h = GetStdHandle(which);
+            !(GetFileType(h) == FILE_TYPE_DISK || GetFileType(h) == FILE_TYPE_PIPE)
+        };
+        let todo: Vec<(u32, u32)> = [
+            (STD_INPUT_HANDLE, 0x8000_0000u32),
+            (STD_OUTPUT_HANDLE, 0x4000_0000u32),
+            (STD_ERROR_HANDLE, 0x4000_0000u32),
+        ]
+        .into_iter()
+        .filter(|(which, _)| was_console(*which))
+        .collect();
+        FreeConsole();
+        // They pointed at the console that is gone: the numbers would stay in the process and be handed to the next handle that
+        // is opened, and a write to one of them (every `println!`) could then land on something that blocks. Send them to NUL.
+        let nul: Vec<u16> = "NUL\0".encode_utf16().collect();
+        for (which, access) in todo {
+            let h = CreateFileW(
+                nul.as_ptr(),
+                access,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                0,
+                std::ptr::null_mut(),
+            );
+            if h != INVALID_HANDLE_VALUE {
+                SetStdHandle(which, h);
+            }
+        }
+    }
+}
+
+/// Switches off the console's quick edit mode. With it on, a click into the window starts a text selection, and Windows
+/// holds back every program that writes to that console until a key is pressed: a countdown or a run in a console
+/// would simply stand still. Without a console (or when the input is not one) nothing happens.
+pub fn disable_console_quick_edit() {
+    use windows_sys::Win32::System::Console::{
+        GetConsoleMode, GetStdHandle, SetConsoleMode, ENABLE_EXTENDED_FLAGS,
+        ENABLE_QUICK_EDIT_MODE, STD_INPUT_HANDLE,
+    };
+    unsafe {
+        let input = GetStdHandle(STD_INPUT_HANDLE);
+        let mut mode = 0u32;
+        if GetConsoleMode(input, &mut mode) != 0 && mode & ENABLE_QUICK_EDIT_MODE != 0 {
+            SetConsoleMode(
+                input,
+                (mode & !ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS,
+            );
+        }
+    }
+}
+
+/// Windows' own ranking of the logical processors: the scheduling class of each CPU set, which Windows takes from the
+/// firmware's CPPC values (higher is preferred, and it is where Windows puts a single thread first). Indexed by logical
+/// processor of the first group; `None` when Windows does not say. Read-only, no rights needed.
+pub fn scheduling_classes() -> Option<Vec<u8>> {
+    use windows_sys::Win32::System::SystemInformation::GetSystemCpuSetInformation;
+    let mut needed = 0u32;
+    unsafe {
+        GetSystemCpuSetInformation(
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+            std::ptr::null_mut(),
+            0,
+        );
+    }
+    if needed == 0 {
+        return None;
+    }
+    // Eight-byte aligned, as the structure is.
+    let mut buffer = vec![0u64; (needed as usize).div_ceil(8)];
+    let ok = unsafe {
+        GetSystemCpuSetInformation(
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    let bytes: &[u8] =
+        unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast(), needed as usize) };
+    Some(scheduling_classes_from(bytes))
+}
+
+/// The entries of `GetSystemCpuSetInformation` (SYSTEM_CPU_SET_INFORMATION): size at 0, group at 12, logical processor at
+/// 14, scheduling class at 20.
+fn scheduling_classes_from(bytes: &[u8]) -> Vec<u8> {
+    let mut classes: Vec<u8> = Vec::new();
+    let mut at = 0usize;
+    while at + 24 <= bytes.len() {
+        let size =
+            u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as usize;
+        if size < 24 {
+            break;
+        }
+        let group = u16::from_le_bytes([bytes[at + 12], bytes[at + 13]]);
+        let logical = bytes[at + 14] as usize;
+        if group == 0 {
+            if classes.len() <= logical {
+                classes.resize(logical + 1, 0);
+            }
+            classes[logical] = bytes[at + 20];
+        }
+        at += size;
+    }
+    classes
 }
 
 /// The user's interface language is German.
@@ -608,4 +768,35 @@ pub fn free_disk_mb(path: &Path) -> Option<u64> {
         )
     };
     (ok != 0).then_some(free_to_caller / (1024 * 1024))
+}
+
+#[cfg(test)]
+mod cpu_set_tests {
+    use super::*;
+
+    fn entry(logical: u8, group: u16, class: u8) -> Vec<u8> {
+        let mut e = vec![0u8; 32];
+        e[0..4].copy_from_slice(&32u32.to_le_bytes());
+        e[12..14].copy_from_slice(&group.to_le_bytes());
+        e[14] = logical;
+        e[20] = class;
+        e
+    }
+
+    #[test]
+    fn the_scheduling_class_of_each_logical_processor_is_read_from_the_entries() {
+        let mut bytes = Vec::new();
+        for (lp, class) in [(0u8, 6u8), (1, 6), (2, 1), (3, 1)] {
+            bytes.extend(entry(lp, 0, class));
+        }
+        bytes.extend(entry(0, 1, 9)); // another group is not ours
+        assert_eq!(scheduling_classes_from(&bytes), vec![6, 6, 1, 1]);
+        assert!(scheduling_classes_from(&[]).is_empty());
+    }
+
+    #[test]
+    fn windows_answers_for_this_machine() {
+        let classes = scheduling_classes().expect("Windows lists its CPU sets");
+        assert!(!classes.is_empty());
+    }
 }

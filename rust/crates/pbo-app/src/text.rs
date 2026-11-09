@@ -53,7 +53,8 @@ texts! {
     CheckedOnHardware => ("checked on hardware", "an Hardware geprüft"),
     NotCheckedOnHardware => ("not checked on hardware", "nicht an Hardware geprüft"),
     NotCheckedHint => ("Nobody has run this program on this processor family yet. Before anything is written, the write path tests itself: each core's own value is written back and read.", "Auf dieser Prozessorfamilie hat das noch niemand ausprobiert. Bevor etwas geschrieben wird, prüft sich der Schreibweg selbst: Der Wert jedes Kerns wird zurückgeschrieben und gelesen."),
-    RestartHint => ("The machine may restart during this. That is intended; it carries on afterwards.", "Der Rechner startet dabei eventuell neu. Das ist gewollt, danach macht es weiter."),
+    RestartHint => ("A crash during the search is intended: the value was too deep and is noted. Afterwards it carries on with a click.", "Ein Absturz bei der Suche ist gewollt: der Wert war zu tief und wird gemerkt. Danach geht es mit einem Klick weiter."),
+    RestartHintCarryOn => ("A crash during the search is intended: the value was too deep and is noted. After the restart Auto carries on by itself.", "Ein Absturz bei der Suche ist gewollt: der Wert war zu tief und wird gemerkt. Nach dem Neustart macht Auto von selbst weiter."),
     CoresLabel => ("Cores", "Kerne"),
     EngineLabel => ("Test program", "Testprogramm"),
     SecondsLabel => ("Seconds per test", "Sekunden pro Test"),
@@ -115,6 +116,13 @@ texts! {
     AutoStartNoEffect => ("No effect now: every core already holds a value.", "Jetzt ohne Wirkung: alle Kerne haben schon einen Wert."),
     AutoMore => ("Fine-tuning", "Feineinstellung"),
     AutoLess => ("Back", "Zurück"),
+    AutoContinuing => ("Carrying Auto on after the crash", "Auto macht nach dem Absturz weiter"),
+    AutoCarriedEnd => ("Auto has ended", "Auto ist zu Ende"),
+    BiosChangedSetAside => ("The BIOS changed since the values were learned ({old} → {new}): what was learned is set aside and the cores are measured again.", "Das BIOS hat sich geändert, seit die Werte gelernt wurden ({old} → {new}): das Gelernte ist beiseitegelegt, die Kerne werden neu gemessen."),
+    AutoContinueIn => ("Auto carries on in", "Auto macht weiter in"),
+    AutoContinueBody => ("After the crash the proven values are back. Auto goes on where it stopped; stop it here if you do not want that.", "Nach dem Absturz sind die bewährten Werte zurückgeschrieben. Auto macht dort weiter, wo es stand; hier lässt es sich stoppen."),
+    AutoContinueStop => ("Do not carry on", "Nicht weitermachen"),
+    AutoContinueStopped => ("Auto does not go on", "Auto macht nicht weiter"),
     AutoAfterCrash => ("Crash", "Absturz"),
     AutoWait => ("Wait", "Warten"),
     AutoCarryOn => ("Carry on", "Weitermachen"),
@@ -156,6 +164,8 @@ texts! {
     IntensityNote => ("Worst case: every core walks its whole way. Most stop much earlier.", "Ungünstigster Fall: Jeder Kern geht seinen ganzen Weg. Die meisten hören viel früher auf."),
     PhaseDone => ("done", "erledigt"),
     ColCore => ("Core", "Kern"),
+    CoreBest => ("The best core, as the processor ranks it (Windows puts single threads here first): it boosts highest and usually takes less undervolting. Auto keeps two more steps of safety on it.", "Der beste Kern, wie der Prozessor ihn einstuft (Windows legt einzelne Threads zuerst hierhin): er boostet am höchsten und verträgt meist weniger Undervolting. Auto hält bei ihm zwei Schritte mehr Sicherheit."),
+    CoreSecond => ("The second best core, as the processor ranks it: it boosts high and usually takes less undervolting. Auto keeps two more steps of safety on it.", "Der zweitbeste Kern, wie der Prozessor ihn einstuft: er boostet hoch und verträgt meist weniger Undervolting. Auto hält bei ihm zwei Schritte mehr Sicherheit."),
     ColDepth => ("Depth", "Tiefe"),
     LegendHolds => ("holds now", "hält jetzt"),
     TestsTakes => ("Takes about", "Dauert etwa"),
@@ -191,7 +201,7 @@ texts! {
     TabTests => ("Tests", "Tests"),
     TabAdvanced => ("Advanced", "Erweitert"),
     CampaignReady => ("Ready to start", "Bereit zum Start"),
-    CampaignInProgress => ("Campaign still in progress", "Kampagne läuft noch"),
+    CampaignInProgress => ("Campaign started", "Kampagne angefangen"),
     CampaignDone => ("All three steps are done", "Alle drei Schritte sind erledigt"),
     CampaignSetup => ("Set up first", "Erst einrichten"),
     CampaignSetupBody => ("The driver or a test program is missing. Open Driver & Engines.", "Treiber oder Testprogramm fehlt. Treiber & Engines öffnen."),
@@ -229,7 +239,8 @@ texts! {
     TransientOff => ("Off", "Aus"),
     TransientPauses => ("Pauses", "Pausen"),
     TransientBursts => ("Bursts", "Schübe"),
-    TransientTip => ("The test is frozen for a moment (pauses) or in fractions of a second (bursts), so the core drops to idle and has to boost back up. That change of load finds a Curve Optimizer value that steady load never does.", "Der Test wird kurz angehalten (Pausen) oder im Sekundenbruchteil (Schübe), damit der Kern in den Leerlauf fällt und wieder hochtakten muss. Dieser Lastwechsel findet einen Curve-Optimizer-Wert, den gleichmäßige Last nie findet."),
+    TransientGame => ("Game", "Spiel"),
+    TransientTip => ("The test is frozen for a moment (pauses), in fractions of a second (bursts), or in the rhythm of a game (game: frames of a few milliseconds and quiet stretches with single spikes, as in League of Legends or TFT), so the core drops to idle and has to boost back up. That change of load finds a Curve Optimizer value that steady load never does.", "Der Test wird kurz angehalten (Pausen), im Sekundenbruchteil (Schübe) oder im Rhythmus eines Spiels (Spiel: Bilder von wenigen Millisekunden und ruhige Abschnitte mit einzelnen Spitzen, wie in League of Legends oder TFT), damit der Kern in den Leerlauf fällt und wieder hochtakten muss. Dieser Lastwechsel findet einen Curve-Optimizer-Wert, den gleichmäßige Last nie findet."),
     OrderSequential => ("In order", "Fortlaufend"),
     OrderAlternate => ("Alternating", "Abwechselnd"),
     OrderRandom => ("Random", "Zufällig"),
@@ -301,6 +312,14 @@ pub fn core_set_result(lang: Lang, core: usize, asked: i32, held: i32) -> String
         (Lang::En, false) => format!("Core {core}: asked for {asked}, the processor keeps {held}"),
         (Lang::De, true) => format!("Kern {core}: jetzt {held}"),
         (Lang::De, false) => format!("Kern {core}: verlangt {asked}, der Prozessor behält {held}"),
+    }
+}
+
+/// "2 of 3 cores": how far a run is through its cores.
+pub fn core_of_cores(lang: Lang, n: usize, total: usize) -> String {
+    match lang {
+        Lang::En => format!("{n} of {total} cores"),
+        Lang::De => format!("{n} von {total} Kernen"),
     }
 }
 
@@ -488,6 +507,10 @@ pub fn profile_meta(lang: Lang, p: &pbo_core::profiles::Profile) -> String {
         Transient::Bursts => match lang {
             Lang::En => " · micro-bursts".to_string(),
             Lang::De => " · Micro-Bursts".to_string(),
+        },
+        Transient::Game => match lang {
+            Lang::En => " · rhythm of a game".to_string(),
+            Lang::De => " · Spiel-Rhythmus".to_string(),
         },
         Transient::Periodic { every_s, .. } => match lang {
             Lang::En => format!(" · pause every {every_s} s"),

@@ -1524,7 +1524,7 @@ dependencies = [
 
 [[package]]
 name = "pbo"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "eframe",
  "pbo-app",
@@ -1539,21 +1539,21 @@ dependencies = [
 
 [[package]]
 name = "pbo-app"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "pbo-core",
 ]
 
 [[package]]
 name = "pbo-core"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "pbo-embed-example"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "libloading",
  "pbo-app",
@@ -1563,14 +1563,14 @@ dependencies = [
 
 [[package]]
 name = "pbo-os"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "pbo-smu"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "pbo-core",
  "pbo-os",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "pbo-ui"
-version = "1.2.0-beta.2"
+version = "1.2.0"
 dependencies = [
  "egui",
 ]

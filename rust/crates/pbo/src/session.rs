@@ -51,6 +51,8 @@ pub struct Session<'a> {
     pub events: Option<std::sync::mpsc::Sender<Event>>,
     /// Holds the machine awake for as long as the session lives: the sleep timer does not know a stress test is going.
     _awake: os::KeepAwake,
+    /// Makes closing the console wait until the values are back (see `pbo_os::Busy`).
+    _busy: os::Busy,
     work_root: PathBuf,
     whea_since: String,
     names: eventlog::Names,
@@ -95,6 +97,7 @@ impl<'a> Session<'a> {
             transient: pbo_core::transient::Transient::default(),
             events: None,
             _awake: os::KeepAwake::new(),
+            _busy: os::Busy::new(),
             work_root: store.root.join("engine-work"),
             whea_since: os::utc_iso(),
             names: eventlog::Names::measure(),
@@ -207,13 +210,30 @@ impl<'a> Session<'a> {
         let cpu_begin = stress.cpu_time();
         let mut paused = Duration::ZERO;
         let mut next_pause = periodic.map(|(every, _)| every);
-        let pulser = (self.transient == Transient::Bursts).then(|| {
-            crate::pulse::Pulser::start(
+        let pulser = match self.transient {
+            Transient::Bursts => Some(crate::pulse::Pulser::start(
                 stress.suspender(),
                 Duration::from_millis(BURST_LOAD_MS.into()),
                 Duration::from_millis(BURST_IDLE_MS.into()),
-            )
-        });
+            )),
+            Transient::Game => {
+                let seed = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(1, |d| d.as_nanos() as u64);
+                let mut rhythm = pbo_core::transient::GamePattern::new(seed);
+                Some(crate::pulse::Pulser::start_rhythm(
+                    stress.suspender(),
+                    move || {
+                        let (load, idle) = rhythm.next_slice();
+                        (
+                            Duration::from_millis(load.into()),
+                            Duration::from_millis(idle.into()),
+                        )
+                    },
+                ))
+            }
+            _ => None,
+        };
         let mut next_sample = Instant::now();
         let mut next_whea = Instant::now() + Duration::from_secs(10);
         let outcome = loop {
@@ -283,6 +303,8 @@ impl<'a> Session<'a> {
             }
         };
 
+        // The share of the time the load was let run, as the pulser measured it (an even pattern or not).
+        let share = pulser.as_ref().and_then(|p| p.share());
         // Stop the pulses first, so the engine is released and nothing touches the handle after it is closed.
         drop(pulser);
 
@@ -290,7 +312,7 @@ impl<'a> Session<'a> {
         // frozen on purpose does not count against it: it is measured against the share of the time it should run.
         let used = stress.cpu_time().saturating_sub(cpu_begin).as_secs_f64();
         let wall = ((begin.elapsed().saturating_sub(paused)).as_secs_f64()
-            * self.transient.duty_cycle())
+            * share.unwrap_or_else(|| self.transient.duty_cycle()))
         .max(0.001);
         stress.stop();
         if let Outcome::Passed { .. } = outcome {
@@ -362,6 +384,20 @@ impl<'a> Session<'a> {
 
     pub fn engine_kind(&self) -> EngineKind {
         self.setup.kind
+    }
+}
+
+/// A setup for a session that tests nothing (`pbo resume`): no program is started with it.
+pub fn no_engine_setup() -> Setup {
+    Setup {
+        kind: EngineKind::Prime95,
+        exe: PathBuf::new(),
+        fft: pbo_core::engine::FftPreset::Smallest,
+        mode: pbo_core::engine::Prime95Mode::Avx2,
+        seconds_per_test: 60,
+        yc_set: pbo_core::engine::YcSet::default(),
+        yc_tests: None,
+        yc_memory_mb: None,
     }
 }
 

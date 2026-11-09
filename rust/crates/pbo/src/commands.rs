@@ -279,7 +279,23 @@ fn start_session<'a>(
     o: &Options,
     events: Option<std::sync::mpsc::Sender<Event>>,
 ) -> Result<Session<'a>, String> {
-    let mut setup = session::default_setup(machine, o.engine)?;
+    start_session_with(machine, store, o, events, true)
+}
+
+/// A session; `needs_engine` false for what tests nothing (`pbo resume`): putting the proven values back after a crash must
+/// not depend on a test program being where it was.
+fn start_session_with<'a>(
+    machine: &'a Machine,
+    store: &'a Store,
+    o: &Options,
+    events: Option<std::sync::mpsc::Sender<Event>>,
+    needs_engine: bool,
+) -> Result<Session<'a>, String> {
+    let mut setup = match session::default_setup(machine, o.engine) {
+        Ok(s) => s,
+        Err(_) if !needs_engine => session::no_engine_setup(),
+        Err(e) => return Err(e),
+    };
     if let Some(fft) = o.fft {
         setup.fft = fft;
     }
@@ -288,7 +304,7 @@ fn start_session<'a>(
     setup.yc_tests = o.yc_tests.clone();
     setup.yc_memory_mb = o.yc_memory_mb;
     let mut extra = Vec::new();
-    for step in &o.then {
+    for step in o.then.iter().filter(|_| needs_engine) {
         let kind = match step.engine {
             pbo_app::plan::Engine::Prime95 => EngineKind::Prime95,
             pbo_app::plan::Engine::YCruncher => EngineKind::YCruncher,
@@ -303,6 +319,7 @@ fn start_session<'a>(
     }
     let run_id = dailylog::new_run_id();
     let bios = os::bios_version().unwrap_or_default();
+    let set_aside = store.set_aside_if_bios_changed(&bios);
     let margins = machine.read_margins().unwrap_or_default();
     let header = Session::header(machine, &bios, &margins);
     let log = DailyLog::open(
@@ -318,6 +335,11 @@ fn start_session<'a>(
     s.transient = o.transient;
     s.bios = bios;
     s.events = events;
+    if let Some((old, new)) = set_aside {
+        s.say(&format!(
+            "The BIOS changed from {old} to {new} since the values were learned: what was learned is set aside (kept in runs\\core_knowledge.bios-*.json) and the cores are measured again."
+        ));
+    }
     Ok(s)
 }
 
@@ -400,6 +422,8 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
             if !record(&mut session, core, held, &outcome) {
                 failed += 1;
             }
+            // Kept at once: a crash later in a long run must not take what was learned before it.
+            session.save_knowledge();
             if matches!(outcome, Outcome::Failed(_) | Outcome::FailedByWhea(_)) {
                 policy.failed(core);
                 if o.notify {
@@ -425,7 +449,9 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
     if o.notify && !cancelled && !stopped {
         os::sound(os::Sound::Done);
     }
-    let _ = session.log.important(if failed == 0 {
+    let _ = session.log.important(if cancelled {
+        "run ended: cancelled"
+    } else if failed == 0 {
         "run ended: all cores passed"
     } else {
         "run ended: failures"
@@ -858,8 +884,12 @@ pub fn resume(args: &[String]) -> i32 {
         Ok(m) => m,
         Err(c) => return c,
     };
+    if o.continue_auto {
+        // At logon this is a console nobody opened: it goes at once, and the window the person sees is PboStudio.
+        pbo_os::hide_own_console();
+    }
     let store = Store::beside_program();
-    let mut session = match start_session(&machine, &store, &o, None) {
+    let mut session = match start_session_with(&machine, &store, &o, None, false) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("{e}");
@@ -1069,7 +1099,7 @@ pub fn autostart(args: &[String]) -> i32 {
                 Some(o) if o.success => {
                     println!("Installed: at logon the program puts the proven values back after a crash, and otherwise applies the saved profile.");
                     if continues {
-                        println!("After a crash it also carries Auto on by itself, after a countdown of a minute that `pbo resume --cancel` stops, and at most {} times in a row.", crate::autorun::MAX_RESUMES_IN_A_ROW);
+                        println!("After a crash it also carries Auto on by itself: the window opens and counts a minute down, in which it can be stopped (or with `pbo resume --cancel`), at most {} times in a row.", crate::autorun::MAX_RESUMES_IN_A_ROW);
                     }
                     0
                 }

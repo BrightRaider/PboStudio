@@ -387,6 +387,66 @@ mod real_engine {
         );
     }
 
+    /// An engine that dies while it is being tested is a failure of the test, with the real program: Prime95 and
+    /// y-cruncher are started on the last processor as a test starts them, killed from outside once they run, and the
+    /// stress has to report that they are gone (and nothing before). No rights and no change to the processor.
+    #[test]
+    #[ignore]
+    fn an_engine_that_dies_during_the_test_is_reported_as_a_failure() {
+        let logical = pbo_os::logical_processors() - 1;
+        let mut tried = 0;
+        for (kind, exe) in [
+            (EngineKind::Prime95, find_prime95()),
+            (EngineKind::YCruncher, find_ycruncher(3)),
+        ] {
+            let Some(exe) = exe else {
+                eprintln!("no {} found: not run", kind.name());
+                continue;
+            };
+            let work_root = std::env::temp_dir().join(format!(
+                "pbo-real-death-{}-{}",
+                kind.name(),
+                std::process::id()
+            ));
+            let setup = Setup {
+                kind,
+                exe,
+                fft: FftPreset::Custom(4, 5),
+                mode: Prime95Mode::Sse,
+                seconds_per_test: 30,
+                yc_set: engine::YcSet::FastDiscovery,
+                yc_tests: None,
+                yc_memory_mb: None,
+            };
+            let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
+            // It has to be running, and quiet, for a while first.
+            for _ in 0..8 {
+                std::thread::sleep(Duration::from_secs(1));
+                assert!(stress.is_alive(), "{} ended by itself", kind.name());
+                assert!(
+                    stress.poll().is_empty(),
+                    "a failure before there was one ({})",
+                    kind.name()
+                );
+            }
+            stress.stop();
+            let mut found = Vec::new();
+            for _ in 0..10 {
+                std::thread::sleep(Duration::from_millis(500));
+                found = stress.poll();
+                if !found.is_empty() {
+                    break;
+                }
+            }
+            drop(stress);
+            let _ = fs::remove_dir_all(&work_root);
+            assert_eq!(found.len(), 1, "{}: {found:?}", kind.name());
+            assert!(found[0].process_gone, "{}: {found:?}", kind.name());
+            tried += 1;
+        }
+        assert!(tried > 0, "neither engine was found");
+    }
+
     /// y-cruncher on one logical processor has to run one thread and say so (its log header names the logical cores it
     /// uses), report a finished iteration, and report no failure. Needs the engine next to the program.
     #[test]

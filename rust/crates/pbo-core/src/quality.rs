@@ -1,4 +1,5 @@
-//! Which cores the processor itself rates highest (CPPC "highest performance", MSR 0xC00102B3).
+//! Which cores the processor itself rates highest (CPPC "highest performance": from the processor, or as Windows ranks
+//! the cores from the same firmware values).
 //!
 //! This used to be a hard-coded guess (core 0 is gold, core 8 or 1 is silver) shown as if it had been measured; on
 //! plenty of Ryzen parts the preferred core is neither. When the values are unavailable there is no ranking at all

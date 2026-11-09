@@ -106,5 +106,4 @@ cargo build --release
 ```
 
 gives `target\release\pbo.exe`, one file. Publish it with its checksum (`pbo hash pbo.exe` writes the line `sha256sum` checks) and say in the release notes
-that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0-beta.2` is the first public
-build); `pbo version` prints it with the checksum of the running file. A release with `-beta` in its tag is a pre-release, which is what `pbo update --beta` looks for.
+that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0` is the first release); `pbo version` prints it with the checksum of the running file. The tag of a release of this program starts with `rust-` (`rust-v1.2.0`); one with `-beta` in it is a pre-release, which is what `pbo update --beta` looks for.

@@ -287,14 +287,42 @@ impl App {
                     }
                 }
                 ui_.add_space(COL_NAME - COL_CHECK - 20.0 + 2.0);
-                ui_.add_sized(
-                    [COL_STEPPER - COL_NAME - 4.0, 20.0],
-                    egui::Label::new(
-                        egui::RichText::new(format!("Core {core}"))
-                            .strong()
-                            .color(if selected { p.text } else { p.muted }),
-                    ),
+                // The best and the second best core get a star (gold and silver), with what it means on hover.
+                let star = self.info.as_ref().and_then(|i| {
+                    if i.best == Some(core) {
+                        Some((p.accent, Key::CoreBest))
+                    } else if i.second == Some(core) {
+                        Some((p.muted, Key::CoreSecond))
+                    } else {
+                        None
+                    }
+                });
+                let font = egui::TextStyle::Body.resolve(ui_.style());
+                let mut job = egui::text::LayoutJob::default();
+                job.append(
+                    &format!("{} {core}", text::tr(self.lang, Key::ColCore)),
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font.clone(),
+                        color: if selected { p.text } else { p.muted },
+                        ..Default::default()
+                    },
                 );
+                // Every row gets the star, invisible where there is none, so that the names stand in one line.
+                job.append(
+                    " \u{2605}",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: font,
+                        color: star.map_or(egui::Color32::TRANSPARENT, |(color, _)| color),
+                        ..Default::default()
+                    },
+                );
+                let name =
+                    ui_.add_sized([COL_STEPPER - COL_NAME - 4.0, 20.0], egui::Label::new(job));
+                if let Some((_, key)) = star {
+                    name.on_hover_text(text::tr(self.lang, key));
+                }
                 match shown {
                     Some(v) => {
                         let height = (row_h - 10.0).clamp(22.0, 30.0);

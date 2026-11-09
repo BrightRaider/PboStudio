@@ -68,6 +68,37 @@ impl Store {
 
     // ── What each core has been seen to hold and to fail at ───────────────
 
+    /// After a BIOS update what was learned may no longer hold (the firmware decides how a Curve Optimizer value behaves):
+    /// the memory is set aside, renamed and kept, so nothing proven under the old BIOS is written or skipped under the new
+    /// one. Returns the old and the new version when it did that. An unknown version on either side changes nothing.
+    pub fn set_aside_if_bios_changed(&self, current: &str) -> Option<(String, String)> {
+        let current = current.trim();
+        let (knowledge, stamped) = self.load_knowledge();
+        let stamped = stamped.trim().to_string();
+        if current.is_empty()
+            || stamped.is_empty()
+            || knowledge.is_empty()
+            || stamped.eq_ignore_ascii_case(current)
+        {
+            return None;
+        }
+        let safe: String = stamped
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let to = self
+            .root
+            .join(format!("core_knowledge.bios-{safe}.{}.json", now_unix()));
+        fs::rename(self.root.join("core_knowledge.json"), to).ok()?;
+        Some((stamped, current.to_string()))
+    }
+
     /// The memory of the search and the BIOS version it was gathered under. A missing or unreadable file is an empty
     /// memory: losing it is a setback, never a reason to refuse to start.
     pub fn load_knowledge(&self) -> (Knowledge, String) {
@@ -473,5 +504,40 @@ mod import_tests {
         // The other program's run state is never taken over.
         assert!(!store.root.join("state.json").exists());
         let _ = fs::remove_dir_all(&base);
+    }
+    #[test]
+    fn after_a_bios_update_what_was_learned_is_set_aside_and_kept() {
+        let dir = std::env::temp_dir().join(format!("pbo-bios-{}", std::process::id()));
+        let store = Store::at(dir.clone());
+        let mut k = Knowledge::new();
+        k.insert(
+            4,
+            CoreKnowledge {
+                best_passed: Some(-24),
+                worst_failed: Some(-28),
+            },
+        );
+        store.save_knowledge(&k, "1.S3").unwrap();
+        // Same BIOS, or an unknown one: nothing happens.
+        assert_eq!(store.set_aside_if_bios_changed("1.S3"), None);
+        assert_eq!(store.set_aside_if_bios_changed(" 1.s3 "), None);
+        assert_eq!(store.set_aside_if_bios_changed(""), None);
+        assert_eq!(store.load_knowledge().0, k);
+        // Another BIOS: the memory is empty, and the old file is still there under another name.
+        assert_eq!(
+            store.set_aside_if_bios_changed("1.T0"),
+            Some(("1.S3".to_string(), "1.T0".to_string()))
+        );
+        assert!(store.load_knowledge().0.is_empty());
+        let kept = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("core_knowledge.bios-1.S3.")
+            });
+        assert!(kept);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

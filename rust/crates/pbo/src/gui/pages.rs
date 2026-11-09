@@ -5,8 +5,8 @@
 use super::*;
 use pbo_core::auto;
 use pbo_core::campaign::{self, Action};
+use pbo_core::estimate as est;
 use pbo_core::tuner::Mode;
-use pbo_core::{estimate as est, profiles};
 use pbo_ui::widgets as w;
 
 /// What the Auto tab shows: the next step of the campaign and what is left of it, at each intensity.
@@ -39,7 +39,7 @@ impl App {
             if Controls::of(&self.state).can_stop {
                 self.stop_run();
             } else if Controls::of(&self.state).can_start && self.has_cores() {
-                self.start_auto();
+                self.start_or_go_on_now();
             }
         }
         if ctrl_s {
@@ -382,7 +382,18 @@ impl App {
             args.push("--cores".to_string());
             args.push(list.join(","));
         }
-        let _ = std::fs::write(self.store.root.join("auto_last.txt"), args.join("\n"));
+        // The same way as `pbo auto`: the folder is made first (on a fresh machine it is not there yet).
+        crate::autorun::write_marker(&self.store, &args);
+    }
+
+    /// The start button: while the window counts down after a crash it goes on now (the same carried-on Auto, without
+    /// the rest of the wait); otherwise the next step of the campaign.
+    pub(super) fn start_or_go_on_now(&mut self) {
+        if self.pending_continue.is_some() {
+            self.continue_deadline = Some(Instant::now());
+        } else {
+            self.start_auto();
+        }
     }
 
     /// The next step of the campaign as a plan: the profile of that step, on the cores it names.
@@ -397,25 +408,58 @@ impl App {
         if !self.has_cores() {
             return;
         }
-        let Some(profile) = profiles::by_id(view.step.profile.name()) else {
+        let mut base = self.plan.clone();
+        base.search = self.auto_search();
+        let Some(plan) = Plan::campaign_step(&view.step, &base, self.intensity) else {
             return;
-        };
-        let mut plan = Plan::from_profile(&profile, &self.plan);
-        // How long a test runs, and how far a step goes, follow the intensity and not the profile.
-        plan.seconds_per_test = self.intensity.minutes(view.phase.max(1)) * 60;
-        plan.rounds = 1;
-        if !view.step.cores.is_empty() {
-            plan.cores = view.step.cores.iter().map(|c| *c as usize).collect();
-        }
-        plan.search = if view.step.use_auto_tuner {
-            self.auto_search()
-        } else {
-            Search::Off
         };
         // The run view calls the phase its step.
         self.next_phase = view.phase.max(1) as u32;
         self.write_auto_marker();
         self.start_with(plan);
+    }
+
+    /// After a crash, while Auto is about to go on by itself: how long, and the way to stop it.
+    pub(super) fn continue_strip(&mut self, ui_: &mut egui::Ui) {
+        let Some(left) = self.continue_seconds_left() else {
+            return;
+        };
+        let dark = self.dark;
+        let p = ui::palette(dark);
+        let lang = self.lang;
+        let t = move |k: Key| text::tr(lang, k);
+        let mut stop = false;
+        let surface = ui::Surface {
+            margin: 12.0,
+            ..ui::Surface::inset(dark).tinted(p.accent, 0.16)
+        };
+        ui::surface(ui_, dark, surface, |ui_| {
+            ui_.label(
+                egui::RichText::new(format!("{} {left} s", t(Key::AutoContinueIn)))
+                    .strong()
+                    .color(p.accent),
+            );
+            ui_.label(
+                egui::RichText::new(t(Key::AutoContinueBody))
+                    .size(ui::TEXT_SMALL)
+                    .color(p.muted),
+            );
+            ui_.add_space(2.0);
+            if w::button(
+                ui_,
+                dark,
+                t(Key::AutoContinueStop),
+                w::ButtonStyle::Quiet,
+                true,
+            )
+            .clicked()
+            {
+                stop = true;
+            }
+        });
+        if stop {
+            self.cancel_continuation();
+        }
     }
 
     pub(super) fn interrupted_strip(&mut self, ui_: &mut egui::Ui) {
@@ -468,6 +512,7 @@ impl App {
     }
 
     pub(super) fn stop_run(&mut self) {
+        self.carry = None;
         match &self.link {
             Some(link) => link.stop(),
             None => os::request_cancel(),

@@ -1,0 +1,31 @@
+# Core 0 of a Ryzen 7 5800X3D (the best core per Windows' ranking, BIOS value -20) at -30, the floor of Zen 3, 2026-11-08.
+# pbo set 0 -30, then three pbo run --cores 0 --seconds 600 --transient bursts: Prime95 SSE smallest FFTs, y-cruncher, Prime95 AVX2 smallest FFTs.
+# Result: no failure, no machine check; core 0 put back to -20 and every value read back (-20 -25 -30 -30 -28 -30 -30 -30).
+# The run log, without the telemetry lines:
+
+pbo 1.2.0
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -30 -25 -30 -30 -28 -30 -30 -30
+
+01:36:04 [1108013604] ---- start ----
+01:36:04 [1108013604] Testing cores [0] at the values they hold, 600 s each, with Prime95. Nothing is changed on the processor.
+01:36:04 [1108013604] core 0: Prime95 on logical [0] at -30 for 600 s
+01:36:04 [1108013604] core 0: load changes: bursts
+01:46:05 [1108013604] core 0: engine used 94 % of the core
+01:46:05 [1108013604] core  0: held at -30 (2 full sweeps)
+01:46:05 [1108013604] run ended: all cores passed
+01:46:05 [1108014605] ---- start ----
+01:46:05 [1108014605] Testing cores [0] at the values they hold, 600 s each, with y-cruncher. Nothing is changed on the processor.
+01:46:05 [1108014605] core 0: y-cruncher on logical [0] at -30 for 600 s
+01:46:05 [1108014605] core 0: load changes: bursts
+01:56:06 [1108014605] core 0: engine used 95 % of the core
+01:56:06 [1108014605] core  0: held at -30 (1 full sweeps)
+01:56:06 [1108014605] run ended: all cores passed
+01:56:06 [1108015606] ---- start ----
+01:56:06 [1108015606] Testing cores [0] at the values they hold, 600 s each, with Prime95. Nothing is changed on the processor.
+01:56:06 [1108015606] core 0: Prime95 on logical [0] at -30 for 600 s
+01:56:06 [1108015606] core 0: load changes: bursts
+02:06:06 [1108015606] core 0: engine used 94 % of the core
+02:06:06 [1108015606] core  0: held at -30 (0 full sweeps)
+02:06:06 [1108015606] run ended: all cores passed

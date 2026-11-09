@@ -6,7 +6,9 @@
 use super::*;
 
 /// The names `pbo gui-preview` knows.
-pub const PREVIEWS: [&str; 20] = [
+pub const PREVIEWS: [&str; 21] = [
+    // After a crash, while Auto is about to go on by itself: the countdown in the window.
+    "continuing",
     // The real constructor and a scripted short run through the window: needs administrator rights.
     "live-run",
     // The real constructor and Auto, one core, the fast intensity, phase after phase: needs rights, writes like Auto.
@@ -267,6 +269,11 @@ impl App {
             dark,
             none_selected: false,
             auto_more: false,
+            pending_continue: (name == "continuing").then(Vec::new),
+            continue_deadline: (name == "continuing").then(|| Instant::now() + Duration::from_secs(45)),
+            run_cores: if name == "running" { 3 } else { 0 },
+            run_seen: if name == "running" { vec![0, 1, 4] } else { Vec::new() },
+            carry: None,
             auto_step: None,
             lang: if german { Lang::De } else { Lang::En },
             tab: match name {
@@ -325,6 +332,8 @@ impl App {
                     deepest: -30,
                     shallowest: 0,
                     suggested_start: if many { -15 } else { -20 },
+                    best: Some(0),
+                    second: Some(1),
                 })
             },
             machine_error: None,

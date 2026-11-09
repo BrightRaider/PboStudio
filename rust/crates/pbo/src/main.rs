@@ -51,10 +51,17 @@ fn main() {
         Some("selftest") => selftest(args.iter().any(|a| a == "--step")),
         Some("run") => commands::run(&args[1..]),
         Some("tune") => commands::tune(&args[1..]),
-        Some("resume") => commands::resume(&args[1..]),
+        Some("resume") => {
+            // At logon this runs in a console nobody started: a click into it must not stop the countdown.
+            pbo_os::disable_console_quick_edit();
+            commands::resume(&args[1..])
+        }
         Some("knowledge") => commands::show_knowledge(),
         Some("whea") => history::run(&args[1..]),
-        Some("auto") => autorun::auto(&args[1..]),
+        Some("auto") => {
+            pbo_os::disable_console_quick_edit();
+            autorun::auto(&args[1..])
+        }
         Some("report") => report::run(&args[1..]),
         Some("set") => commands::set(&args[1..]),
         Some("apply") => commands::apply(),

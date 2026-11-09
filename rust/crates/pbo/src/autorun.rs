@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use pbo_app::plan::{Engine, Plan, Search};
 use pbo_core::auto::Intensity;
 use pbo_core::campaign::{self, Verdict};
-use pbo_core::profiles;
 use pbo_core::tuner;
 use pbo_os as os;
 
@@ -33,6 +32,13 @@ pub const DEFAULT_COUNTDOWN_SECONDS: u64 = 60;
 
 fn file(store: &Store, name: &str) -> PathBuf {
     store.root.join(name)
+}
+
+/// Writes down how Auto was started. The folder is made first: on a machine where nothing has been saved yet it is not
+/// there, and a marker that is not written means that nothing carries Auto on after a crash (a forced restart showed it).
+pub(crate) fn write_marker(store: &Store, args: &[String]) {
+    let _ = std::fs::create_dir_all(&store.root);
+    let _ = std::fs::write(file(store, "auto_last.txt"), args.join("\n"));
 }
 
 /// `pbo auto [--intensity fast|normal|thorough] [options of run and tune]`.
@@ -60,9 +66,16 @@ pub fn auto(args: &[String]) -> i32 {
             return 2;
         }
     };
+    // Ctrl+C and closing the console stop the test and put the value back instead of ending the program at once.
+    os::handle_ctrl_c();
     let store = Store::beside_program();
+    if let Some((old, new)) =
+        store.set_aside_if_bios_changed(&os::bios_version().unwrap_or_default())
+    {
+        println!("The BIOS changed from {old} to {new} since the values were learned: what was learned is set aside and the cores are measured again.");
+    }
     // How it was started, for the continuation after a crash.
-    let _ = std::fs::write(file(&store, "auto_last.txt"), args.join("\n"));
+    write_marker(&store, args);
     let named_step = rest.iter().any(|a| a == "--fine" || a == "--step");
     let code = drive(&o, intensity, named_step);
     // The file that says how it was started is there only while it runs: a crash leaves it behind, and that is what lets
@@ -174,20 +187,9 @@ fn drive(o: &Options, intensity: Intensity, named_step: bool) -> i32 {
             Verdict::Run => {}
         }
         let phase = step.stage.phase_number().max(1);
-        let Some(profile) = profiles::by_id(step.profile.name()) else {
+        let Some(plan) = Plan::campaign_step(&step, &base, intensity) else {
             eprintln!("no test list '{}'", step.profile.name());
             return 1;
-        };
-        let mut plan = Plan::from_profile(&profile, &base);
-        plan.seconds_per_test = intensity.minutes(phase) * 60;
-        plan.rounds = 1;
-        if !step.cores.is_empty() {
-            plan.cores = step.cores.iter().map(|c| *c as usize).collect();
-        }
-        plan.search = if step.use_auto_tuner {
-            base.search
-        } else {
-            Search::Off
         };
         println!(
             "Auto, phase {phase} of {}: {} on cores {:?}.",
@@ -208,9 +210,7 @@ fn drive(o: &Options, intensity: Intensity, named_step: bool) -> i32 {
         } else {
             commands::run_with(&options, None)
         };
-        state.last_stage = Some(step.stage);
-        state.runs_done += 1;
-        state.last_signature = campaign::signature(step.stage, &step.cores, &held);
+        state.ran(step.stage, &step.cores, &held);
         last_clean = code == 0;
         if os::cancelled() {
             println!("Auto cancelled.");
@@ -245,57 +245,87 @@ fn read_resumes(store: &Store) -> (u32, i64) {
     (count, since)
 }
 
-/// After a crash, when `pbo resume --continue` has put the proven values back: carries the campaign on, after a countdown.
-/// Returns whether it went on.
-pub fn continue_after_crash(countdown_seconds: u64) -> bool {
-    let store = Store::beside_program();
-    let Ok(text) = std::fs::read_to_string(file(&store, "auto_last.txt")) else {
-        println!("There was no Auto run to carry on.");
-        return false;
+/// Why Auto does not go on by itself after a crash.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NoContinuation {
+    /// No Auto run was going when the machine went down: nothing to carry on.
+    NoRun,
+    /// It was carried on too often in a row; the person is to look at it.
+    TooOften(String),
+}
+
+/// How the last Auto run was started (the marker file), when it may be carried on: it must be there, and a crash must not
+/// have taken the machine down too many times in a row. A core that keeps doing that is for the person to look at.
+pub fn continuation_args(store: &Store) -> Result<Vec<String>, NoContinuation> {
+    let Ok(text) = std::fs::read_to_string(file(store, "auto_last.txt")) else {
+        return Err(NoContinuation::NoRun);
     };
-    let args: Vec<String> = text
+    let (count, _) = current_resumes(store);
+    if count >= MAX_RESUMES_IN_A_ROW {
+        return Err(NoContinuation::TooOften(format!(
+            "Auto has already been carried on {count} times after crashes. It does not go on by itself again: look at `pbo whea` and `pbo knowledge`, then start it by hand."
+        )));
+    }
+    Ok(text
         .lines()
         .filter(|l| !l.is_empty())
         .map(str::to_string)
-        .collect();
+        .collect())
+}
 
-    // Never more than a few in a row: a core that keeps taking the machine down is for the person to look at.
+/// The count of continuations in a row and when the first was; a count that is older than the window starts again.
+fn current_resumes(store: &Store) -> (u32, i64) {
     let now = crate::store::now_unix();
-    let (count, since) = read_resumes(&store);
-    let (count, since) = if count == 0 || now - since > RESUME_WINDOW_SECONDS {
+    let (count, since) = read_resumes(store);
+    if count == 0 || now - since > RESUME_WINDOW_SECONDS {
         (0, now)
     } else {
         (count, since)
-    };
-    if count >= MAX_RESUMES_IN_A_ROW {
-        println!(
-            "Auto has already been carried on {count} times after crashes. It is not going on by itself again: look at `pbo whea` and `pbo knowledge`, then start it by hand."
-        );
-        return false;
     }
+}
 
-    // The countdown, which the person can end with a file (`pbo resume --cancel`) or by closing this program.
-    let cancel = file(&store, "auto_cancel");
-    let _ = std::fs::remove_file(&cancel);
-    println!(
-        "Auto goes on in {countdown_seconds} s (carried on {count} of {MAX_RESUMES_IN_A_ROW} times so far). `pbo resume --cancel` stops it."
-    );
-    for left in (1..=countdown_seconds).rev() {
-        if cancel.exists() {
-            let _ = std::fs::remove_file(&cancel);
-            println!("Cancelled: Auto does not go on.");
-            return false;
-        }
-        if left % 15 == 0 {
-            println!("  {left} s");
-        }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+/// A continuation is starting: one more in a row.
+pub fn note_continuation(store: &Store) {
+    let (count, since) = current_resumes(store);
     let _ = std::fs::write(
-        file(&store, "auto_resume.txt"),
+        file(store, "auto_resume.txt"),
         format!("{} {since}", count + 1),
     );
-    auto(&args) == 0
+}
+
+/// Whether the person asked to stop a continuation that is counting down (`pbo resume --cancel`); the request is used up.
+pub fn cancel_requested(store: &Store) -> bool {
+    let cancel = file(store, "auto_cancel");
+    let asked = cancel.exists();
+    if asked {
+        let _ = std::fs::remove_file(&cancel);
+    }
+    asked
+}
+
+/// After a crash, when `pbo resume --continue` has put the proven values back: PboStudio opens, in this very process (no
+/// second program is started, and no console stays: that is a window the person sees), counts down in the window, where it
+/// can be stopped, and carries the campaign on. Returns whether it went on.
+pub fn continue_after_crash(countdown_seconds: u64) -> bool {
+    let store = Store::beside_program();
+    match continuation_args(&store) {
+        Err(NoContinuation::NoRun) => false,
+        Err(NoContinuation::TooOften(message)) => {
+            // The window opens to say so; nothing is started.
+            crate::gui::run_continuing(0, Some(message));
+            false
+        }
+        Ok(args) => {
+            let _ = std::fs::remove_file(file(&store, "auto_cancel"));
+            if crate::gui::run_continuing(countdown_seconds, None) == 0 {
+                true
+            } else {
+                // No window (no desktop, or it could not be opened): it goes on here, as `pbo auto`.
+                note_continuation(&store);
+                auto(&args) == 0
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -343,6 +373,21 @@ mod tests {
     }
 
     #[test]
+    fn the_marker_is_written_even_where_the_folder_does_not_exist_yet() {
+        let dir = std::env::temp_dir()
+            .join(format!("pbo-marker-{}", std::process::id()))
+            .join("runs");
+        let store = Store { root: dir.clone() };
+        assert!(!dir.exists());
+        write_marker(&store, &["--intensity".to_string(), "fast".to_string()]);
+        assert_eq!(
+            std::fs::read_to_string(dir.join("auto_last.txt")).unwrap(),
+            "--intensity\nfast"
+        );
+        let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+    }
+
+    #[test]
     fn the_count_of_continuations_is_read_from_its_file_and_a_missing_file_is_none() {
         let dir = std::env::temp_dir().join(format!("pbo-autorun-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -352,6 +397,43 @@ mod tests {
         assert_eq!(read_resumes(&store), (2, 1_793_872_800));
         std::fs::write(dir.join("auto_resume.txt"), "garbage").unwrap();
         assert_eq!(read_resumes(&store), (0, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn a_continuation_needs_the_marker_and_stops_after_three_in_a_row() {
+        let dir = std::env::temp_dir().join(format!("pbo-continue-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store { root: dir.clone() };
+        assert_eq!(continuation_args(&store), Err(NoContinuation::NoRun));
+        std::fs::write(dir.join("auto_last.txt"), "--intensity\nfast\n--cores\n4").unwrap();
+        assert_eq!(
+            continuation_args(&store).unwrap(),
+            vec!["--intensity", "fast", "--cores", "4"]
+        );
+        // Each continuation that starts is counted; the fourth in a row is refused.
+        for _ in 0..MAX_RESUMES_IN_A_ROW {
+            assert!(continuation_args(&store).is_ok());
+            note_continuation(&store);
+        }
+        assert!(matches!(
+            continuation_args(&store),
+            Err(NoContinuation::TooOften(_))
+        ));
+        // A count older than the window starts again.
+        std::fs::write(dir.join("auto_resume.txt"), "3 1000").unwrap();
+        assert!(continuation_args(&store).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cancel_request_is_seen_once() {
+        let dir = std::env::temp_dir().join(format!("pbo-cancel-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store { root: dir.clone() };
+        assert!(!cancel_requested(&store));
+        std::fs::write(dir.join("auto_cancel"), "cancel").unwrap();
+        assert!(cancel_requested(&store));
+        assert!(!cancel_requested(&store));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
