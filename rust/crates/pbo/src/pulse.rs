@@ -4,7 +4,7 @@
 //! The pulser always leaves the engine released: a process left frozen looks exactly like a core that went idle, and
 //! the next test would inherit it. Dropping a pulser stops it and waits for it to finish.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -27,6 +27,9 @@ impl Switch for pbo_os::Suspender {
 pub struct Pulser {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// Microseconds the load was let run, and microseconds in all.
+    ran_us: Arc<AtomicU64>,
+    total_us: Arc<AtomicU64>,
 }
 
 /// Sleeps for `total` in short slices. Returns false when it was asked to stop in the meantime.
@@ -47,17 +50,39 @@ fn sleep_unless_stopped(stop: &AtomicBool, total: Duration) -> bool {
 impl Pulser {
     /// The load runs for `load`, then the engine is frozen for `idle`, and so on until the pulser is dropped.
     pub fn start<S: Switch>(switch: S, load: Duration, idle: Duration) -> Pulser {
+        Pulser::start_rhythm(switch, move || (load, idle))
+    }
+
+    /// The load runs and the engine is frozen in the slices `rhythm` gives (load, then idle), until the pulser is dropped.
+    pub fn start_rhythm<S, R>(switch: S, mut rhythm: R) -> Pulser
+    where
+        S: Switch,
+        R: FnMut() -> (Duration, Duration) + Send + 'static,
+    {
         let stop = Arc::new(AtomicBool::new(false));
-        let flag = stop.clone();
+        let ran_us = Arc::new(AtomicU64::new(0));
+        let total_us = Arc::new(AtomicU64::new(0));
+        let (flag, ran, total) = (stop.clone(), ran_us.clone(), total_us.clone());
         let thread = std::thread::spawn(move || {
+            let add = |counter: &AtomicU64, since: Instant| {
+                counter.fetch_add(since.elapsed().as_micros() as u64, Ordering::SeqCst);
+            };
             let mut frozen = false;
             loop {
-                if !sleep_unless_stopped(&flag, load) {
+                let (load, idle) = rhythm();
+                let t = Instant::now();
+                let went_on = sleep_unless_stopped(&flag, load);
+                add(&ran, t);
+                add(&total, t);
+                if !went_on {
                     break;
                 }
                 switch.suspend();
                 frozen = true;
-                if !sleep_unless_stopped(&flag, idle) {
+                let t = Instant::now();
+                let went_on = sleep_unless_stopped(&flag, idle);
+                add(&total, t);
+                if !went_on {
                     break;
                 }
                 switch.resume();
@@ -70,7 +95,15 @@ impl Pulser {
         Pulser {
             stop,
             thread: Some(thread),
+            ran_us,
+            total_us,
         }
+    }
+
+    /// The share of the time the load was let run so far; none before anything was measured.
+    pub fn share(&self) -> Option<f64> {
+        let total = self.total_us.load(Ordering::SeqCst);
+        (total > 0).then(|| self.ran_us.load(Ordering::SeqCst) as f64 / total as f64)
     }
 }
 
@@ -197,6 +230,42 @@ mod tests {
             "the process ran {share:.2} of the time, expected about 0.75"
         );
         // Released: it computes again at once.
+        let after = child.cpu_time();
+        std::thread::sleep(Duration::from_millis(1000));
+        let grown = (child.cpu_time() - after).as_secs_f64();
+        assert!(
+            grown > 0.7,
+            "the process only ran {grown:.2} s of the next second"
+        );
+    }
+
+    #[test]
+    fn the_rhythm_of_a_game_on_a_real_process_runs_as_long_as_the_pulser_measured_and_leaves_it_released(
+    ) {
+        let _alone = ONE_BUSY_PROCESS.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(child) = busy_process() else {
+            return;
+        };
+        let before = child.cpu_time();
+        let began = Instant::now();
+        let mut rhythm = pbo_core::transient::GamePattern::new(7);
+        let pulser = Pulser::start_rhythm(child.suspender(), move || {
+            let (load, idle) = rhythm.next_slice();
+            (
+                Duration::from_millis(load.into()),
+                Duration::from_millis(idle.into()),
+            )
+        });
+        std::thread::sleep(Duration::from_secs(8));
+        let measured = pulser.share().expect("the pulser measured something");
+        drop(pulser);
+        let used = (child.cpu_time() - before).as_secs_f64();
+        let share = used / began.elapsed().as_secs_f64();
+        // Slices of a few milliseconds: what the process really ran is close to what the pulser let it run.
+        assert!(
+            (share - measured).abs() < 0.15 && (0.05..0.6).contains(&share),
+            "the process ran {share:.2} of the time, the pulser measured {measured:.2}"
+        );
         let after = child.cpu_time();
         std::thread::sleep(Duration::from_millis(1000));
         let grown = (child.cpu_time() - after).as_secs_f64();

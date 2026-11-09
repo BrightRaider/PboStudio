@@ -133,18 +133,39 @@ impl Machine {
         (0..self.cores).map(|c| self.read_margin(c)).collect()
     }
 
-    /// What each core reports as its highest performance (CPPC, MSR C001_02B3, low byte), or 0 when the read failed.
-    /// `None` on a family without Curve Optimizer, where the ranking is of no use.
+    /// How the cores rank, best first being the highest: what each reports as its highest performance (CPPC), bits 31:24
+    /// of MSR C001_02B0; where that reads nothing, the low byte of C001_02B3 as 1.x read it; and where the processor gives
+    /// neither (a 5800X3D reads 0 in both), the ranking Windows takes from the firmware (the scheduling class of each
+    /// core, plus one, so that 0 still means "no reading"). `None` on a family without Curve Optimizer, where the
+    /// ranking is of no use.
     pub fn cppc(&self) -> Option<Vec<i32>> {
         if !self.family.curve_optimizer {
             return None;
         }
-        Some(
+        let read = |msr: u32, value: fn(u64) -> i32| -> Vec<i32> {
             (0..self.cores)
                 .map(|core| {
                     self.amd
-                        .read_msr_on(core * self.threads_per_core, 0xC001_02B3)
-                        .map_or(0, |v| (v & 0xFF) as i32)
+                        .read_msr_on(core * self.threads_per_core, msr)
+                        .map_or(0, value)
+                })
+                .collect()
+        };
+        let highest = read(0xC001_02B0, |v| ((v >> 24) & 0xFF) as i32);
+        if highest.iter().any(|v| *v != 0) {
+            return Some(highest);
+        }
+        let request = read(0xC001_02B3, |v| (v & 0xFF) as i32);
+        if request.iter().any(|v| *v != 0) {
+            return Some(request);
+        }
+        let classes = os::scheduling_classes().unwrap_or_default();
+        Some(
+            (0..self.cores)
+                .map(|core| {
+                    classes
+                        .get(core * self.threads_per_core)
+                        .map_or(0, |c| i32::from(*c) + 1)
                 })
                 .collect(),
         )

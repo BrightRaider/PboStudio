@@ -101,6 +101,10 @@ pub struct Setup {
     pub seconds_per_test: u32,
     /// Which algorithms y-cruncher runs.
     pub yc_set: engine::YcSet,
+    /// y-cruncher's tests of the person's own choosing (their tags); none: the set above.
+    pub yc_tests: Option<Vec<String>>,
+    /// The memory y-cruncher gets for each logical processor, in MiB; none: 64.
+    pub yc_memory_mb: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,12 +196,27 @@ impl Stress {
                 // The settings go in a file, because only there can y-cruncher be told which logical processors to run
                 // on; without it, it starts a thread for each of the machine's and they take turns on the one it may use.
                 let config = dir.join(format!("stress-{}.cfg", std::process::id()));
+                // The person's own list of tests and memory, or the set that was chosen and 64 MiB for each thread.
+                let custom: Vec<&str> = setup
+                    .yc_tests
+                    .as_ref()
+                    .map(|t| t.iter().map(String::as_str).collect())
+                    .unwrap_or_default();
+                let algorithms: &[&str] = if custom.is_empty() {
+                    setup.yc_set.algorithms()
+                } else {
+                    &custom
+                };
+                let memory = setup
+                    .yc_memory_mb
+                    .map_or(engine::YCRUNCHER_MEMORY_PER_THREAD, |m| u64::from(m) << 20);
                 fs::write(
                     &config,
-                    engine::ycruncher_config(
+                    engine::ycruncher_config_with(
                         logical,
                         setup.seconds_per_test,
-                        setup.yc_set.algorithms(),
+                        algorithms,
+                        memory,
                     )
                     .as_bytes(),
                 )
@@ -328,6 +347,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 60,
             yc_set: engine::YcSet::default(),
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
         let results = work_root.join("core7").join("results.txt");
@@ -366,6 +387,66 @@ mod real_engine {
         );
     }
 
+    /// An engine that dies while it is being tested is a failure of the test, with the real program: Prime95 and
+    /// y-cruncher are started on the last processor as a test starts them, killed from outside once they run, and the
+    /// stress has to report that they are gone (and nothing before). No rights and no change to the processor.
+    #[test]
+    #[ignore]
+    fn an_engine_that_dies_during_the_test_is_reported_as_a_failure() {
+        let logical = pbo_os::logical_processors() - 1;
+        let mut tried = 0;
+        for (kind, exe) in [
+            (EngineKind::Prime95, find_prime95()),
+            (EngineKind::YCruncher, find_ycruncher(3)),
+        ] {
+            let Some(exe) = exe else {
+                eprintln!("no {} found: not run", kind.name());
+                continue;
+            };
+            let work_root = std::env::temp_dir().join(format!(
+                "pbo-real-death-{}-{}",
+                kind.name(),
+                std::process::id()
+            ));
+            let setup = Setup {
+                kind,
+                exe,
+                fft: FftPreset::Custom(4, 5),
+                mode: Prime95Mode::Sse,
+                seconds_per_test: 30,
+                yc_set: engine::YcSet::FastDiscovery,
+                yc_tests: None,
+                yc_memory_mb: None,
+            };
+            let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
+            // It has to be running, and quiet, for a while first.
+            for _ in 0..8 {
+                std::thread::sleep(Duration::from_secs(1));
+                assert!(stress.is_alive(), "{} ended by itself", kind.name());
+                assert!(
+                    stress.poll().is_empty(),
+                    "a failure before there was one ({})",
+                    kind.name()
+                );
+            }
+            stress.stop();
+            let mut found = Vec::new();
+            for _ in 0..10 {
+                std::thread::sleep(Duration::from_millis(500));
+                found = stress.poll();
+                if !found.is_empty() {
+                    break;
+                }
+            }
+            drop(stress);
+            let _ = fs::remove_dir_all(&work_root);
+            assert_eq!(found.len(), 1, "{}: {found:?}", kind.name());
+            assert!(found[0].process_gone, "{}: {found:?}", kind.name());
+            tried += 1;
+        }
+        assert!(tried > 0, "neither engine was found");
+    }
+
     /// y-cruncher on one logical processor has to run one thread and say so (its log header names the logical cores it
     /// uses), report a finished iteration, and report no failure. Needs the engine next to the program.
     #[test]
@@ -384,6 +465,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 3,
             yc_set: engine::YcSet::FastDiscovery,
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &[logical]).expect("start");
         let log = work_root
@@ -430,6 +513,8 @@ mod real_engine {
             mode: Prime95Mode::Sse,
             seconds_per_test: 60,
             yc_set: engine::YcSet::default(),
+            yc_tests: None,
+            yc_memory_mb: None,
         };
         let mut stress = Stress::start(&setup, &work_root, 7, &logical_list).expect("start");
         let began = Instant::now();

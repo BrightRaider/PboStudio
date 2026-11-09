@@ -5,8 +5,8 @@
 use super::*;
 use pbo_core::auto;
 use pbo_core::campaign::{self, Action};
+use pbo_core::estimate as est;
 use pbo_core::tuner::Mode;
-use pbo_core::{estimate as est, profiles};
 use pbo_ui::widgets as w;
 
 /// What the Auto tab shows: the next step of the campaign and what is left of it, at each intensity.
@@ -39,7 +39,7 @@ impl App {
             if Controls::of(&self.state).can_stop {
                 self.stop_run();
             } else if Controls::of(&self.state).can_start && self.has_cores() {
-                self.start_auto();
+                self.start_or_go_on_now();
             }
         }
         if ctrl_s {
@@ -227,6 +227,30 @@ impl App {
     }
 
     /// "On every Windows start": the values as they are now become the profile, and the logon task applies it.
+    /// Whether the machine carries Auto on by itself after a crash. It is the logon task that does it, so turning it on
+    /// makes the task (with `--continue`), and turning it off makes a task that exists plain again.
+    pub(super) fn set_continue_after_crash(&mut self, on: bool) {
+        if self.is_preview() {
+            return;
+        }
+        if !on && !self.logon_task {
+            self.logon_continue = false;
+            return;
+        }
+        self.logon_continue = on;
+        let (tx, rx) = mpsc::channel();
+        self.setup_busy = Some(rx);
+        let args: Vec<String> = if on {
+            vec!["on".to_string(), "--continue".to_string()]
+        } else {
+            vec!["on".to_string()]
+        };
+        std::thread::spawn(move || {
+            let code = commands::autostart(&args);
+            let _ = tx.send(code);
+        });
+    }
+
     pub(super) fn set_every_start(&mut self, on: bool) {
         if self.is_preview() {
             return;
@@ -333,6 +357,45 @@ impl App {
         })
     }
 
+    /// Says how Auto was started, in a file that is there only while the run is: a crash leaves it behind, and that is what
+    /// lets `pbo resume --continue` carry the campaign on by itself after the machine has come back (see `autorun.rs`).
+    fn write_auto_marker(&self) {
+        if self.is_preview() || !self.has_cores() {
+            return;
+        }
+        let default_step = pbo_core::tuner::step_size(self.intensity.preselected_mode()) as u32;
+        let step = self.auto_search().step_size().unwrap_or(default_step);
+        let mut args = vec![
+            "--intensity".to_string(),
+            self.intensity.id().to_string(),
+            "--step".to_string(),
+            step.to_string(),
+            "--guardband".to_string(),
+            self.plan.guardband.to_string(),
+        ];
+        if self.plan.start > 0 {
+            args.push("--start".to_string());
+            args.push(self.plan.start.to_string());
+        }
+        if !self.plan.cores.is_empty() {
+            let list: Vec<String> = self.plan.cores.iter().map(|c| c.to_string()).collect();
+            args.push("--cores".to_string());
+            args.push(list.join(","));
+        }
+        // The same way as `pbo auto`: the folder is made first (on a fresh machine it is not there yet).
+        crate::autorun::write_marker(&self.store, &args);
+    }
+
+    /// The start button: while the window counts down after a crash it goes on now (the same carried-on Auto, without
+    /// the rest of the wait); otherwise the next step of the campaign.
+    pub(super) fn start_or_go_on_now(&mut self) {
+        if self.pending_continue.is_some() {
+            self.continue_deadline = Some(Instant::now());
+        } else {
+            self.start_auto();
+        }
+    }
+
     /// The next step of the campaign as a plan: the profile of that step, on the cores it names.
     pub(super) fn start_auto(&mut self) {
         let Some(view) = self.campaign_view() else {
@@ -345,24 +408,58 @@ impl App {
         if !self.has_cores() {
             return;
         }
-        let Some(profile) = profiles::by_id(view.step.profile.name()) else {
+        let mut base = self.plan.clone();
+        base.search = self.auto_search();
+        let Some(plan) = Plan::campaign_step(&view.step, &base, self.intensity) else {
             return;
-        };
-        let mut plan = Plan::from_profile(&profile, &self.plan);
-        // How long a test runs, and how far a step goes, follow the intensity and not the profile.
-        plan.seconds_per_test = self.intensity.minutes(view.phase.max(1)) * 60;
-        plan.rounds = 1;
-        if !view.step.cores.is_empty() {
-            plan.cores = view.step.cores.iter().map(|c| *c as usize).collect();
-        }
-        plan.search = if view.step.use_auto_tuner {
-            self.auto_search()
-        } else {
-            Search::Off
         };
         // The run view calls the phase its step.
         self.next_phase = view.phase.max(1) as u32;
+        self.write_auto_marker();
         self.start_with(plan);
+    }
+
+    /// After a crash, while Auto is about to go on by itself: how long, and the way to stop it.
+    pub(super) fn continue_strip(&mut self, ui_: &mut egui::Ui) {
+        let Some(left) = self.continue_seconds_left() else {
+            return;
+        };
+        let dark = self.dark;
+        let p = ui::palette(dark);
+        let lang = self.lang;
+        let t = move |k: Key| text::tr(lang, k);
+        let mut stop = false;
+        let surface = ui::Surface {
+            margin: 12.0,
+            ..ui::Surface::inset(dark).tinted(p.accent, 0.16)
+        };
+        ui::surface(ui_, dark, surface, |ui_| {
+            ui_.label(
+                egui::RichText::new(format!("{} {left} s", t(Key::AutoContinueIn)))
+                    .strong()
+                    .color(p.accent),
+            );
+            ui_.label(
+                egui::RichText::new(t(Key::AutoContinueBody))
+                    .size(ui::TEXT_SMALL)
+                    .color(p.muted),
+            );
+            ui_.add_space(2.0);
+            if w::button(
+                ui_,
+                dark,
+                t(Key::AutoContinueStop),
+                w::ButtonStyle::Quiet,
+                true,
+            )
+            .clicked()
+            {
+                stop = true;
+            }
+        });
+        if stop {
+            self.cancel_continuation();
+        }
     }
 
     pub(super) fn interrupted_strip(&mut self, ui_: &mut egui::Ui) {
@@ -415,6 +512,7 @@ impl App {
     }
 
     pub(super) fn stop_run(&mut self) {
+        self.carry = None;
         match &self.link {
             Some(link) => link.stop(),
             None => os::request_cancel(),

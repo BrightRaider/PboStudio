@@ -45,9 +45,19 @@ pub struct Options {
     pub yc_set: pbo_core::engine::YcSet,
     /// How the load is interrupted so the core has to boost back up.
     pub transient: pbo_core::transient::Transient,
+    /// Seconds of rest between two cores, for them to cool down.
+    pub pause: u64,
+    /// After a crash, carry on with Auto by itself (`pbo resume --continue`).
+    pub continue_auto: bool,
+    /// The countdown before that, in seconds.
+    pub wait: u64,
+    /// y-cruncher's algorithms of one's own, by their tags; none: the set that was chosen.
+    pub yc_tests: Option<Vec<String>>,
+    /// The memory y-cruncher's stress test gets for each logical processor, in MiB; none: 64.
+    pub yc_memory_mb: Option<u32>,
 }
 
-fn parse(args: &[String]) -> Result<Options, String> {
+pub(crate) fn parse(args: &[String]) -> Result<Options, String> {
     let mut o = Options {
         seconds: 60,
         cores: None,
@@ -65,6 +75,11 @@ fn parse(args: &[String]) -> Result<Options, String> {
         on_error: pbo_core::onerror::OnError::default(),
         notify: true,
         yc_set: pbo_core::engine::YcSet::default(),
+        pause: 0,
+        continue_auto: false,
+        wait: crate::autorun::DEFAULT_COUNTDOWN_SECONDS,
+        yc_tests: None,
+        yc_memory_mb: None,
     };
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -117,6 +132,48 @@ fn parse(args: &[String]) -> Result<Options, String> {
                     .filter(|n| (1..=30).contains(n))
                     .ok_or("--start takes a number from 1 to 30")?;
                 o.start = Some(n);
+            }
+            "--pause" => {
+                o.pause = value("--pause")?
+                    .parse()
+                    .ok()
+                    .filter(|n| *n <= 3600)
+                    .ok_or("--pause takes a number of seconds, up to 3600")?;
+            }
+            "--continue" => o.continue_auto = true,
+            "--wait" => {
+                o.wait = value("--wait")?
+                    .parse()
+                    .ok()
+                    .filter(|n| *n <= 3600)
+                    .ok_or("--wait takes a number of seconds, up to 3600")?;
+            }
+            "--yc-tests" => {
+                let list = value("--yc-tests")?;
+                let mut tags = Vec::new();
+                for part in list.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+                    tags.push(
+                        pbo_core::engine::ycruncher_tag(part)
+                            .ok_or(format!(
+                                "'{part}' is not a y-cruncher stress test (one of: {})",
+                                pbo_core::engine::YCRUNCHER_TAGS.join(", ")
+                            ))?
+                            .to_string(),
+                    );
+                }
+                if tags.is_empty() {
+                    return Err("--yc-tests needs at least one test".into());
+                }
+                o.yc_tests = Some(tags);
+            }
+            "--yc-memory" => {
+                o.yc_memory_mb = Some(
+                    value("--yc-memory")?
+                        .parse()
+                        .ok()
+                        .filter(|n| (16..=4096).contains(n))
+                        .ok_or("--yc-memory takes MiB for each logical processor, 16 to 4096")?,
+                );
             }
             "--guardband" => {
                 o.guardband = value("--guardband")?
@@ -189,14 +246,17 @@ fn parse(args: &[String]) -> Result<Options, String> {
     Ok(o)
 }
 
-fn open_machine() -> Result<Machine, i32> {
+pub(crate) fn open_machine() -> Result<Machine, i32> {
     Machine::open().map_err(|e| {
         eprintln!("{e}");
         1
     })
 }
 
-fn chosen_cores(machine: &Machine, requested: &Option<Vec<usize>>) -> Result<Vec<usize>, String> {
+pub(crate) fn chosen_cores(
+    machine: &Machine,
+    requested: &Option<Vec<usize>>,
+) -> Result<Vec<usize>, String> {
     match requested {
         None => Ok((0..machine.cores).collect()),
         Some(list) => {
@@ -219,14 +279,32 @@ fn start_session<'a>(
     o: &Options,
     events: Option<std::sync::mpsc::Sender<Event>>,
 ) -> Result<Session<'a>, String> {
-    let mut setup = session::default_setup(machine, o.engine)?;
+    start_session_with(machine, store, o, events, true)
+}
+
+/// A session; `needs_engine` false for what tests nothing (`pbo resume`): putting the proven values back after a crash must
+/// not depend on a test program being where it was.
+fn start_session_with<'a>(
+    machine: &'a Machine,
+    store: &'a Store,
+    o: &Options,
+    events: Option<std::sync::mpsc::Sender<Event>>,
+    needs_engine: bool,
+) -> Result<Session<'a>, String> {
+    let mut setup = match session::default_setup(machine, o.engine) {
+        Ok(s) => s,
+        Err(_) if !needs_engine => session::no_engine_setup(),
+        Err(e) => return Err(e),
+    };
     if let Some(fft) = o.fft {
         setup.fft = fft;
     }
     setup.mode = o.prime_mode;
     setup.yc_set = o.yc_set;
+    setup.yc_tests = o.yc_tests.clone();
+    setup.yc_memory_mb = o.yc_memory_mb;
     let mut extra = Vec::new();
-    for step in &o.then {
+    for step in o.then.iter().filter(|_| needs_engine) {
         let kind = match step.engine {
             pbo_app::plan::Engine::Prime95 => EngineKind::Prime95,
             pbo_app::plan::Engine::YCruncher => EngineKind::YCruncher,
@@ -235,10 +313,13 @@ fn start_session<'a>(
         leg.mode = step.mode;
         leg.fft = step.fft;
         leg.yc_set = o.yc_set;
+        leg.yc_tests = o.yc_tests.clone();
+        leg.yc_memory_mb = o.yc_memory_mb;
         extra.push(leg);
     }
     let run_id = dailylog::new_run_id();
     let bios = os::bios_version().unwrap_or_default();
+    let set_aside = store.set_aside_if_bios_changed(&bios);
     let margins = machine.read_margins().unwrap_or_default();
     let header = Session::header(machine, &bios, &margins);
     let log = DailyLog::open(
@@ -254,6 +335,11 @@ fn start_session<'a>(
     s.transient = o.transient;
     s.bios = bios;
     s.events = events;
+    if let Some((old, new)) = set_aside {
+        s.say(&format!(
+            "The BIOS changed from {old} to {new} since the values were learned: what was learned is set aside (kept in runs\\core_knowledge.bios-*.json) and the cores are measured again."
+        ));
+    }
     Ok(s)
 }
 
@@ -309,6 +395,7 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
     let mut cancelled = false;
     let mut stopped = false;
     let mut policy = pbo_core::onerror::ErrorPolicy::new(o.on_error);
+    let mut tested_one = false;
     for round in 1..=o.rounds.max(1) {
         if o.rounds > 1 {
             session.say(&format!("round {round} of {}", o.rounds));
@@ -318,6 +405,10 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
             session.say(&format!("order of the cores: {in_order:?}"));
         }
         for core in &in_order {
+            if tested_one {
+                rest_between(&mut session, o.pause);
+            }
+            tested_one = true;
             let core = *core;
             let held = match machine.read_margin(core) {
                 Ok(m) => m,
@@ -331,6 +422,8 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
             if !record(&mut session, core, held, &outcome) {
                 failed += 1;
             }
+            // Kept at once: a crash later in a long run must not take what was learned before it.
+            session.save_knowledge();
             if matches!(outcome, Outcome::Failed(_) | Outcome::FailedByWhea(_)) {
                 policy.failed(core);
                 if o.notify {
@@ -356,7 +449,9 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
     if o.notify && !cancelled && !stopped {
         os::sound(os::Sound::Done);
     }
-    let _ = session.log.important(if failed == 0 {
+    let _ = session.log.important(if cancelled {
+        "run ended: cancelled"
+    } else if failed == 0 {
         "run ended: all cores passed"
     } else {
         "run ended: failures"
@@ -365,6 +460,20 @@ pub fn run_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) -> 
         0
     } else {
         1
+    }
+}
+
+/// Rest between two cores, so that the next one starts cool (`--pause N`). It ends at once when the run is cancelled.
+fn rest_between(session: &mut Session, seconds: u64) {
+    if seconds == 0 {
+        return;
+    }
+    session.say(&format!("resting {seconds} s before the next core"));
+    for _ in 0..seconds {
+        if os::cancelled() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 
@@ -650,11 +759,16 @@ pub fn tune_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) ->
 
     let mut failed = 0;
     let mut results: BTreeMap<usize, i32> = BTreeMap::new();
+    let mut tested_one = false;
     let cores = pbo_core::order::arrange(o.order, &cores, order_seed());
     if o.order != pbo_core::order::CoreOrder::Sequential {
         session.say(&format!("order of the cores: {cores:?}"));
     }
     for core in cores {
+        if tested_one {
+            rest_between(&mut session, o.pause);
+        }
+        tested_one = true;
         let proven = session
             .knowledge
             .get(&(core as u32))
@@ -755,6 +869,10 @@ pub fn tune_with(o: &Options, events: Option<std::sync::mpsc::Sender<Event>>) ->
 /// What runs at logon: after a crash, every core is put back to what it was proven to hold, and the person is told
 /// what happened. It does not start a test by itself; that is a decision the person makes.
 pub fn resume(args: &[String]) -> i32 {
+    // A continuation that is counting down is stopped with a file; nothing else is done.
+    if args.iter().any(|a| a == "--cancel") {
+        return crate::autorun::cancel_continuation();
+    }
     let o = match parse(args) {
         Ok(o) => o,
         Err(e) => {
@@ -766,8 +884,12 @@ pub fn resume(args: &[String]) -> i32 {
         Ok(m) => m,
         Err(c) => return c,
     };
+    if o.continue_auto {
+        // At logon this is a console nobody opened: it goes at once, and the window the person sees is PboStudio.
+        pbo_os::hide_own_console();
+    }
     let store = Store::beside_program();
-    let mut session = match start_session(&machine, &store, &o, None) {
+    let mut session = match start_session_with(&machine, &store, &o, None, false) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("{e}");
@@ -787,6 +909,12 @@ pub fn resume(args: &[String]) -> i32 {
     if had_state {
         // A run was cut off: what it left is not to be trusted, the proven values are.
         restore_proven(&mut session, o.guardband);
+        if o.continue_auto {
+            // The proven values are back; Auto carries on by itself after a countdown that can be cancelled.
+            drop(session);
+            drop(machine);
+            crate::autorun::continue_after_crash(o.wait);
+        }
         0
     } else if session.store.load_saved_profile().is_some() {
         drop(session);
@@ -958,13 +1086,21 @@ pub fn autostart(args: &[String]) -> i32 {
             let exe = std::env::current_exe()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default();
-            let run = format!("\"{exe}\" resume");
+            let continues = args.get(1).is_some_and(|a| a == "--continue");
+            let run = if continues {
+                format!("\"{exe}\" resume --continue")
+            } else {
+                format!("\"{exe}\" resume")
+            };
             let out = schtasks(&[
                 "/Create", "/TN", TASK_NAME, "/TR", &run, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F",
             ]);
             match out {
                 Some(o) if o.success => {
                     println!("Installed: at logon the program puts the proven values back after a crash, and otherwise applies the saved profile.");
+                    if continues {
+                        println!("After a crash it also carries Auto on by itself: the window opens and counts a minute down, in which it can be stopped (or with `pbo resume --cancel`), at most {} times in a row.", crate::autorun::MAX_RESUMES_IN_A_ROW);
+                    }
                     0
                 }
                 _ => {
@@ -1090,6 +1226,11 @@ impl Options {
             on_error: plan.on_error,
             notify: plan.notify,
             yc_set: plan.yc_set,
+            pause: 0,
+            continue_auto: false,
+            wait: crate::autorun::DEFAULT_COUNTDOWN_SECONDS,
+            yc_tests: None,
+            yc_memory_mb: None,
         }
     }
 }
@@ -1381,5 +1522,66 @@ mod plan_tests {
             assert_eq!(Options::from_plan(&back), Options::from_plan(&plan));
             assert_eq!(back.command_line(), plan.command_line());
         }
+    }
+}
+
+#[cfg(test)]
+mod option_tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn the_rest_between_cores_is_a_number_of_seconds_up_to_an_hour() {
+        assert_eq!(parse(&args(&["--pause", "20"])).unwrap().pause, 20);
+        assert_eq!(parse(&args(&[])).unwrap().pause, 0);
+        assert!(parse(&args(&["--pause", "3601"])).is_err());
+        assert!(parse(&args(&["--pause", "soon"])).is_err());
+        assert!(parse(&args(&["--pause"])).is_err());
+    }
+
+    #[test]
+    fn y_cruncher_tests_are_checked_against_its_tags_and_spelled_as_it_wants() {
+        let o = parse(&args(&["--yc-tests", "sftv4, vt3,N63"])).unwrap();
+        assert_eq!(
+            o.yc_tests,
+            Some(vec![
+                "SFTv4".to_string(),
+                "VT3".to_string(),
+                "N63".to_string()
+            ])
+        );
+        assert!(parse(&args(&["--yc-tests", "SFTv4,nonsense"])).is_err());
+        assert!(parse(&args(&["--yc-tests", ","])).is_err());
+        assert_eq!(parse(&args(&[])).unwrap().yc_tests, None);
+    }
+
+    #[test]
+    fn y_cruncher_memory_has_a_sensible_range() {
+        assert_eq!(
+            parse(&args(&["--yc-memory", "128"])).unwrap().yc_memory_mb,
+            Some(128)
+        );
+        assert!(parse(&args(&["--yc-memory", "8"])).is_err());
+        assert!(parse(&args(&["--yc-memory", "100000"])).is_err());
+    }
+
+    #[test]
+    fn carrying_on_after_a_crash_has_a_countdown_of_a_minute_unless_told_otherwise() {
+        let o = parse(&args(&["--continue"])).unwrap();
+        assert!(o.continue_auto);
+        assert_eq!(o.wait, crate::autorun::DEFAULT_COUNTDOWN_SECONDS);
+        assert_eq!(parse(&args(&["--wait", "5"])).unwrap().wait, 5);
+        assert!(!parse(&args(&[])).unwrap().continue_auto);
+        assert!(parse(&args(&["--wait", "7200"])).is_err());
+    }
+
+    #[test]
+    fn the_start_is_a_depth_from_one_to_thirty() {
+        assert_eq!(parse(&args(&["--start", "20"])).unwrap().start, Some(20));
+        assert!(parse(&args(&["--start", "0"])).is_err());
+        assert!(parse(&args(&["--start", "31"])).is_err());
     }
 }

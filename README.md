@@ -4,6 +4,8 @@
 per-core stress testing with direct SMU Curve Optimizer read/write in a single native GUI
 (.NET 9 / Avalonia UI), so you can test a value and apply it without rebooting into the BIOS.
 
+> **PboStudio 1.2.0 is the Rust version**: one `pbo.exe` that is both the window and the command line, with Auto in three phases, crash recovery and a time that is shown before it starts (it matched in the run that was checked). Download it from the [release `rust-v1.2.0`](../../releases/tag/rust-v1.2.0); the guide is [`docs/rust/anleitung.md`](docs/rust/anleitung.md) (German), the changes and what is not verified are in [`docs/rust/CHANGELOG.md`](docs/rust/CHANGELOG.md). It is not code-signed (the checksums are in the release) and was checked on one Ryzen 7 5800X3D. **Everything below describes the C# version 1.1.3**, which stays available under its own releases.
+
 > **Status: 1.1.3.** 459 tests, and the tuning loop verified end to end on an AMD Ryzen 7 5800X3D:
 > values written to the SMU before each measurement, Prime95 pinned to a single core, a full
 > stress slot, pass detection, step-down and locking at the chip limit.
@@ -30,6 +32,8 @@ Right-click → **Run as administrator**: talking to the SMU goes through a kern
 that needs elevation.
 
 Windows SmartScreen will warn about an unknown publisher — the executable is not code-signed.
+Windows Defender's behaviour detection may also flag it as `Behavior:Win32/Execution.A!ml` (a false positive for an unsigned program that needs administrator rights and a driver). The SHA-256 on the release page tells you it is the released file; see the guide for what to do.
+
 
 ---
 

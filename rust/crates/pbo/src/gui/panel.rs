@@ -65,7 +65,7 @@ impl App {
         // With the fine-tuning open there is more to show: the explanations make way earlier, and the tiles and the steps
         // shrink, so that nothing ever needs a scroll bar.
         let tight = self.auto_more && room < 560.0;
-        let compact = self.interrupted || room < 470.0 || tight;
+        let compact = self.interrupted || self.pending_continue.is_some() || room < 470.0 || tight;
 
         let title = if setup_needed {
             t(Key::CampaignSetup)
@@ -75,7 +75,12 @@ impl App {
             t(Key::CampaignInProgress)
         };
         ui_.horizontal(|ui_| {
-            ui_.label(egui::RichText::new(title).size(19.0).strong().color(p.ok));
+            ui_.label(
+                egui::RichText::new(title)
+                    .size(if tight { 16.0 } else { 19.0 })
+                    .strong()
+                    .color(p.ok),
+            );
             // The fine-tuning is opened at the bottom and closed here, where it does not take a line of its own.
             if self.auto_more {
                 ui_.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui_| {
@@ -103,6 +108,17 @@ impl App {
         } else {
             t(Key::StopAnyTime)
         };
+        // After a crash that Auto is carried on after: how long it takes, and the way to stop it.
+        if self.pending_continue.is_some() {
+            ui_.add_space(4.0);
+            self.continue_strip(ui_);
+            ui_.add_space(8.0);
+            // Nothing else to choose meanwhile: Auto goes on the way it was started. One button goes on now.
+            if w::big_button(ui_, dark, t(Key::Continue), w::ButtonStyle::Accent, true).clicked() {
+                self.start_or_go_on_now();
+            }
+            return;
+        }
         // After a crash the strip that offers to put the values back comes first.
         if self.interrupted {
             ui_.add_space(4.0);
@@ -138,7 +154,7 @@ impl App {
                         ui_,
                         dark,
                         on,
-                        egui::Vec2::new(tile_w, if tight { 52.0 } else { 80.0 }),
+                        egui::Vec2::new(tile_w, if tight { 44.0 } else { 80.0 }),
                         |ui_| {
                             ui_.label(egui::RichText::new(title).strong().color(if on {
                                 p.accent
@@ -224,6 +240,17 @@ impl App {
                     let n = [10u32, 15, 20][i];
                     self.plan.start = if n == family_start { 0 } else { n };
                 }
+                let after_crash = usize::from(self.logon_continue);
+                if let Some(i) = Self::choice_row(
+                    ui_,
+                    dark,
+                    t(Key::AutoAfterCrash),
+                    t(Key::AutoAfterCrashTip),
+                    &[t(Key::AutoWait), t(Key::AutoCarryOn)],
+                    Some(after_crash),
+                ) {
+                    self.set_continue_after_crash(i == 1);
+                }
                 ui_.spacing_mut().item_spacing.y = spacing;
             }
             if !compact {
@@ -265,7 +292,7 @@ impl App {
             dark,
             &items,
             if tight {
-                34.0
+                31.0
             } else if compact {
                 38.0
             } else {
@@ -283,12 +310,17 @@ impl App {
             t(Key::Continue)
         };
         if w::big_button(ui_, dark, label, w::ButtonStyle::Accent, can).clicked() {
-            self.start_auto();
+            self.start_or_go_on_now();
         }
         if !self.has_cores() && !setup_needed {
             paragraph(ui_, t(Key::NoCoreChosen), ui::TEXT_SMALL, p.danger);
         } else if !compact && ui_.available_height() > 30.0 {
-            paragraph(ui_, t(Key::RestartHint), ui::TEXT_SMALL - 1.0, p.muted);
+            let hint = if self.logon_continue {
+                t(Key::RestartHintCarryOn)
+            } else {
+                t(Key::RestartHint)
+            };
+            paragraph(ui_, hint, ui::TEXT_SMALL - 1.0, p.muted);
         }
         if !self.auto_more && !setup_needed && self.has_cores() {
             ui_.add_space(2.0);
@@ -316,7 +348,18 @@ impl App {
         let state_text = match &self.state {
             State::Preparing => t(Key::StatePreparing).to_string(),
             State::Stopping => t(Key::StateStopping).to_string(),
-            State::Running { phase, core } => text::progress(lang, *phase, *core),
+            State::Running { phase, core } => {
+                let line = text::progress(lang, *phase, *core);
+                match (self.run_seen.len(), self.run_cores) {
+                    (n, total) if total > 1 && n >= 1 => {
+                        format!(
+                            "{line} \u{b7} {}",
+                            text::core_of_cores(lang, n.min(total), total)
+                        )
+                    }
+                    _ => line,
+                }
+            }
             _ => String::new(),
         };
         ui_.label(
@@ -749,11 +792,13 @@ impl App {
                     t(Key::TransientOff),
                     t(Key::TransientPauses),
                     t(Key::TransientBursts),
+                    t(Key::TransientGame),
                 ];
                 let mut idx = match self.plan.transient {
                     Transient::Off => 0,
                     Transient::Periodic { .. } => 1,
                     Transient::Bursts => 2,
+                    Transient::Game => 3,
                 };
                 if w::segmented(ui_, dark, &mut idx, &labels) {
                     self.plan.transient = match idx {
@@ -763,7 +808,8 @@ impl App {
                             self.plan.transient
                         }
                         1 => Transient::default(),
-                        _ => Transient::Bursts,
+                        2 => Transient::Bursts,
+                        _ => Transient::Game,
                     };
                 }
             },
@@ -1004,13 +1050,17 @@ impl App {
                 }
             });
         });
-        let mut command = self.plan.command_line();
-        ui_.add(
-            egui::TextEdit::multiline(&mut command)
-                .font(egui::TextStyle::Monospace)
-                .desired_rows(2)
-                .desired_width(f32::INFINITY),
-        );
+        // The command line itself only where there is room for it and the button below: at the smallest window the button
+        // comes first (the plan file buttons above still save it).
+        if ui_.available_height() > 110.0 {
+            let mut command = self.plan.command_line();
+            ui_.add(
+                egui::TextEdit::multiline(&mut command)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_rows(2)
+                    .desired_width(f32::INFINITY),
+            );
+        }
         let can = Controls::of(&self.state).can_start && self.engine_found && self.has_cores();
         if w::big_button(
             ui_,

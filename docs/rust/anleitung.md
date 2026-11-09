@@ -1,4 +1,4 @@
-# Anleitung: PboStudio 1.2.0-beta.1 (Rust)
+# Anleitung: PboStudio 1.2.0 (Rust)
 
 Für den, der das Programm benutzt. Wie es gebaut ist und was geprüft wurde, steht in [README.md](README.md); jeder Befehl
 mit seinen Schaltern in [`rust/README.md`](../../rust/README.md).
@@ -31,7 +31,7 @@ hat und was durchgefallen ist); rechts drei Reiter.
   von Auto und der Knopf. Alles andere ist **vorgewählt, passend zu deinem Prozessor**. Wer selbst eingreifen will, klickt unten
   auf **Feineinstellung**; der Knopf verschwindet, und es erscheinen drei Zeilen (mit **Zurück** oben rechts schließt man sie wieder): **Schritt** (wie weit der Wert pro Test sinkt,
   1 bis 5 Zähler), **Sicherheit** (der Abstand, den der Kern am Ende zu dem Wert behält, der noch hielt, 1 bis 5) und **Start bei**
-  (wo die Suche bei einem Kern ohne Wert beginnt: −10, −15 oder −20; ohne Wirkung, solange jeder Kern schon einen Wert hat).
+  (wo die Suche bei einem Kern ohne Wert beginnt: −10, −15 oder −20; ohne Wirkung, solange jeder Kern schon einen Wert hat). Dazu **Nach Absturz** (*Warten* oder *Weitermachen*, siehe "Über Nacht").
   Vorgewählt sind *Schnell*, Schritt 5, Sicherheit 3 und der Start des Prozessors (−20 bei X3D, sonst −15); bei *Gründlich* ist
   der Schritt 1. Die Zeiten rechnen mit deiner Wahl. Auto läuft in drei Schritten: prüfen, was die aktuellen Werte halten; jeden
   Kern absenken, bis er nachgibt; das Ergebnis unter jeder Lastart beweisen. Es geht in **beide Richtungen**: ein Kern, der auf
@@ -39,7 +39,7 @@ hat und was durchgefallen ist); rechts drei Reiter.
   fortsetzen.
 - **Tests:** vierzehn fertige Testlisten (Empfohlen, Schnellcheck, Grenzwert, Volllast, Über Nacht, y-cruncher, Micro-Bursts …), je mit Zeit und Programm.
 - **Erweitert:** was getestet wird (Programm, Befehlssatz, FFT-Bereich auch frei, Zeit auch „Auto", Runden, Threads, die
-  y-cruncher-Algorithmen) und wie es läuft (Lastwechsel *Pausen* oder *Schübe*, Reihenfolge der Kerne, Suche grob oder fein,
+  y-cruncher-Algorithmen) und wie es läuft (Lastwechsel *Pausen*, *Schübe* oder *Spiel*, Reihenfolge der Kerne, Suche grob oder fein,
   Verhalten bei einem Fehler, Ton). Darunter steht dasselbe als Befehlszeile; *Speichern* und *Laden* sichern den Plan als Datei.
 
 Unten: **Live anwenden** schreibt die geänderten Werte jetzt (bis zum Neustart). **Alle auf das Limit** trägt für jeden Kern die
@@ -47,6 +47,12 @@ tiefste Grenze ein und **Werte vom Start** das, was beim Öffnen galt; geschrieb
 **Ins BIOS eintragen …** neben „Fertig" und öffnet dieselbe Liste. **Bei jedem Windows-Start** sichert die Werte, die gerade
 gelten, und legt eine geplante Aufgabe an (`pbo resume`), die sie bei der Anmeldung schreibt; war ein Lauf unterbrochen, meldet
 sie das und schreibt statt dessen die bewährten Werte.
+
+**Lastwechsel *Spiel*** (Erweitert → Ablauf, oder `--transient game`) ist für Abstürze in Spielen wie League of Legends oder TFT
+gedacht, die ein gleichmäßiger Test nicht findet: kurze Lastspitzen von wenigen Millisekunden im Takt eines Spiels (etwa hundert in
+der Sekunde, unregelmäßig) und dazwischen ruhige Abschnitte mit einzelnen Spitzen, wie in einem Menü oder zwischen den Runden. Am
+besten mit einer leichten Last (Prime95 SSE, kleinste FFTs), damit der Kern auf dem höchsten Takt bleibt. Der Sprung aus dem
+Leerlauf auf den höchsten Takt ist der Moment, an dem ein zu tiefer Wert im Spiel versagt.
 
 ## Wie lange dauert Auto, und warum
 
@@ -121,6 +127,28 @@ Die Werte, die das Programm schreibt, gelten bis zum Neustart. Dauerhaft sind si
 
 Das UEFI nimmt Werte nur in dem Bereich an, den der Prozessor erlaubt (bei Zen 3 bis −30).
 
+## Über Nacht und ohne Fenster
+
+- **`pbo auto`** macht auf der Befehlszeile dasselbe wie Auto im Fenster: prüfen, suchen, beweisen, eine Phase nach der anderen, bis
+  die Kampagne fertig ist (`--intensity fast|normal|thorough`, dazu `--step`, `--guardband`, `--start`, `--cores`). Es muss
+  als Administrator laufen wie alle Befehle.
+- **Selbst weitermachen nach einem Absturz** ist ausgeschaltet, solange man es nicht einschaltet: im Fenster in der
+  Feineinstellung *Nach Absturz: Weitermachen*, oder einmal `pbo autostart on --continue` (beides legt die Anmeldeaufgabe an).
+  Dann geschieht nach einem Absturz Folgendes: der Rechner startet, bei der Anmeldung kommen die **bewährten Werte** zurück, und
+  **das PboStudio-Fenster öffnet sich** (es gibt keine schwarze Konsole). Es sagt, wie lange es noch dauert (**eine Minute**), und
+  dort lässt sich mit *Nicht weitermachen* (oder mit `pbo resume --cancel`) stoppen. Danach macht Auto dort weiter, wo es stand,
+  sichtbar im Fenster und **bis zum Ende der Kampagne**; ein Klick auf *Stopp* beendet das. **Höchstens dreimal hintereinander:**
+  ein Kern, der den Rechner immer wieder abstürzen lässt,
+  soll keine Endlosschleife auslösen; danach wartet das Programm auf dich (`pbo whea` und `pbo knowledge` zeigen, was los war).
+- Damit das Ganze nachts ohne dich geht, muss der Rechner sich nach dem Neustart **selbst anmelden** und nicht schlafen gehen:
+  `pbo ready` prüft das (Anmeldeaufgabe, automatische Anmeldung, Ruhezustand, Speicherplatz, Temperatur).
+- **Was an der Hardware gesehen ist:** ein erzwungener Neustart mitten in Auto (`shutdown /r /f`), mit der Anmeldeaufgabe: bei der Anmeldung wurde der Absturz erkannt und dem Kern angelastet, der Wert zurückgesetzt, das Fenster öffnete sich (ohne Konsole) und nach der Wartezeit ging Auto weiter. Dass das Fenster nach einem Schritt von selbst den nächsten nimmt und die Kampagne beendet, der Countdown im Fenster und das Stoppen sind ohne Neustart nachgestellt gesehen. **Nicht gesehen:** ein Absturz, bei dem der Strom wegbleibt oder der Rechner hängt; für das Programm hinterlässt er dieselben Spuren (ein Lauf, der nicht zu Ende ging, und eine andere Startzeit des Rechners), aber er war nicht dabei.
+- **`pbo report`** schreibt eine Datei `pbo-report.txt` neben das Programm: Fassung, was der Prozessor hält, was das Programm sich
+  gemerkt hat, die Machine Checks der letzten 90 Tage, wie Auto gestartet wurde und das Ende des Protokolls. Sie ist für
+  Fehlermeldungen gedacht; sieh sie dir an, bevor du sie anhängst (sie nennt Prozessor und BIOS-Version).
+- Kleinigkeiten für Tests: `--pause N` (Sekunden Ruhe zwischen zwei Kernen, damit der nächste kühl startet), `--yc-tests A,B,C`
+  und `--yc-memory MB` (die Tests von y-cruncher und sein Speicher je logischem Prozessor).
+
 ## Was das Programm auf den Prozessor schreibt
 
 Nur die Curve-Optimizer-Werte der Kerne, jeden mit **Rücklesen**; nie einen Wert über 0; bei Zen 3 nie tiefer als −30. Bricht man
@@ -136,7 +164,7 @@ nächsten Lauf oder mit `pbo resume`) vermerkt das Programm den Wert, der lief, 
 ## Dateien
 
 Alles liegt im Ordner `runs\` neben dem Programm: `core_knowledge.json` (was je Kern gehalten hat und durchgefallen ist, mit der
-BIOS-Version), `co_saved.json` (die gesicherten Werte), `settings.json` und `logs\` (ein Protokoll je Tag, der Tag endet um
+BIOS-Version; nach einem BIOS-Update wird sie als `core_knowledge.bios-….json` beiseitegelegt, und die Kerne werden neu gemessen), `co_saved.json` (die gesicherten Werte), `settings.json` und `logs\` (ein Protokoll je Tag, der Tag endet um
 06:00; **nichts wird von selbst gelöscht**). `pbo import` übernimmt, was eine 1.x-Fassung hinterlassen hat.
 
 ## Grenzen, ehrlich
@@ -148,3 +176,4 @@ BIOS-Version), `co_saved.json` (die gesicherten Werte), `settings.json` und `log
   was gehalten hat).
 - Das Programm ist **nicht signiert**. `pbo version` und `pbo hash DATEI` zeigen die Prüfsumme, mit der man ein Original von einer
   Kopie unterscheidet.
+- **Windows Defender kann das Programm melden** (zum Beispiel als `Behavior:Win32/Execution.A!ml`, eine Verhaltenserkennung mit maschinellem Lernen). Das ist ein Fehlalarm, aber ein verständlicher: das Programm ist unsigniert, verlangt Administratorrechte, schreibt über einen Treiber in Prozessorregister und kann eine Anmeldeaufgabe anlegen. Bei der Entwicklung hat Defender einmal das Programm beendet, die Anmeldeaufgabe gelöscht und die Datei in Quarantäne gesteckt. Wenn das bei dir passiert: der Quelltext liegt offen vor, die Prüfsumme (`pbo version`, `SHA256SUMS.txt` der Veröffentlichung) zeigt, dass es die Datei der Veröffentlichung ist; Defender lässt sich unter *Schutzverlauf* „auf dem Gerät zulassen“, und die Datei lässt sich bei Microsoft als Fehlalarm melden (Microsoft Security Intelligence, „Submit a file“). Zuerst gemeldet wurde der Lauf über die Anmeldeaufgabe; ob sie die Ursache ist, ist nicht geklärt.

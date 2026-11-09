@@ -51,6 +51,9 @@ struct MachineInfo {
     shallowest: i32,
     /// Where the search begins for a core that holds nothing yet (the family's suggestion).
     suggested_start: i32,
+    /// The best and the second best core, as the processor (or Windows, from its values) ranks them; none without a ranking.
+    best: Option<usize>,
+    second: Option<usize>,
 }
 
 struct App {
@@ -63,6 +66,12 @@ struct App {
     none_selected: bool,
     /// Step, safety and start of Auto are shown (opened with a button, session only).
     auto_more: bool,
+    /// After a crash: how Auto was started, to be carried on as soon as the window is ready.
+    pending_continue: Option<Vec<String>>,
+    /// When the countdown before that ends; the person can stop it until then.
+    continue_deadline: Option<Instant>,
+    /// An Auto that carries on by itself (after a crash): where the campaign stands, so the window takes each next step.
+    carry: Option<Carry>,
     /// How thorough Auto is: remembered with the plan.
     intensity: Intensity,
     /// The steps of the search Auto makes, when the person chose their own; none: those of the intensity.
@@ -100,6 +109,9 @@ struct App {
     test_began: Instant,
     test_seconds: u64,
     current: Option<(usize, i32)>,
+    /// How many cores the run that is going on tests, and those it has begun so far: "core 2 of 3".
+    run_cores: usize,
+    run_seen: Vec<usize>,
     toast: Option<(String, Instant)>,
     selftest: Option<Result<(), String>>,
     readiness: Option<Vec<pbo_core::readiness::Check>>,
@@ -113,6 +125,8 @@ struct App {
     edit: std::collections::BTreeMap<usize, i32>,
     /// Whether the logon task is installed; asked at start and after a change, not every frame.
     logon_task: bool,
+    /// The logon task carries Auto on after a crash.
+    logon_continue: bool,
     store: Store,
     shot: Option<Shot>,
     /// What was last written to `window.json`, to write again only when something changed.
@@ -158,6 +172,8 @@ impl App {
             deepest: m.allowed_range().0,
             shallowest: m.allowed_range().1,
             suggested_start: pbo_core::families::suggested_start(&m.family, m.x3d),
+            best: ranked(m, pbo_core::quality::Rank::GoldStar),
+            second: ranked(m, pbo_core::quality::Rank::SilverStar),
         });
         // Without rights, a helper that is already running (started earlier, or by a run that outlived its window) is
         // picked up; nothing is started without the person asking.
@@ -180,6 +196,9 @@ impl App {
             plan: Plan::recommended(),
             none_selected: false,
             auto_more: false,
+            pending_continue: None,
+            continue_deadline: None,
+            carry: None,
             // Chosen beforehand: the quick run is the efficient one (the proof at the end is the same length in every run of
             // it, and short tests of 2 to 3 minutes are what find a core that does not hold).
             intensity: Intensity::Fast,
@@ -210,6 +229,8 @@ impl App {
             test_began: Instant::now(),
             test_seconds: 0,
             current: None,
+            run_cores: 0,
+            run_seen: Vec::new(),
             toast: None,
             selftest: None,
             readiness: None,
@@ -218,6 +239,7 @@ impl App {
             interrupted: false,
             edit: std::collections::BTreeMap::new(),
             logon_task: false,
+            logon_continue: false,
             store,
             shot: None,
             window_saved: String::new(),
@@ -253,7 +275,34 @@ impl App {
         app.window_saved = app.window_state();
         app.interrupted = app.store.read_run_state().is_some();
         app.logon_task = crate::ready::logon_task_installed();
+        app.logon_continue = crate::ready::logon_task_continues();
+        let bios = os::bios_version().unwrap_or_default();
+        if let Some((old, new)) = app.store.set_aside_if_bios_changed(&bios) {
+            let text = text::tr(app.lang, Key::BiosChangedSetAside)
+                .replace("{old}", &old)
+                .replace("{new}", &new);
+            app.say_toast(&text);
+        }
         app.refresh();
+        if CONTINUE_RUN.load(std::sync::atomic::Ordering::SeqCst) {
+            let notice = CONTINUE_NOTICE.lock().ok().and_then(|mut n| n.take());
+            if let Some(message) = notice {
+                // Auto is not carried on (too many crashes in a row): the window opens and says so.
+                app.say_toast(&message);
+            } else {
+                app.pending_continue =
+                    std::fs::read_to_string(app.store.root.join("auto_last.txt"))
+                        .ok()
+                        .map(|t| {
+                            t.lines()
+                                .filter(|l| !l.is_empty())
+                                .map(str::to_string)
+                                .collect()
+                        });
+                let seconds = CONTINUE_COUNTDOWN.load(std::sync::atomic::Ordering::SeqCst);
+                app.continue_deadline = Some(Instant::now() + Duration::from_secs(seconds));
+            }
+        }
         app
     }
 
@@ -272,6 +321,8 @@ impl App {
             deepest: r.deepest,
             shallowest: r.shallowest,
             suggested_start: r.suggested_start,
+            best: None,
+            second: None,
         });
         self.held = r.margins.clone();
     }
@@ -313,7 +364,18 @@ impl App {
 
     fn command(&mut self, c: Command) {
         match runstate::apply(&self.state, c) {
-            Ok(next) => self.state = next,
+            Ok(next) => {
+                self.state = next;
+                // A run that is over (however it ended) is nothing to carry on after a crash.
+                if matches!(
+                    self.state,
+                    State::Ready | State::Finished | State::Halted(_)
+                ) && !self.is_preview()
+                {
+                    let _ = std::fs::remove_file(self.store.root.join("auto_last.txt"));
+                    let _ = std::fs::remove_file(self.store.root.join("auto_resume.txt"));
+                }
+            }
             Err(e) => self
                 .log
                 .push(format!("(ignored: {:?} in {:?})", e.command, e.from)),
@@ -345,6 +407,12 @@ impl App {
         self.run_phase = std::mem::take(&mut self.next_phase);
         let o = Options::from_plan(&plan);
         let tune = plan.search != Search::Off;
+        self.run_cores = if plan.cores.is_empty() {
+            self.info.as_ref().map_or(0, |i| i.cores)
+        } else {
+            plan.cores.len()
+        };
+        self.run_seen.clear();
         self.command(Command::Start);
         if self.state != State::Preparing {
             return;
@@ -400,6 +468,9 @@ impl App {
                     seconds,
                 } => {
                     self.current = Some((core, margin));
+                    if !self.run_seen.contains(&core) {
+                        self.run_seen.push(core);
+                    }
                     self.test_began = Instant::now();
                     self.test_seconds = seconds;
                     if self.began {
@@ -474,6 +545,138 @@ impl App {
         self.worker = Some(Worker { rx });
     }
 
+    /// After a crash: counts down in the window, where it can be stopped (the button, or `pbo resume --cancel`), and then,
+    /// once the window is ready (it reads the processor, nothing else is going on), sets Auto up the way it was started and
+    /// starts it, as if the person had pressed *Continue*.
+    fn continue_if_pending(&mut self) {
+        if self.pending_continue.is_none() {
+            return;
+        }
+        if crate::autorun::cancel_requested(&self.store) {
+            self.cancel_continuation();
+            return;
+        }
+        if self
+            .continue_deadline
+            .is_some_and(|deadline| Instant::now() < deadline)
+        {
+            return;
+        }
+        if self.info.is_none() || self.state != State::Ready || self.setup_busy.is_some() {
+            return;
+        }
+        let args = self.pending_continue.take().unwrap_or_default();
+        self.continue_deadline = None;
+        crate::autorun::note_continuation(&self.store);
+        self.apply_auto_args(&args);
+        self.say_toast(text::tr(self.lang, Key::AutoContinuing));
+        self.launch_carried(Carry {
+            state: pbo_core::campaign::State::default(),
+            launched: None,
+            starts: 0,
+        });
+    }
+
+    /// The person stopped the countdown: Auto does not go on, and what says it was running is taken away.
+    pub(super) fn cancel_continuation(&mut self) {
+        self.pending_continue = None;
+        self.continue_deadline = None;
+        if !self.is_preview() {
+            let _ = std::fs::remove_file(self.store.root.join("auto_last.txt"));
+            let _ = std::fs::remove_file(self.store.root.join("auto_resume.txt"));
+        }
+        self.say_toast(text::tr(self.lang, Key::AutoContinueStopped));
+    }
+
+    /// Seconds left of the countdown, rounded up; none when none is going.
+    pub(super) fn continue_seconds_left(&self) -> Option<u64> {
+        self.pending_continue.as_ref()?;
+        let deadline = self.continue_deadline?;
+        let left = deadline.saturating_duration_since(Instant::now());
+        Some(left.as_secs() + u64::from(left.subsec_nanos() > 0))
+    }
+
+    /// What each core holds, as the campaign looks at it.
+    fn held_map(&self) -> BTreeMap<u32, i32> {
+        self.held
+            .iter()
+            .enumerate()
+            .map(|(c, v)| (c as u32, *v))
+            .collect()
+    }
+
+    /// Starts the next step of a carried-on Auto and remembers what it is; ends the carrying if no step could start.
+    fn launch_carried(&mut self, mut carry: Carry) {
+        let Some(view) = self.campaign_view() else {
+            return;
+        };
+        carry.launched = Some((view.step.stage, view.step.cores.clone(), self.held_map()));
+        carry.starts += 1;
+        self.start_auto();
+        // A start that did not happen (nothing to set up here, no cores) leaves the window ready: nothing is carried on.
+        if self.state != State::Ready {
+            self.carry = Some(carry);
+        }
+    }
+
+    /// A carried-on Auto whose step has ended: the next step, as `pbo auto` decides it, or the end.
+    fn carry_on_if_ended(&mut self) {
+        if self.carry.is_none() || self.is_preview() {
+            return;
+        }
+        match self.state {
+            State::Preparing | State::Running { .. } | State::Stopping => return,
+            // Stopped by the person, or a limit: it is for them to look at, not to go on over.
+            State::Halted(_) | State::Ready => {
+                self.carry = None;
+                return;
+            }
+            State::Finished => {}
+        }
+        let Some(mut carry) = self.carry.take() else {
+            return;
+        };
+        let clean = self.attention != Some(true);
+        if let Some((stage, cores, before)) = carry.launched.take() {
+            carry.state.ran(stage, &cores, &before);
+        }
+        self.command(Command::Dismiss);
+        self.refresh();
+        let Some(view) = self.campaign_view() else {
+            return;
+        };
+        let decision =
+            pbo_core::campaign::decide(&carry.state, &view.step, &self.held_map(), clean);
+        if decision.verdict == pbo_core::campaign::Verdict::Run && carry.starts < MAX_CARRIED_STEPS
+        {
+            self.launch_carried(carry);
+        } else {
+            self.say_toast(text::tr(self.lang, Key::AutoCarriedEnd));
+        }
+    }
+
+    /// The arguments `pbo auto` was started with (the marker file) as the window's own settings.
+    fn apply_auto_args(&mut self, args: &[String]) {
+        let a = parse_auto_args(args);
+        if let Some(i) = a.intensity {
+            self.intensity = i;
+        }
+        if let Some(n) = a.step {
+            let default = pbo_core::tuner::step_size(self.intensity.preselected_mode()) as u32;
+            self.auto_step = (n != default).then_some(n);
+        }
+        if let Some(g) = a.guardband {
+            self.plan.guardband = g;
+        }
+        if let Some(n) = a.start {
+            self.plan.start = n;
+        }
+        if let Some(cores) = a.cores {
+            self.plan.cores = cores;
+            self.none_selected = false;
+        }
+    }
+
     /// Takes in the result of a setup step that was running.
     fn poll_setup(&mut self) {
         let Some(rx) = &self.setup_busy else {
@@ -483,6 +686,7 @@ impl App {
             self.setup_busy = None;
             self.engine_found = stress::find_prime95().is_some();
             self.logon_task = crate::ready::logon_task_installed();
+            self.logon_continue = crate::ready::logon_task_continues();
             let msg = if code == 0 {
                 self.t(Key::SetupDone)
             } else {
@@ -556,6 +760,11 @@ impl eframe::App for App {
             }
         }
         self.poll_worker();
+        self.continue_if_pending();
+        if self.pending_continue.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
+        self.carry_on_if_ended();
         // A run that ended while the window is behind others: the taskbar says so.
         if let Some(bad) = self.attention.take() {
             if self.shot.is_none() {
@@ -624,6 +833,15 @@ impl eframe::App for App {
     }
 }
 
+/// The core that holds `rank` in the processor's own ranking, if there is one.
+fn ranked(machine: &Machine, rank: pbo_core::quality::Rank) -> Option<usize> {
+    let cppc = machine.cppc();
+    pbo_core::quality::core_qualities(machine.cores, cppc.as_deref())
+        .into_iter()
+        .find(|q| q.rank == rank)
+        .map(|q| q.core)
+}
+
 /// The window icon: the program's mark, drawn (`pbo-ui/src/icon.rs`); the same picture is built into the executable.
 fn icon() -> egui::IconData {
     let size = 128usize;
@@ -632,6 +850,83 @@ fn icon() -> egui::IconData {
         width: size as u32,
         height: size as u32,
     }
+}
+
+/// What the marker file `auto_last.txt` says (one argument per line), as far as the window can use it.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct AutoArgs {
+    intensity: Option<Intensity>,
+    step: Option<u32>,
+    guardband: Option<i32>,
+    start: Option<u32>,
+    cores: Option<Vec<usize>>,
+}
+
+fn parse_auto_args(args: &[String]) -> AutoArgs {
+    let mut out = AutoArgs::default();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--intensity" => out.intensity = it.next().and_then(|v| Intensity::from_id(v)),
+            "--step" => {
+                out.step = it
+                    .next()
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .filter(|n| (1..=pbo_core::tuner::MAX_STEP as u32).contains(n));
+            }
+            "--guardband" => {
+                out.guardband = it
+                    .next()
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .map(|g| g.clamp(0, 10));
+            }
+            "--start" => {
+                out.start = it
+                    .next()
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .map(|n| n.min(30));
+            }
+            "--cores" => {
+                out.cores = it.next().map(|list| {
+                    list.split(',')
+                        .filter_map(|c| c.trim().parse().ok())
+                        .collect()
+                });
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// An Auto that goes on by itself, step after step, like `pbo auto` does in a console: what the campaign has done so far and
+/// what the step that is running was.
+struct Carry {
+    state: pbo_core::campaign::State,
+    /// The stage, the cores and the values before the step that is running; none while none is.
+    launched: Option<(pbo_core::campaign::Stage, Vec<u32>, BTreeMap<u32, i32>)>,
+    starts: u32,
+}
+
+/// The most steps one carried-on Auto takes (the same limit as `pbo auto`).
+const MAX_CARRIED_STEPS: u32 = 12;
+
+/// Set when `pbo resume --continue` opens the window after a crash: it carries Auto on, to the end of the campaign.
+static CONTINUE_RUN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The seconds the window counts down before it carries Auto on.
+static CONTINUE_COUNTDOWN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Instead of carrying on: what the window says when it does not (too many crashes in a row).
+static CONTINUE_NOTICE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// The window, opened after a crash: it counts down `countdown_seconds`, in the window, and then carries Auto on; or, with a
+/// `notice`, it only says why it does not.
+pub fn run_continuing(countdown_seconds: u64, notice: Option<String>) -> i32 {
+    CONTINUE_COUNTDOWN.store(countdown_seconds, std::sync::atomic::Ordering::SeqCst);
+    if let Ok(mut n) = CONTINUE_NOTICE.lock() {
+        *n = notice;
+    }
+    CONTINUE_RUN.store(true, std::sync::atomic::Ordering::SeqCst);
+    run()
 }
 
 pub fn run() -> i32 {
@@ -654,5 +949,47 @@ pub fn run() -> i32 {
             eprintln!("the window could not be opened: {e}");
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod auto_args_tests {
+    use super::*;
+
+    fn lines(text: &str) -> Vec<String> {
+        text.lines().map(str::to_string).collect()
+    }
+
+    #[test]
+    fn the_marker_file_of_a_window_run_is_read_back_whole() {
+        let a = parse_auto_args(&lines(
+            "--intensity\nfast\n--step\n3\n--guardband\n3\n--start\n20\n--cores\n0,4,7",
+        ));
+        assert_eq!(a.intensity, Some(Intensity::Fast));
+        assert_eq!(a.step, Some(3));
+        assert_eq!(a.guardband, Some(3));
+        assert_eq!(a.start, Some(20));
+        assert_eq!(a.cores, Some(vec![0, 4, 7]));
+    }
+
+    #[test]
+    fn what_is_missing_or_nonsense_is_left_as_it_is() {
+        assert_eq!(parse_auto_args(&[]), AutoArgs::default());
+        let a = parse_auto_args(&lines("--step\n9\n--intensity\nwild\n--other\n--cores"));
+        assert_eq!(a.step, None);
+        assert_eq!(a.intensity, None);
+        assert_eq!(a.cores, None);
+        // One line with everything on it is not the format: it says nothing.
+        assert_eq!(
+            parse_auto_args(&lines("--intensity fast --cores 4")),
+            AutoArgs::default()
+        );
+    }
+
+    #[test]
+    fn the_numbers_are_kept_inside_their_ranges() {
+        let a = parse_auto_args(&lines("--guardband\n99\n--start\n99"));
+        assert_eq!(a.guardband, Some(10));
+        assert_eq!(a.start, Some(30));
     }
 }

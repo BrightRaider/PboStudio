@@ -6,7 +6,9 @@
 use super::*;
 
 /// The names `pbo gui-preview` knows.
-pub const PREVIEWS: [&str; 20] = [
+pub const PREVIEWS: [&str; 21] = [
+    // After a crash, while Auto is about to go on by itself: the countdown in the window.
+    "continuing",
     // The real constructor and a scripted short run through the window: needs administrator rights.
     "live-run",
     // The real constructor and Auto, one core, the fast intensity, phase after phase: needs rights, writes like Auto.
@@ -107,7 +109,16 @@ impl App {
         let ended = matches!(self.state, State::Finished | State::Halted(_));
 
         if frames == 3 {
-            self.plan.cores = vec![1];
+            // The cores to run on: `PBO_LIVE_AUTO_CORES=0,1,4`, else core 1 alone.
+            self.plan.cores = std::env::var("PBO_LIVE_AUTO_CORES")
+                .ok()
+                .map(|v| {
+                    v.split(',')
+                        .filter_map(|c| c.trim().parse::<usize>().ok())
+                        .collect::<Vec<_>>()
+                })
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| vec![1]);
             self.intensity = Intensity::Fast;
             println!("auto: starting run 1 on core 1, fast");
             self.start_auto();
@@ -117,8 +128,12 @@ impl App {
             }
             return;
         }
-        if began.elapsed() > Duration::from_secs(45 * 60) && !final_done {
-            println!("auto: the 45 minutes are up, stopping");
+        let minutes: u64 = std::env::var("PBO_LIVE_AUTO_MINUTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(45);
+        if began.elapsed() > Duration::from_secs(minutes * 60) && !final_done {
+            println!("auto: the {minutes} minutes are up, stopping");
             self.stop_run();
             if let Some(s) = &mut self.shot {
                 s.auto_final_requested = true;
@@ -140,7 +155,7 @@ impl App {
             self.command(Command::Dismiss);
             self.refresh();
             let next = self.campaign_view();
-            let more = starts < 2
+            let more = starts < 3
                 && next
                     .as_ref()
                     .is_some_and(|v| v.step.action != pbo_core::campaign::Action::OpenSetup);
@@ -254,6 +269,11 @@ impl App {
             dark,
             none_selected: false,
             auto_more: false,
+            pending_continue: (name == "continuing").then(Vec::new),
+            continue_deadline: (name == "continuing").then(|| Instant::now() + Duration::from_secs(45)),
+            run_cores: if name == "running" { 3 } else { 0 },
+            run_seen: if name == "running" { vec![0, 1, 4] } else { Vec::new() },
+            carry: None,
             auto_step: None,
             lang: if german { Lang::De } else { Lang::En },
             tab: match name {
@@ -312,6 +332,8 @@ impl App {
                     deepest: -30,
                     shallowest: 0,
                     suggested_start: if many { -15 } else { -20 },
+                    best: Some(0),
+                    second: Some(1),
                 })
             },
             machine_error: None,
@@ -350,6 +372,7 @@ impl App {
             interrupted: name == "interrupted",
             edit: std::collections::BTreeMap::new(),
             logon_task: false,
+            logon_continue: false,
             readiness: if name == "advanced" {
                 use pbo_core::readiness::{Check, Item, Level};
                 Some(vec![

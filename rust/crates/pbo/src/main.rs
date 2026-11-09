@@ -8,6 +8,7 @@
 
 #![cfg(windows)]
 
+mod autorun;
 mod commands;
 mod dailylog;
 mod diag;
@@ -20,6 +21,7 @@ mod history;
 mod machine;
 mod pulse;
 mod ready;
+mod report;
 mod session;
 mod setup;
 mod store;
@@ -49,9 +51,18 @@ fn main() {
         Some("selftest") => selftest(args.iter().any(|a| a == "--step")),
         Some("run") => commands::run(&args[1..]),
         Some("tune") => commands::tune(&args[1..]),
-        Some("resume") => commands::resume(&args[1..]),
+        Some("resume") => {
+            // At logon this runs in a console nobody started: a click into it must not stop the countdown.
+            pbo_os::disable_console_quick_edit();
+            commands::resume(&args[1..])
+        }
         Some("knowledge") => commands::show_knowledge(),
         Some("whea") => history::run(&args[1..]),
+        Some("auto") => {
+            pbo_os::disable_console_quick_edit();
+            autorun::auto(&args[1..])
+        }
+        Some("report") => report::run(&args[1..]),
         Some("set") => commands::set(&args[1..]),
         Some("apply") => commands::apply(),
         Some("save") => commands::save(),
@@ -98,6 +109,8 @@ fn help() {
     );
     eprintln!("  pbo knowledge        what the program remembers about each core");
     eprintln!("  pbo whea [--days N]  the machine checks Windows has logged, by crash and by core");
+    eprintln!("  pbo auto [--intensity fast|normal|thorough]   the window's Auto without a window: all three phases, one after the other");
+    eprintln!("  pbo report           one file (pbo-report.txt) to attach to an issue");
     eprintln!("  pbo set CORE VALUE   set one core's value (checked, read back)");
     eprintln!("  pbo import [FOLDER]   take over what a 1.x install kept (memory, profile, logs)");
     eprintln!("  pbo helper [--pipe NAME]   serve the processor to a window or module without rights, over a pipe");
@@ -125,6 +138,11 @@ fn help() {
         "    --step N           tune: steps of N counts, 1 to 6 (3 is the default, 1 is --fine)"
     );
     eprintln!("    --guardband N      tune: steps of headroom kept above what held (3)");
+    eprintln!("    --start N          tune: where a core that holds nothing begins, N counts below zero (1 to 30)");
+    eprintln!("    --pause N          rest N seconds between two cores");
+    eprintln!("    --yc-tests A,B     y-cruncher: these tests (BKT, BBP, SFTv4, SNT, SVT, FFTv4, NTT63, N63, VSTv3, VT3)");
+    eprintln!("    --yc-memory MB     y-cruncher: memory for each logical processor (default 64)");
+    eprintln!("    resume only: --continue (carry Auto on after a crash, after --wait N seconds), --cancel (stop that countdown)");
     eprintln!();
     eprintln!("Run as administrator: the processor registers are only reachable that way.");
 }

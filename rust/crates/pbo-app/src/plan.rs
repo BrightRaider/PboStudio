@@ -175,6 +175,30 @@ impl Plan {
         }
     }
 
+    /// One step of Auto's campaign as a plan: the step's test list, on the cores it names (all chosen ones when it names
+    /// none), the time per test of the intensity, one round, and the search of `base` only where the step searches. The
+    /// window and `pbo auto` both build their steps here, so they run the same thing. `None` when the step names no test
+    /// list that exists.
+    pub fn campaign_step(
+        step: &pbo_core::campaign::NextStep,
+        base: &Plan,
+        intensity: pbo_core::auto::Intensity,
+    ) -> Option<Plan> {
+        let profile = pbo_core::profiles::by_id(step.profile.name())?;
+        let mut plan = Plan::from_profile(&profile, base);
+        plan.seconds_per_test = intensity.minutes(step.stage.phase_number().max(1)) * 60;
+        plan.rounds = 1;
+        if !step.cores.is_empty() {
+            plan.cores = step.cores.iter().map(|c| *c as usize).collect();
+        }
+        plan.search = if step.use_auto_tuner {
+            base.search
+        } else {
+            Search::Off
+        };
+        Some(plan)
+    }
+
     /// A plan from one of the ready-made test lists: its steps, its time per core and its threads. A test list tests at the
     /// values the cores hold, so the search is off; the cores the person chose are kept.
     pub fn from_profile(profile: &pbo_core::profiles::Profile, keep: &Plan) -> Plan {
@@ -686,5 +710,38 @@ mod tests {
         let proven = p.worst_case_seconds(1, &held, &k, -30);
         assert!(fresh > 60);
         assert!(proven <= fresh);
+    }
+    #[test]
+    fn a_campaign_step_is_its_test_list_with_the_time_of_the_intensity_and_the_search_only_where_it_searches(
+    ) {
+        use pbo_core::auto::Intensity;
+        use pbo_core::campaign::{Action, NextStep, Profile, Stage};
+        let mut base = Plan::recommended();
+        base.cores = vec![0, 1, 4];
+        base.search = Search::stepping(5);
+        let narrow = NextStep {
+            profile: Profile::HeavyFfts,
+            stage: Stage::Narrow,
+            use_auto_tuner: true,
+            cores: vec![4],
+            action: Action::ConfigureRun,
+            show_profile: false,
+        };
+        let plan = Plan::campaign_step(&narrow, &base, Intensity::Fast).unwrap();
+        assert_eq!(plan.cores, vec![4]);
+        assert_eq!(plan.search, Search::stepping(5));
+        assert_eq!(plan.rounds, 1);
+        assert_eq!(plan.seconds_per_test, Intensity::Fast.minutes(2) * 60);
+        let discover = NextStep {
+            profile: Profile::RecommendedCombo,
+            stage: Stage::Discover,
+            use_auto_tuner: false,
+            cores: Vec::new(),
+            ..narrow
+        };
+        let plan = Plan::campaign_step(&discover, &base, Intensity::Fast).unwrap();
+        assert_eq!(plan.cores, vec![0, 1, 4]);
+        assert_eq!(plan.search, Search::Off);
+        assert_eq!(plan.seconds_per_test, Intensity::Fast.minutes(1) * 60);
     }
 }

@@ -1,0 +1,55 @@
+# A forced restart in the middle of Auto on a Ryzen 7 5800X3D, 2026-11-06 (shutdown /r /f, with two minutes of warning), and the way back.
+# Auto (quick, core 4 only) was started headless with 'pbo auto'; the logon task had been made with 'pbo autostart on --continue'.
+# At logon the task ran 'pbo resume --continue': the crash was noticed and held against core 4, the value was backed off, and after the countdown of a minute Auto went on.
+# The program ran from its own copy, with its own memory; the task, the copy's run and its folder link were removed afterwards, and core 4 was put back to -28 and read back.
+
+===== the steps of the test (script log)
+start 17:53:19
+Installed: at logon the program puts the proven values back after a crash, and otherwise applies the saved profile.
+After a crash it also carries Auto on by itself, after a countdown of a minute that `pbo resume --cancel` stops, and at most 3 times in a row.
+
+The logon task is installed.
+
+auto started, pid 20172, 17:53:20
+a test is running: 17:53:25; auto_last.txt: True
+restart in 120 s
+
+===== the program's own log (readings left out)
+pbo 1.2.0
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+17:53:20 [1106175320] ---- start ----
+17:53:20 [1106175320] Testing cores [4] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+17:53:20 [1106175320] order of the cores: [4]
+17:53:20 [1106175320] core 4: Prime95 on logical [8] at -28 for 120 s
+17:53:20 [1106175320] core 4: load changes: periodic:30:1
+17:55:21 [1106175320] core 4: engine used 100 % of the core
+17:55:21 [1106175320] core 4: y-cruncher on logical [8] at -28 for 120 s
+17:55:21 [1106175320] core 4: load changes: periodic:30:1
+17:56:21 [1106175621] ---- start ----
+17:56:21 [1106175621] The last run (started 2026-11-06T16:53:20.408Z) did not end and the computer has restarted since: core 4 crashed at -28.
+17:56:21 [1106175621] 1 core(s) have a value on record that failed.
+17:56:21 [1106175621] core  4: put back to -24
+17:57:21 [1106175721] ---- start ----
+17:57:21 [1106175721] Testing cores [4] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+17:57:21 [1106175721] order of the cores: [4]
+17:57:21 [1106175721] core 4: Prime95 on logical [8] at -24 for 120 s
+17:57:21 [1106175721] core 4: load changes: periodic:30:1
+
+===== what it remembered after the crash (core_knowledge.json)
+{
+  "BiosVersion": "1.S3",
+  "Cores": {
+    "4": {
+      "BestPassed": null,
+      "WorstFailed": -28
+    }
+  }
+}
+===== the end of the test (finish script)
+finish 17:58:04
+core 4: now -28
+VALUES: -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: as before the test

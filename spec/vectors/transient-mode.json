@@ -4,7 +4,7 @@
   "kind": "new",
   "invariants": ["I5"],
   "source": "rust/crates/pbo-core/src/transient.rs (the values are those of 1.x: a pause of a second every half minute, bursts of 300 ms load and 100 ms idle)",
-  "about": "How a test interrupts its load so that the core has to boost back up. 'off' is a steady load, 'periodic:EVERY:PAUSE' freezes the engine for PAUSE seconds every EVERY seconds, 'bursts' freezes and releases it in fractions of a second. 'dutyCycle' is the share of the time the load really runs, which the check that the engine used its core is measured against. 'ofProfile' says how a ready-made list interrupts its load.",
+  "about": "How a test interrupts its load so that the core has to boost back up. 'off' is a steady load, 'periodic:EVERY:PAUSE' freezes the engine for PAUSE seconds every EVERY seconds, 'bursts' freezes and releases it in fractions of a second, 'game' in the rhythm of a game (frames of a few milliseconds and quiet stretches with single spikes). 'dutyCycle' is the share of the time the load really runs, which the check that the engine used its core is measured against. 'ofProfile' says how a ready-made list interrupts its load.",
   "cases": [
     { "name": "a steady load runs all the time", "function": "dutyCycle", "input": { "text": "off" }, "expected": 1.0 },
     { "name": "pauses cost the check nothing", "function": "dutyCycle", "input": { "text": "periodic:30:1" }, "expected": 1.0 },
@@ -13,6 +13,7 @@
     { "name": "periodic without numbers is a second every half minute", "function": "normalise", "input": { "text": " PERIODIC " }, "expected": "periodic:30:1" },
     { "name": "periodic with numbers", "function": "normalise", "input": { "text": "periodic:5:1" }, "expected": "periodic:5:1" },
     { "name": "bursts", "function": "normalise", "input": { "text": "burst" }, "expected": "bursts" },
+    { "name": "the rhythm of a game", "function": "normalise", "input": { "text": " Game " }, "expected": "game" },
     { "name": "none is off", "function": "normalise", "input": { "text": "none" }, "expected": "off" },
     { "name": "a pause as long as the period is no pause", "function": "normalise", "input": { "text": "periodic:5:5" }, "expected": null },
     { "name": "a pause of nothing is no pause", "function": "normalise", "input": { "text": "periodic:5:0" }, "expected": null },

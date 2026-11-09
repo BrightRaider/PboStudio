@@ -1,0 +1,156 @@
+# Auto through the window on cores 0, 1 and 4 of a Ryzen 7 5800X3D, 2026-11-06, all three phases (quick, step 5, safety 3, start -20, the preselection).
+# 16:18 to 17:22, no one at the machine. Elevated; the program ran from its own copy. The time shown beforehand was 12 + 15 + 36 minutes; it took 12 + 15 + 36.
+# Result: core 0 and core 1 held -30 and are locked at -27, core 4 held -28 and was left; no error, no WHEA event; every value was put back and read back.
+
+ORIGINAL VALUES: -20 -25 -30 -30 -28 -30 -30 -30   [16:18:38]
+=== auto through the window, cores 0,1,4  [16:18:38]
+auto: starting run 1 on core 1, fast
+Testing cores [0, 1, 4] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+order of the cores: [0, 4, 1]
+auto: picture in the middle of the run
+core  0: held at -20 (0 full sweeps)
+core  4: held at -28 (0 full sweeps)
+core  1: held at -25 (0 full sweeps)
+auto: run 1 ended: Finished
+auto: starting run 2: stage Some(Narrow)
+Tuning cores [0, 1]: 180 s per test, steps of 5, headroom 3 step(s), range -30 to 0.
+order of the cores: [0, 1]
+core  0: held at -20 (0 full sweeps)
+core  0: held at -25 (0 full sweeps)
+core  0: held at -30 (0 full sweeps)
+core  0: locked at -27
+core  1: held at -25 (0 full sweeps)
+core  1: held at -30 (0 full sweeps)
+core  1: locked at -27
+Result: 0:-27 1:-27
+auto: run 2 ended: Finished
+auto: starting run 3: stage Some(Confirm)
+Testing cores [0, 1, 4] at the values they hold, 180 s each, with Prime95. Nothing is changed on the processor.
+order of the cores: [0, 4, 1]
+core  0: held at -27 (0 full sweeps)
+core  4: held at -28 (0 full sweeps)
+core  1: held at -27 (0 full sweeps)
+auto: run 3 ended: Finished
+auto: nothing more to start, final picture
+
+--- the window ended [17:21:57], exit code 0
+VALUES AFTER THE RUN: -27 -27 -30 -30 -28 -30 -30 -30
+BIOS version it was gathered under: 1.S3
+core  0: best that held  -30   worst that failed    -
+core  1: best that held  -30   worst that failed    -
+core  4: best that held  -28   worst that failed    -
+
+=== the program's own log (telemetry left out)
+pbo 1.2.0-beta.1
+processor: AMD Ryzen 7 5800X3D 8-Core Processor (Zen 3 (Vermeer))
+BIOS: 1.S3
+values at start: -20 -25 -30 -30 -28 -30 -30 -30
+
+16:18:39 [1106161839] ---- start ----
+16:18:39 [1106161839] Testing cores [0, 1, 4] at the values they hold, 120 s each, with Prime95. Nothing is changed on the processor.
+16:18:39 [1106161839] order of the cores: [0, 4, 1]
+16:18:39 [1106161839] core 0: Prime95 on logical [0] at -20 for 120 s
+16:18:39 [1106161839] core 0: load changes: periodic:30:1
+16:20:40 [1106161839] core 0: engine used 92 % of the core
+16:20:40 [1106161839] core 0: y-cruncher on logical [0] at -20 for 120 s
+16:20:40 [1106161839] core 0: load changes: periodic:30:1
+16:22:40 [1106161839] core 0: engine used 92 % of the core
+16:22:40 [1106161839] core  0: held at -20 (0 full sweeps)
+16:22:40 [1106161839] core 4: Prime95 on logical [8] at -28 for 120 s
+16:22:40 [1106161839] core 4: load changes: periodic:30:1
+16:24:41 [1106161839] core 4: engine used 100 % of the core
+16:24:41 [1106161839] core 4: y-cruncher on logical [8] at -28 for 120 s
+16:24:41 [1106161839] core 4: load changes: periodic:30:1
+16:26:42 [1106161839] core 4: engine used 100 % of the core
+16:26:42 [1106161839] core  4: held at -28 (0 full sweeps)
+16:26:42 [1106161839] core 1: Prime95 on logical [2] at -25 for 120 s
+16:26:42 [1106161839] core 1: load changes: periodic:30:1
+16:28:43 [1106161839] core 1: engine used 100 % of the core
+16:28:43 [1106161839] core 1: y-cruncher on logical [2] at -25 for 120 s
+16:28:43 [1106161839] core 1: load changes: periodic:30:1
+16:30:43 [1106161839] core 1: engine used 99 % of the core
+16:30:43 [1106161839] core  1: held at -25 (0 full sweeps)
+16:30:43 [1106161839] run ended: all cores passed
+16:30:43 [1106163043] ---- start ----
+16:30:44 [1106163043] Tuning cores [0, 1]: 180 s per test, steps of 5, headroom 3 step(s), range -30 to 0.
+16:30:44 [1106163043] order of the cores: [0, 1]
+16:30:44 [1106163043] core 0: Prime95 on logical [0] at -20 for 180 s
+16:30:44 [1106163043] core 0: load changes: periodic:30:1
+16:33:44 [1106163043] core 0: engine used 93 % of the core
+16:33:44 [1106163043] core  0: held at -20 (0 full sweeps)
+16:33:44 [1106163043] core 0: Prime95 on logical [0] at -25 for 180 s
+16:33:44 [1106163043] core 0: load changes: periodic:30:1
+16:36:45 [1106163043] core 0: engine used 96 % of the core
+16:36:45 [1106163043] core  0: held at -25 (0 full sweeps)
+16:36:45 [1106163043] core 0: Prime95 on logical [0] at -30 for 180 s
+16:36:45 [1106163043] core 0: load changes: periodic:30:1
+16:39:46 [1106163043] core 0: engine used 97 % of the core
+16:39:46 [1106163043] core  0: held at -30 (0 full sweeps)
+16:39:46 [1106163043] core  0: locked at -27
+16:39:46 [1106163043] core 1: Prime95 on logical [2] at -25 for 180 s
+16:39:46 [1106163043] core 1: load changes: periodic:30:1
+16:42:47 [1106163043] core 1: engine used 100 % of the core
+16:42:47 [1106163043] core  1: held at -25 (0 full sweeps)
+16:42:47 [1106163043] core 1: Prime95 on logical [2] at -30 for 180 s
+16:42:47 [1106163043] core 1: load changes: periodic:30:1
+16:45:47 [1106163043] core 1: engine used 100 % of the core
+16:45:47 [1106163043] core  1: held at -30 (0 full sweeps)
+16:45:47 [1106163043] core  1: locked at -27
+16:45:47 [1106163043] Result: 0:-27 1:-27
+16:45:47 [1106163043] tune ended
+16:45:47 [1106164547] ---- start ----
+16:45:47 [1106164547] Testing cores [0, 1, 4] at the values they hold, 180 s each, with Prime95. Nothing is changed on the processor.
+16:45:47 [1106164547] order of the cores: [0, 4, 1]
+16:45:47 [1106164547] core 0: Prime95 on logical [0] at -27 for 180 s
+16:45:47 [1106164547] core 0: load changes: periodic:30:1
+16:48:48 [1106164547] core 0: engine used 98 % of the core
+16:48:48 [1106164547] core 0: Prime95 on logical [0] at -27 for 180 s
+16:48:48 [1106164547] core 0: load changes: periodic:30:1
+16:51:49 [1106164547] core 0: engine used 98 % of the core
+16:51:49 [1106164547] core 0: Prime95 on logical [0] at -27 for 180 s
+16:51:49 [1106164547] core 0: load changes: periodic:30:1
+16:54:50 [1106164547] core 0: engine used 98 % of the core
+16:54:50 [1106164547] core 0: y-cruncher on logical [0] at -27 for 180 s
+16:54:50 [1106164547] core 0: load changes: periodic:30:1
+16:57:50 [1106164547] core 0: engine used 98 % of the core
+16:57:50 [1106164547] core  0: held at -27 (0 full sweeps)
+16:57:50 [1106164547] core 4: Prime95 on logical [8] at -28 for 180 s
+16:57:50 [1106164547] core 4: load changes: periodic:30:1
+17:00:51 [1106164547] core 4: engine used 100 % of the core
+17:00:51 [1106164547] core 4: Prime95 on logical [8] at -28 for 180 s
+17:00:51 [1106164547] core 4: load changes: periodic:30:1
+17:03:52 [1106164547] core 4: engine used 100 % of the core
+17:03:52 [1106164547] core 4: Prime95 on logical [8] at -28 for 180 s
+17:03:52 [1106164547] core 4: load changes: periodic:30:1
+17:06:53 [1106164547] core 4: engine used 100 % of the core
+17:06:53 [1106164547] core 4: y-cruncher on logical [8] at -28 for 180 s
+17:06:53 [1106164547] core 4: load changes: periodic:30:1
+17:09:54 [1106164547] core 4: engine used 100 % of the core
+17:09:54 [1106164547] core  4: held at -28 (0 full sweeps)
+17:09:54 [1106164547] core 1: Prime95 on logical [2] at -27 for 180 s
+17:09:54 [1106164547] core 1: load changes: periodic:30:1
+17:12:54 [1106164547] core 1: engine used 100 % of the core
+17:12:54 [1106164547] core 1: Prime95 on logical [2] at -27 for 180 s
+17:12:54 [1106164547] core 1: load changes: periodic:30:1
+17:15:55 [1106164547] core 1: engine used 100 % of the core
+17:15:55 [1106164547] core 1: Prime95 on logical [2] at -27 for 180 s
+17:15:55 [1106164547] core 1: load changes: periodic:30:1
+17:18:56 [1106164547] core 1: engine used 100 % of the core
+17:18:56 [1106164547] core 1: y-cruncher on logical [2] at -27 for 180 s
+17:18:56 [1106164547] core 1: load changes: periodic:30:1
+17:21:57 [1106164547] core 1: engine used 100 % of the core
+17:21:57 [1106164547] core  1: held at -27 (0 full sweeps)
+17:21:57 [1106164547] run ended: all cores passed
+
+=== hardware error events (WHEA-Logger) since the start
+none
+restoring core 0 to -20
+core 0: now -20
+
+restoring core 1 to -25
+core 1: now -25
+
+ORIGINAL: -20 -25 -30 -30 -28 -30 -30 -30
+FINAL   : -20 -25 -30 -30 -28 -30 -30 -30
+RESULT: all values are back
+DONE [17:21:58]

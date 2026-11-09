@@ -210,6 +210,16 @@ pub struct State {
     pub last_signature: String,
 }
 
+impl State {
+    /// A step has run: what it was, and the values of its cores before it, so the next decision can tell a step that
+    /// found something from one that would only run over the same values again.
+    pub fn ran(&mut self, stage: Stage, cores: &[u32], margins_before: &BTreeMap<u32, i32>) {
+        self.last_stage = Some(stage);
+        self.runs_done += 1;
+        self.last_signature = signature(stage, cores, margins_before);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     NeedsSetup,

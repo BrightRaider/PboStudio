@@ -17,29 +17,31 @@ Run as administrator: the processor registers are only reachable that way.
 |---|---|
 | `pbo` | the window (it asks for administrator rights once at start and carries on as that copy; declined, it opens without them and offers a helper; `PBO_NO_ELEVATE` skips the question): the cores with a stepper and a depth bar each, Auto with three levels of thoroughness (the worst-case time is shown before the start), ready-made test lists, and a plan builder |
 | `pbo diag [--raw]` | reads what this machine reports and writes `pbo-diag.txt` next to the program. Read-only. `--raw` adds the whole power monitoring table, which helps most on a Zen 4 or Zen 5 part. |
-| `pbo status` | the Curve Optimizer value of every core and the live readings |
+| `pbo status` | the Curve Optimizer value of every core and the live readings ; `on --continue` makes the task also carry Auto on after a crash |
 | `pbo selftest [--step]` | writes each core's own value back and reads it (changes nothing); `--step` also moves each core one step toward zero and puts it back |
 | `pbo run` | tests the cores at the values they hold; changes nothing on the processor |
 | `pbo tune` | searches each core's value, always through the checked write path; puts values back if cancelled |
+| `pbo auto [--intensity fast|normal|thorough]` | the window's Auto without a window: the three phases one after the other (what to run comes from the same campaign), until it is done, has nothing new to find, or needs the driver or a test program. It writes down how it was started, so that `pbo resume --continue` can carry it on after a crash |
 | `pbo set CORE VALUE` | one value, written and read back |
 | `pbo plan new\|show\|command\|run FILE` | the plan as a readable file (a small subset of TOML) that the window, the command line and the helper all use |
 | `pbo helper [--pipe NAME]`, `pbo helper-call NAME MESSAGE` | the part with the rights, served over a pipe to a window or module without them; one message, one answer |
 | `pbo hash FILE...`, `pbo verify FILE SHA256`, `pbo version` | SHA-256 of files and of this program; there is no code signature, so the checksum is how a release is told from a copy |
 | `pbo setup status\|prime95\|ycruncher\|all` | puts the test programs into `engines` next to the program: https from the vendor's own domain only, and the archive must have the SHA-256 this version was made with (`--from ARCHIVE` installs offline, `--accept-unverified` is your explicit choice) |
-| `pbo update [--beta]` | says whether a newer release exists (stable, or beta too); it only looks, and never replaces the program |
+| `pbo update [--beta]` | says whether a newer release exists (stable, or beta too); it only looks, and never replaces the program ; the releases of this program are the ones tagged `rust-v...`, the C# program has its own |
 | `pbo setup pawnio` | starts the PawnIO driver installer (Windows asks for permission) after the same checks as the test programs: SHA-256 of this version's installer, a fresh private folder for a download, nothing started that does not match |
 | `pbo estimate [--cores ..] [--intensity fast\|normal\|thorough]` | how long the campaign still has to run at that thoroughness (balanced by default), phase by phase, calculated from what each core holds and may reach |
 | `pbo ready [--hours N]` | "Ready for the night?": the logon task, automatic sign-in, the sleep timer, free disk space, temperature headroom; changes nothing, says what is missing |
 | `pbo save`, `pbo apply` | keep the current values as the logon profile; write that profile |
-| `pbo resume` | after a crash: put every core back to what it was proven to hold |
+| `pbo resume` | after a crash: put every core back to what it was proven to hold ; `--continue` also carries `pbo auto` on after a countdown (`--wait N`, a minute by default, stopped by `pbo resume --cancel`), at most three times in a row |
 | `pbo autostart on\|off\|status` | the task that runs `pbo resume` at logon (never at system start) |
 | `pbo knowledge` | what the program remembers about each core |
+| `pbo report` | one file, `pbo-report.txt`, to attach to an issue: version, what the processor holds, what the program remembers, the machine checks of 90 days, how Auto was started, the end of the newest log, and `pbo-diag.txt` if there is one |
 | `pbo whea [--days N]` | the machine checks Windows has logged (a year by default): one line for each crash with the cores it names (and the unexpected shutdown, Kernel-Power 41, logged just before it), a count of the shutdowns that had no machine check next to them, a count for each core, and a note when the System log has been cleared (what it held before is gone). Reads only, needs no rights |
 | `pbo import [FOLDER]` | takes over what a 1.x install kept (memory, profile, settings, logs); overwrites nothing |
 | `pbo gui-preview NAME FILE.png [light] [de] [size=WxH] [click=X,Y ...]` | draws one window state with made-up numbers and no hardware; the clicks go through the window's own input |
 
 Options of `run`, `tune` and `resume`: `--seconds N`, `--cores 0,1`, `--engine prime95|ycruncher`, `--fft NAME`, `--smt`,
-`--fine`, `--step N` (steps of N counts, 1 to 6), `--start N` (where the search of a core that holds nothing begins, 1 to 30 counts below zero), `--guardband N` (the safety kept at the end), `--mode sse|avx|avx2|avx512`, `--then ENGINE:MODE:FFT+...` (further steps per core),
+`--fine`, `--step N` (steps of N counts, 1 to 6), `--start N` (where the search of a core that holds nothing begins, 1 to 30 counts below zero), `--pause N` (seconds of rest between two cores), `--yc-tests A,B` and `--yc-memory MB` (y-cruncher's tests, by their tags, and its memory for each logical processor), `--guardband N` (the safety kept at the end), `--mode sse|avx|avx2|avx512`, `--then ENGINE:MODE:FFT+...` (further steps per core),
 `--rounds N` (how often a test of the held values goes round all cores), `--order sequential|alternate|random|pairs`
 (the order of the cores), `--on-error continue|skip|stop` (what a test of the held values does when a core fails; a failed core is left out of the later rounds by default), `--quiet` (no sound at an error and at the end), `--yc-set curve-optimizer|fast-discovery`, `--seconds auto` (until the test program has been through its work list once, an hour at most) and `--fft MIN-MAX` (a range of one's own, in K) and `--transient off|bursts|periodic[:EVERY:PAUSE]` (how the load is interrupted so that the core has
 to boost back up: a pause of a second every half minute by default, or sub-second bursts). The test programs are looked for in an `engines` folder next to the program
@@ -104,5 +106,4 @@ cargo build --release
 ```
 
 gives `target\release\pbo.exe`, one file. Publish it with its checksum (`pbo hash pbo.exe` writes the line `sha256sum` checks) and say in the release notes
-that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0-beta.1` is the first public
-build); `pbo version` prints it with the checksum of the running file. A release with `-beta` in its tag is a pre-release, which is what `pbo update --beta` looks for.
+that it is not code-signed, so the checksum is how a copy is told from the release. The version is in `Cargo.toml` (`1.2.0` is the first release); `pbo version` prints it with the checksum of the running file. The tag of a release of this program starts with `rust-` (`rust-v1.2.0`); one with `-beta` in it is a pre-release, which is what `pbo update --beta` looks for.

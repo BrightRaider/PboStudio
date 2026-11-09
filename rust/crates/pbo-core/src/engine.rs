@@ -326,11 +326,38 @@ pub fn ycruncher_arguments(log_path: &str, config_path: &str) -> String {
 /// The memory y-cruncher's stress test gets for each logical processor it runs on.
 pub const YCRUNCHER_MEMORY_PER_THREAD: u64 = 64 << 20;
 
+/// The stress tests y-cruncher names on its command line, in the spelling it wants.
+pub const YCRUNCHER_TAGS: [&str; 10] = [
+    "BKT", "BBP", "SFTv4", "SNT", "SVT", "FFTv4", "NTT63", "N63", "VSTv3", "VT3",
+];
+
+/// A y-cruncher test tag in its own spelling, from any capitalisation.
+pub fn ycruncher_tag(text: &str) -> Option<&'static str> {
+    YCRUNCHER_TAGS
+        .into_iter()
+        .find(|t| t.eq_ignore_ascii_case(text.trim()))
+}
+
 /// The configuration file of a y-cruncher stress run on exactly the logical processors in `logical` (their numbers
 /// as Windows counts them). The layout is the one y-cruncher itself reads for `config`; CoreCycler writes the same.
 pub fn ycruncher_config(logical: &[usize], seconds_per_test: u32, algorithms: &[&str]) -> String {
+    ycruncher_config_with(
+        logical,
+        seconds_per_test,
+        algorithms,
+        YCRUNCHER_MEMORY_PER_THREAD,
+    )
+}
+
+/// The same with the memory for each logical processor of one's own, in bytes.
+pub fn ycruncher_config_with(
+    logical: &[usize],
+    seconds_per_test: u32,
+    algorithms: &[&str],
+    memory_per_thread: u64,
+) -> String {
     let cores: Vec<String> = logical.iter().map(usize::to_string).collect();
-    let memory = YCRUNCHER_MEMORY_PER_THREAD * logical.len().max(1) as u64;
+    let memory = memory_per_thread * logical.len().max(1) as u64;
     let mut lines = vec![
         "{".to_string(),
         "    Action : \"StressTest\"".to_string(),
@@ -453,6 +480,27 @@ mod tests {
 #[cfg(test)]
 mod custom_tests {
     use super::*;
+
+    #[test]
+    fn y_cruncher_tags_are_found_in_any_capitalisation_and_nothing_else() {
+        assert_eq!(ycruncher_tag("sftv4"), Some("SFTv4"));
+        assert_eq!(ycruncher_tag(" VT3 "), Some("VT3"));
+        assert_eq!(ycruncher_tag("n63"), Some("N63"));
+        assert_eq!(ycruncher_tag("SFT"), None);
+        assert_eq!(ycruncher_tag(""), None);
+    }
+
+    #[test]
+    fn the_memory_of_a_y_cruncher_run_is_a_share_for_each_logical_processor() {
+        let one = ycruncher_config_with(&[2], 10, &["VT3"], 128 << 20);
+        assert!(one.contains("TotalMemory : 134217728"), "{one}");
+        let two = ycruncher_config_with(&[2, 3], 10, &["VT3"], 128 << 20);
+        assert!(two.contains("TotalMemory : 268435456"), "{two}");
+        assert_eq!(
+            ycruncher_config(&[2], 10, &["VT3"]),
+            ycruncher_config_with(&[2], 10, &["VT3"], YCRUNCHER_MEMORY_PER_THREAD)
+        );
+    }
 
     #[test]
     fn a_range_of_ones_own_is_checked_and_round_trips() {
